@@ -1,0 +1,47 @@
+{
+	"author": "Niklas Gollenstede",
+	"dependencies": {
+	},
+	"description": "Disables / modifies some browser APIs that would otherwise allow browser fingerprinting",
+	"engines": {
+		"firefox": "38.0 - 47.0"
+	},
+	"icon": "icon.png",
+	"license": "MPL-2.0",
+	"main": "main.js",
+	"name": "stop-fingerprinting",
+	"permissions": {
+		"multiprocess": true,
+		"private-browsing": true,
+		"unsafe-content-script": true
+	},
+	"preferences": [
+		{
+			"name": "excludeButton",
+			"title": "Exclude list",
+			"label": "open",
+			"description": "",
+			"type": "control"
+		}, {
+			"name": "excludeList",
+			"title": "Exclude list",
+			"value": "# List one exclude domain, url-prefix or RegExp per line.\n# Domains and url-prefixes will be prepended with 'https?://' if omitted,\n# only '*' (arbitrary number of arbitrary  characters) as wildcard allowed.\n# RegExpes start with '/' and are required to match the entire url.\n# Use '#' or ';' at the start of a line to ignore that line\n# Changes will take effect at the next navigation to the corresponding urls.\n# Examples:\n#    *.mozilla.org\n#    https://good.com/nice/path\n#    /https\\:\\/\\/(www\\.)?blob\\.(com|org|net).*\n\n\n\n\n\n\n\n\n",
+			"hidden": true,
+			"type": "string"
+		}, {
+			"name": "excludeSync",
+			"title": "Sync exclude list",
+			"value": true,
+			"type": "bool"
+		}
+	],
+	"repository" : {
+		"type" : "git",
+		"url" : "git@github.com:NiklasGollenstede/stop-fingerprinting.git"
+	},
+	"scripts": {
+		"test": "node --harmony_destructuring --harmony_default_parameters test.js"
+	},
+	"title": "Stop Fingerprinting",
+	"version": "0.1.0"
+}
