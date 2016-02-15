@@ -23,8 +23,8 @@ function setSyncPref() {
 
 function onGlobalCreated({ subject: window, data, }) {
 	const url = window.location.href || data !== 'null' && data;
-	if (!url || !include.test(url) || exclude.test(url)) { console.log('skipping "'+ window.location.href +'"'+ (window.location.href ? '' : ' ("'+ data +'")')); return; }
-	console.log('faking for "'+ window.location.href +'"'+ (window.location.href ? '' : ' ("'+ data +'")'));
+	if (!url || !include.test(url) || exclude.test(url)) { /*console.log('skipping "'+ window.location.href +'"'+ (window.location.href ? '' : ' ("'+ data +'")'));*/ return; }
+	// console.log('faking for "'+ window.location.href +'"'+ (window.location.href ? '' : ' ("'+ data +'")'));
 	fakeAPIs(window.wrappedJSObject);
 }
 
@@ -34,7 +34,7 @@ onUnload(() => Observers.off('content-document-global-created', onGlobalCreated)
 
 // for content processes
 MessageManager.loadFrameScript('resource://stop-fingerprinting/frame.js', true);
-MessageManager.addMessageListener('@stop-fingerprinting:get-init-state', () => log('sending state', { exclude: exclude.source, include: include.source, }));
+MessageManager.addMessageListener('@stop-fingerprinting:get-init-state', () => ({ exclude: exclude.source, include: include.source, }));
 onUnload(() => {
 	MessageManager.removeDelayedFrameScript('resource://stop-fingerprinting/frame.js');
 	MessageManager.broadcastAsyncMessage('@stop-fingerprinting:destroy');
@@ -75,4 +75,3 @@ Prefs.on(
 
 Prefs.on('excludeSync', setSyncPref);
 loadReason !== 'startup' && setSyncPref();
-console.log('loadReason', loadReason);

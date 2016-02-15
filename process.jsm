@@ -33,6 +33,7 @@ function onFrameDestroy({ target: frame, }) {
 
 function initialize(frame) {
 	({ console, addMessageListener, removeMessageListener, sendSyncMessage, } = frame); // TODO: what happens, if this frame is unloaded?
+	console = { log() { }, error() { }, };
 	console.log('process created');
 	const init = sendSyncMessage('@stop-fingerprinting:get-init-state');
 	parseState(init[0] || init);
