@@ -1,7 +1,7 @@
 'use strict';
 
 try {
-	const getExcludes = require('./exclude.js');
+	const getExcludes = require('./exclude.js')._parse;
 
 	const _ = String.raw;
 

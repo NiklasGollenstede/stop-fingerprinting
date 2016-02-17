@@ -8,9 +8,10 @@ const EXPORTED_SYMBOLS = [ 'addFrame', ];
 
 const { utils: Cu } = Components;
 const { require } = Cu.import('resource://gre/modules/commonjs/toolkit/require.js', { });
+const { id: addonName, } = { id: 'stop-fingerprinting', };
 const { setTimeout, } = require('sdk/timers');
 
-const fakeAPIs = require('resource://stop-fingerprinting/content.js');
+const fakeAPIs = require(`resource://${ addonName }/content.js`);
 
 let isInitialized = false;
 let console, addMessageListener, removeMessageListener, sendSyncMessage;
@@ -35,16 +36,10 @@ function initialize(frame) {
 	({ console, addMessageListener, removeMessageListener, sendSyncMessage, } = frame); // TODO: what happens, if this frame is unloaded?
 	console = { log() { }, error() { }, };
 	console.log('process created');
-	const init = sendSyncMessage('@stop-fingerprinting:get-init-state');
+	const init = sendSyncMessage(`@${ addonName }:get-init-state`);
 	parseState(init[0] || init);
-	if (!exclude || !include) { // for some reason the sendSyncMessage returns an empty Array for the first process
-		setTimeout(() => {
-			const init = sendSyncMessage('@stop-fingerprinting:get-init-state');
-			parseState(init[0] || init);
-		}, 1);
-	}
-	addMessageListener('@stop-fingerprinting:state-update', onStateUpdate);
-	addMessageListener('@stop-fingerprinting:destroy', onDestroy);
+	addMessageListener(`@${ addonName }:state-update`, onStateUpdate);
+	addMessageListener(`@${ addonName }:destroy`, onDestroy);
 	isInitialized = true;
 }
 
@@ -60,8 +55,8 @@ function parseState(_state) {
 
 function onDestroy() {
 	console.log('destroing process');
-	removeMessageListener('@stop-fingerprinting:state-update', onStateUpdate);
-	removeMessageListener('@stop-fingerprinting:destroy', onDestroy);
+	removeMessageListener(`@${ addonName }:state-update`, onStateUpdate);
+	removeMessageListener(`@${ addonName }:destroy`, onDestroy);
 	frames.forEach(frame => onFrameDestroy({ target: frame, }));
 }
 
