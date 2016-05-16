@@ -34,7 +34,7 @@ function onFrameDestroy({ target: frame, }) {
 
 function initialize(frame) {
 	({ console, addMessageListener, removeMessageListener, sendSyncMessage, } = frame); // TODO: what happens, if this frame is unloaded?
-	console = { log() { }, error() { }, };
+	// console = { log() { }, error() { }, };
 	console.log('process created');
 	const init = sendSyncMessage(`@${ addonName }:get-init-state`);
 	parseState(init[0] || init);
@@ -63,6 +63,8 @@ function onDestroy() {
 function onDOMWindowCreated(event) { try {
 	const window = event.target || event.subject;
 	let url = window.location.href;
+
+	// TODO: test data:-uris
 
 	if (!url) {
 		if (window.parent && window.parent !== window) {

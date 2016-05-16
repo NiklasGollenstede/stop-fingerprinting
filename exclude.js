@@ -6,7 +6,7 @@
 
 const { Panel, } = require('sdk/panel');
 const Prefs = require('sdk/simple-prefs');
-const Storage = require('sdk/simple-storage');
+const { storage: Storage, } = require('sdk/simple-storage');
 const { Services } = require('resource://gre/modules/Services.jsm');
 
 const nothing = '^(?!x)x$';

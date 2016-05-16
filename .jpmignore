@@ -4,6 +4,7 @@ node_modules/es6lib/electron.js
 node_modules/es6lib/fs.js
 node_modules/es6lib/graph.js
 node_modules/es6lib/polyfill.js
+screenshots/*
 .*
 *.xpi
 test
