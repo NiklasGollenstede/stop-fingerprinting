@@ -1,0 +1,56 @@
+{
+	"manifest_version": 2,
+	"name": "Stop Fingerprinting",
+	"short_name": "Stop Fingerprinting",
+	"version": "0.2.0",
+	"author": "Niklas Gollenstede",
+
+	"description": "Disables / modifies some browser APIs that would otherwise allow browser fingerprinting",
+	"icons": {
+		"64": "icon.png"
+	},
+
+	"minimum_chrome_version": "49.0.0",
+	"applications": {
+		"gecko": {
+			"id": "@stop-fingerprinting",
+			"strict_min_version": "47.0"
+		}
+	},
+
+	"permissions": [
+		"storage",
+		"tabs",
+		"webRequest",
+		"webRequestBlocking",
+		"*://*/*"
+	],
+	"optional_permissions": [
+	],
+
+	"background": {
+		"page": "background/index.html"
+	},
+	"content_scripts": [
+		{
+			"matches": [ "*://*/*" ],
+			"match_about_blank": true,
+			"run_at": "document_start",
+			"all_frames": true,
+			"js": [
+				"content/index.js"
+			]
+		}
+	],
+	"browser_action": {
+		"default_icon": {
+			"64": "icon.png"
+		},
+		"default_title": "Stop Fingerprinting",
+		"default_popup": "action/open-options-in-tab.html"
+	},
+	"web_accessible_resources": [
+	],
+
+	"incognito": "spanning"
+}

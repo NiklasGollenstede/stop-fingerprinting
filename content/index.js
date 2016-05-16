@@ -1,14 +1,45 @@
-function script() {
 'use strict';
+
+const url = location.href;
+chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, ({ error, value, }) => {
+	if (error) { throw error; }
+	if (!value) { console.log('skiping ', url); return; }
+	inject(script);
+});
+
+const script = '('+ function()  {
+
+fakeAPIs(window);
+
+const faked = new WeakSet;
+const observer = this.observer = new MutationObserver(mutations => mutations.forEach(({ target: element, }) => {
+	observer.takeRecords();
+	if (element.tagName === 'IFRAME') {
+		// if (faked.has(element)) { return; } faked.add(element);
+		console.log('direct: attaching to iframe', element);
+		fakeAPIs(element.contentWindow);
+		console.log('faked', element.contentWindow.screen, element.contentWindow.devicePixelRatio);
+	} else if(element.querySelector('iframe')) {
+		Array.prototype.forEach.call(element.querySelectorAll('iframe'), element => { try {
+			// if (faked.has(element)) { return; } faked.add(element);
+			console.log('loop: attaching to iframe', element);
+			fakeAPIs(element.contentWindow);
+			console.log('faked', element.contentWindow.screen, element.contentWindow.devicePixelRatio);
+		} catch(error) { console.error(error); } });
+	}
+}));
+observer.observe(document, { subtree: true, childList: true, });
 
 /**
  * This function does the actual work of this add-on. All the other code just makes sure that this function is called on every window object that gets created.
  * @param  {Window|Document}  object   The global object that just got created. Needs to be passed in before any page scripts could read it.
  */
-(function fakeAPIs() {
+function fakeAPIs(window) {
+	/* globals Screen, MediaDevices, Navigator, PluginArray, MimeTypeArray */
 
 	// emulate standard fullHD screen
-	fakeGetters(Screen.prototype, { bind: true, }, {
+	window.devicePixelRatio = 1;
+	fakeGetters(window.Screen.prototype, { bind: true, }, {
 		width() { return 1920; },
 		availWidth() { return 1920; },
 		height() { return 1080; },
@@ -20,28 +51,27 @@ function script() {
 		availTop() { return 0; },
 		availLeft() { return 0; },
 	});
-	window.devicePixelRatio = 1;
 
 	// hide media devices
-	MediaDevices.prototype.enumerateDevices = function() { return Promise.resolve([ ]);}.bind();
+	window.MediaDevices.prototype.enumerateDevices = function enumerateDevices() { return window.Promise.resolve([ ]); }.bind();
 
 	// make navigator.userAgent related properties match (if a custom ua is set)
-	fakeGetters(Navigator.prototype, {
+	fakeGetters(window.Navigator.prototype, {
 		oscpu() {
 			const ua = (this.wrappedJSObject || this).userAgent || ''; // TODO: make sure iframes match their .parent
-			const match = String.match(ua, /\((.*?); ?rv:/);
+			const match = (/\((.*?); ?rv:/).exec(ua);
 			return match && match[1] || 'Windows NT 6.1; Win64; x64';
 		},
 		productSub() {
 			const ua = (this.wrappedJSObject || this).userAgent || '';
-			const match = String.match(ua, /Gecko\/(\d+)/);
+			const match = (/Gecko\/(\d+)/).exec(ua);
 			return match && match[1] || '20100101';
 		},
 		appName() { return 'Netscape'; },
 		appCodeName() { return 'Mozilla'; },
 		appVersion() {
 			const ua = (this.wrappedJSObject || this).userAgent || '';
-			const match = String.match(ua, /\((\w+)/);
+			const match = (/\((\w+)/).exec(ua);
 			return `5.0 (${ match && match[1] || 'Windows' })`;
 		},
 		product() { return 'Gecko'; },
@@ -49,33 +79,33 @@ function script() {
 	});
 
 	// hide plugins
-	fakeGetters(Navigator.prototype, {
+	fakeGetters(window.Navigator.prototype, {
 		plugins() {
-			return Object.create(PluginArray.prototype);
+			return Object.create(window.PluginArray.prototype);
 		},
 		mimeTypes() {
-			return Object.create(MimeTypeArray.prototype);
+			return Object.create(window.MimeTypeArray.prototype);
 		},
 	});
-	toStringTag(PluginArray.prototype);
-	toStringTag(MimeTypeArray.prototype);
-	fakeGetters(PluginArray.prototype, { bind: true, }, {
+	toStringTag(window.PluginArray.prototype);
+	toStringTag(window.MimeTypeArray.prototype);
+	fakeGetters(window.PluginArray.prototype, { bind: true, }, {
 		length() { return 0; },
 	});
-	Object.assign(PluginArray.prototype, {
+	window.Object.assign(window.PluginArray.prototype, {
 		refresh() { },
 		namedItem() { return null; },
 	});
-	fakeGetters(MimeTypeArray.prototype, { bind: true, }, {
+	fakeGetters(window.MimeTypeArray.prototype, { bind: true, }, {
 		length() { return 0; },
 	});
-	Object.assign(MimeTypeArray.prototype, {
+	window.Object.assign(window.MimeTypeArray.prototype, {
 		namedItem() { return null; },
 		item() { return null; },
 	});
 
 	// disable navigator.sendBeacon(), but keep the function signature
-	Navigator.prototype.sendBeacon = function sendBeacon(arg) {
+	window.Navigator.prototype.sendBeacon = function sendBeacon(arg) {
 		if (!arguments.length) { throw new window.TypeError('Not enough arguments to Navigator.sendBeacon.'); }
 		return true;
 	}.bind();
@@ -99,9 +129,9 @@ function script() {
 			factor = newFactor(font);
 			font2factor.set(font, factor);
 		}
-		return Math.round(correct * factor);
+		return window.Math.round(correct * factor);
 	}
-	fakeGetters(HTMLElement.prototype, { old: true, }, {
+	fakeGetters(window.HTMLElement.prototype, { old: true, }, {
 		offsetWidth(old) {
 			return getSize(this, old);
 		},
@@ -110,7 +140,7 @@ function script() {
 		},
 	});
 
-})();
+};
 
 
 /**
@@ -119,6 +149,7 @@ function script() {
  * @param  {object}  options  Optional options containing:
  * @param  {bool}    .bind    If true .bind() is used to hide the new getters source (which will make the this reference undefined).
  * @param  {bool}    .old     If true the old getter will be passed as the first argument to the new getter at every call.
+ * @param  {bool}    .add     Unless true, getters wil only be replaced and not added.
  * @param  {object}  getters  Object whose members will be used as the new getters.
  * @return {object}           The first argument.
  */
@@ -126,8 +157,11 @@ function fakeGetters(object, options, getters) {
 	if (!getters) { getters = options; options = { }; }
 	const bind = options && options.bind;
 	const old = options && options.old;
+	const add = options && options.add;
 	Object.keys(getters).forEach(key => {
-		const get = old && Object.getOwnPropertyDescriptor(object, key).get;
+		const desc = Object.getOwnPropertyDescriptor(object, key);
+		if (!add && ! desc) { return; }
+		const get = old && desc.get;
 		Object.defineProperty(object, key, { get: bind ? getters[key].bind(bind, get) : get ? function() { return getters[key].call(this, get); } : getters[key], });
 	});
 	return object;
@@ -176,7 +210,7 @@ function Random(n) {
  * @param {function}  source  A function that is called to fill the internal random slot.
  */
 function Decrementor(source) {
-	let current = source();
+	let current = -1;
 	function get(steps = 1) {
 		if (current <= steps) {
 			current = source();
@@ -188,15 +222,17 @@ function Decrementor(source) {
 	return get;
 }
 
+} +')()';
+
+
+function inject(script) {
+	let element;
+	try {
+		element = document.createElement('div');
+		element.setAttribute('onclick', script);
+		element.click();
+	} catch(error) {
+		alert('Failed to inject Stop Fingerprinting script: "'+ (error && error.message || 'unknown error') +'"!');
+		throw error;
+	}
 }
-
-(function() { 'use strict'; /* global module */
-
-const scriptSource = 'return ('+ script +').apply(window, arguments)';
-
-module.exports = function(window) {
-	window = window.defaultView || window; // window may actually be a Document
-	new window.Function(scriptSource)();
-};
-
-})();
