@@ -6,7 +6,7 @@ chrome.webRequest.onHeadersReceived.addListener(
 		const { responseHeaders, } = details;
 		responseHeaders.forEach(header => {
 			if (!(/^(?:(?:X-)?Content-Security-Policy|X-WebKit-CSP)$/i).test(header.name) || !header.value) { return; }
-			header.value = header.value.replace(/default-src|script-src/i, "$& 'unsafe-inline'"); // TODO: replace this by "'sha256-...'"
+			header.value = header.value.replace(/default-src|script-src/i, "$& 'unsafe-inline' 'unsafe-eval'"); // TODO: replace this by "'sha256-...'"
 		});
 		return { responseHeaders, };
 	},

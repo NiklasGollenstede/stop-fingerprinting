@@ -3,10 +3,21 @@
 console.log('window', window.devicePixelRatio);
 
 document.addEventListener('DOMContentLoaded', () => {
-	const sb = window.sb = document.querySelector('#sandboxed').contentWindow;
-	console.log('#sandboxed', sb.devicePixelRatio);
-	const xsb = window.xs = document.querySelector('#cross-sandboxed').contentWindow;
-	console.log('#cross-sandboxed', xsb.devicePixelRatio);
-	/*const xs = window.xs = document.querySelector('#cross-origin').contentWindow;
-	console.log('#cross-origin', xs.devicePixelRatio);*/
+
+	Array.prototype.forEach.call(document.querySelectorAll('iframe'), frame => {
+		const cw = frame.contentWindow;
+		try {
+			console.log('#'+ frame.id, cw.devicePixelRatio);
+		} catch (error) {
+			console.info('#'+ frame.id, 'accsess denied');
+		}
+
+		window[frame.id.replace(/-(\w)/g, (_, c) => c.toUpperCase())] = cw;
+	});
+
+
+	const iframe = document.createElement('iframe');
+	document.body.appendChild(iframe);
+	const loose = window.loose = iframe.contentWindow;
+	console.log('lose iframe', loose.devicePixelRatio);
 });

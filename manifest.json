@@ -34,10 +34,11 @@
 	"content_scripts": [
 		{
 			"matches": [ "*://*/*" ],
-			"match_about_blank": true,
-			"run_at": "document_start",
+			"match_about_blank": false,
 			"all_frames": true,
+			"run_at": "document_start",
 			"js": [
+				"content/inject.js",
 				"content/index.js"
 			]
 		}
