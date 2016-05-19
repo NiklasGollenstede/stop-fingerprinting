@@ -18,6 +18,7 @@ const API = {
 	get tabs() { return wrap(chrome.tabs); },
 	get windows() { return wrap(chrome.windows); },
 };
+Object.keys(API).forEach(key => Object.defineProperty(API, key.replace(/^./, s => s.toUpperCase()), Object.getOwnPropertyDescriptor(API, key)));
 
 function wrap(api) {
 	if (!api || (typeof api.addListener === 'function' && typeof api.removeListener === 'function')) { return api; }
@@ -45,7 +46,7 @@ function promisify(method, thisArg) {
 	return function() {
 		return new Promise((resolve, reject) => {
 			method.call(thisArg, ...arguments, function() {
-				const error = chrome.extension.lastError || chrome.runtime.lastError;
+				const error = chrome.runtime.lastError || chrome.extension.lastError;
 				return error ? reject(error) : resolve(...arguments);
 			});
 		});
@@ -91,6 +92,10 @@ class MessageHandler {
 		this._handlers = { };
 		this._listener = null;
 		this._sendMessage = promisify(chrome.runtime.sendMessage, chrome.runtime);
+		this.addHandler = this.addHandler.bind(this);
+		this.removeHandler = this.removeHandler.bind(this);
+		this.request = this.request.bind(this);
+		this.isExclusiveMessageHandler = false;
 	}
 	addHandler(name, handler) {
 		if (this._handlers[name]) { throw new Error('Duplicate message handler for "'+ name +'"'); }
@@ -104,25 +109,30 @@ class MessageHandler {
 		return ret;
 	}
 	request(name, ...args) {
-		return this._sendMessage({ name, args, }).then(({ error, value, }) => { if (error) { throw error; } return value; });
+		return this._sendMessage({ name, args, }).then(({ error, value, }) => { if (error) { throw fromJson(error); } return value; });
 	}
 	_attach() {
 		if (this._listener) { return; }
 		this._listener = ({ name, args, }, sender, reply) => {
-			if (!this._handlers[name]) { return; }
+			if (!this._handlers[name]) {
+				if (!this.isExclusiveMessageHandler) { return; }
+				reply({ error: toJson(new Error('Missing message handler for "'+ name +'"')), });
+				console.error('Rejected message request for "'+ name +'": no such handler.');
+				return;
+			}
 			try {
 				const value = this._handlers[name](...args);
 				if (value instanceof Promise) {
 					value.then(
 						value => reply({ value, }),
-						error => reply({ error: error && { message: error.message || error, stack: error.stack, }, })
+						error => reply({ error: toJson(error), })
 					);
 					return true;
 				} else {
 					reply({ value, });
 				}
 			} catch (error) {
-				reply({ error: error && { message: error.message || error, stack: error.stack, }, });
+				reply({ error: toJson(error), });
 			}
 		};
 
@@ -133,6 +143,23 @@ class MessageHandler {
 		chrome.runtime.onMessage.removeListener(this._listener);
 		this._listener = null;
 	}
+}
+
+function toJson(value) {
+	return JSON.stringify(value, (key, value) => {
+		if (!value || typeof value !== 'object') { return value; }
+		if (value instanceof Error) { return '$_ERROR_$'+ JSON.stringify({ name: value.name, message: value.message, stack: value.stack, }); }
+		return value;
+	});
+}
+function fromJson(string) {
+	if (typeof string !== 'string') { return string; }
+	return JSON.parse(string, (key, value) => {
+		if (!value || typeof value !== 'string' || !value.startsWith('$_ERROR_$')) { return value; }
+		const object = JSON.parse(value.slice(9));
+		const constructor = object.name ? window[object.name] || Error : Error;
+		return Object.assign(new constructor, object);
+	});
 }
 
 return API;

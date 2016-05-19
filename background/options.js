@@ -14,8 +14,8 @@ const defaults = [
 		title: 'Exclude by regular expression',
 		description: 'Sites whose urls entirely match any of the expressions below will be excluded by this extension',
 		maxLength: Infinity,
-		addDefault: '^(?:https?://www\.domain\.com/.*)$',
-		restrict: { type: 'string', },
+		addDefault: String.raw`^(?:https?://www\.domain\.com/.*)$`,
+		restrict: { type: 'string', unique: '../*', },
 		type: 'string',
 	}, {
 		name: 'excludePattern',

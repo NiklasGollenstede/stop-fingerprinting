@@ -1,10 +1,10 @@
-'use strict'; define('web-ext-utils/options-editor', [
+'use strict'; define('web-ext-utils/options/editor', [
 	'es6lib'
 ], function(
 	{ dom: { createElement, getParent, }, }
 ) {
 
-return function loadEditor({ host, options, onCommand, }) {
+return function loadEditor({ host, options, onCommand, layout, theme, }) {
 
 	host.addEventListener('click', function({ target, button, }) {
 		if (button || !target.matches) { return; }
@@ -26,7 +26,7 @@ return function loadEditor({ host, options, onCommand, }) {
 			case 'value-input': {
 				if (target.dataset.type !== 'control') { return; }
 				console.log('button clicked', target);
-				onCommand(target.parentNode.pref);
+				onCommand(target.parentNode.pref, target.dataset.value);
 			} break;
 			default: { return true; }
 		} });
@@ -44,6 +44,10 @@ return function loadEditor({ host, options, onCommand, }) {
 		if (!target.matches || !target.matches('.value-input')) { return; }
 		saveInput(target);
 	});
+
+	host.appendChild(createElement('style', {
+
+	}));
 
 	displayPreferences(options, host);
 };
@@ -63,11 +67,12 @@ function saveInput(target) {
 	const values = Array.prototype.map.call(element.querySelector('.values-container').children, getInputValue);
 	try {
 		pref.values = values;
-		Array.prototype.forEach.call(element.querySelectorAll('.invalid'), invalid => {
+		Array.from(element.querySelectorAll('.invalid')).concat(element).forEach(invalid => {
 			invalid.classList.remove('invalid');
 			invalid.title = '';
 		});
 	} catch (error) {
+		'index' in error && (target = element.querySelectorAll('.value-input')[error.index]);
 		target.title = error && error.message || error;
 		target.classList.add('invalid');
 		throw error;
@@ -137,6 +142,9 @@ function setInputValue(input, value) {
 		} break;
 		case "label":
 			break;
+		case "control":
+			field.dataset.value = value;
+			/* falls through */
 		default:
 			field.value = value;
 			break;
@@ -148,7 +156,7 @@ function getInputValue(input) {
 	const { pref, firstChild: field, } = input;
 	switch (pref.type) {
 		case "control":
-			return undefined;
+			return field.dataset.value;
 		case "bool":
 			return field.checked;
 		case "boolInt":
@@ -168,8 +176,7 @@ function cloneInput(input) {
 	return clone;
 }
 
-function displayPreferences(prefs, host = document.body, parent = null) {
-
+function displayPreferences(prefs, host, parent = null) {
 	prefs.forEach(pref => {
 		if (pref.type === 'hidden') { return; }
 

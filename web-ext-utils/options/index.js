@@ -12,6 +12,8 @@ const OnChange = new WeakMap;
 
 const Options = new Map;
 
+const _uniqueCache = new WeakMap;
+
 class Option {
 	constructor(_default, parent) {
 		Defaults.set(this, _default);
@@ -37,7 +39,7 @@ class Option {
 			this.defaults = Object.freeze([ this.default ]);
 		}
 
-		_default.restrict && (this.restrict = _default.restrict === 'inherit' ? parent.restrict : new Restriction(_default.restrict));
+		_default.restrict && (this.restrict = _default.restrict === 'inherit' ? parent.restrict : new Restriction(this, _default.restrict));
 
 		this.children = new OptionList((_default.children || [ ]).map(child => new Option(child, this)));
 
@@ -52,14 +54,14 @@ class Option {
 
 	whenTrue(listener) {
 		const values = this.values;
-		values.is && callAll([ listener, ], values.get(0), values, this.path);
+		values.is && callAll([ listener, ], values.get(0), values, null, this.path);
 		let listeners = OnTrue.get(this) || new Set;
 		OnTrue.set(this, listeners);
 		listeners.add(listener);
 	}
 	whenFalse(listener) {
 		const values = this.values;
-		!values.is && callAll([ listener, ], values.get(0), values, this.path);
+		!values.is && callAll([ listener, ], values.get(0), values, null, this.path);
 		let listeners = OnFalse.get(this) || new Set;
 		OnFalse.set(this, listeners);
 		listeners.add(listener);
@@ -70,7 +72,7 @@ class Option {
 	}
 	whenChange(listener) {
 		const values = this.values;
-		callAll([ listener, ], values.get(0), values, this.path);
+		callAll([ listener, ], values.get(0), values, null, this.path);
 		let listeners = OnChange.get(this) || new Set;
 		OnChange.set(this, listeners);
 		listeners.add(listener);
@@ -108,25 +110,25 @@ class ValueList {
 		return Values.get(this)[index];
 	}
 	set(index, value) {
-		this.parent.restrict.validate(value);
 		const values = Values.get(this).slice();
 		values[index] = value;
+		this.parent.restrict.validate(value, values, this.parent);
 		return storage.set({ [this.key]: values, });
 	}
 	replace(values) {
-		this.parent.restrict && values.forEach(value => this.parent.restrict.validate(value));
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
+		this.parent.restrict && this.parent.restrict.validateAll(values, this.parent);
 		return storage.set({ [this.key]: values, });
 	}
 	splice(index, remove, ...insert) {
-		this.parent.restrict && insert.forEach(value => this.parent.restrict.validate(value));
 		const values = Values.get(this).slice();
 		values.splice.apply(values, arguments);
 		if (values.length < this.min || values.length > this.max) {
 			throw new Error('the number of values for the option "'+ this.key +'" must be between '+ this.min +' and '+ this.max);
 		}
+		this.parent.restrict && this.parent.restrict.validateAll(insert, this.parent, index);
 		return storage.set({ [this.key]: values, });
 	}
 	reset() {
@@ -135,29 +137,76 @@ class ValueList {
 }
 
 class Restriction {
-	constructor(restrict) {
+	constructor(parent, restrict) {
+		this._parent = parent;
 		const from = this.from = restrict.from;
 		const to = this.to = restrict.to;
 		const match = this.match = restrict.match;
 		const type = this.type = restrict.type;
+		const unique = this.unique = Object.freeze(restrict.unique);
 		const message = this.message = restrict.message;
 		const checks = [ ];
 		restrict.hasOwnProperty('from') && checks.push(value => value < from && ('This value must be at least '+ from));
 		restrict.hasOwnProperty('to') && checks.push(value => value > to && ('This value can be at most '+ to));
 		restrict.hasOwnProperty('match') && checks.push(value => !match.test(value) && (message ? message : ('This value must match '+ match)));
 		restrict.hasOwnProperty('type') && checks.push(value => typeof value !== type && ('This value must be of type "'+ type +'" but is "'+ (typeof value) +'"'));
+		restrict.hasOwnProperty('unique') && (() => {
+			checks.push((value, values, option) => this._unique.map(other => {
+				if (other === option) {
+					return values.filter(v => v === value).length > 1 && 'This value must be unique winthin this option';
+				}
+				return other && other.values.current.indexOf(value) !== -1 && 'This value must be unique, but it is already used in "'+ other.title +'"';
+			}).find(x => x));
+		})();
 		this.checks = Object.freeze(checks);
 		return Object.freeze(this);
 	}
-	validate(value) {
-		const message = this.checks.map(check => check(value)).find(x => x);
+	validate(value, values, option) {
+		const message = this.checks.map(check => check(value, values, option)).find(x => x);
 		if (message) { throw new Error(message); }
+	}
+	validateAll(values, option, offset = 0) {
+		values.forEach((value, index) => { try {
+			this.validate(value, values, option);
+		} catch (error) {
+			try { error.index = index + offset; } catch (e) { }
+			throw error;
+		} });
+	}
+	get _unique() {
+		let options = _uniqueCache.get(this);
+		if (options) { return options; }
+		const paths = (typeof this.unique === 'string' ? [ this.unique, ] : this.unique || [ ]).map(path => path.split(/[\/\\]/));
+		const result = new Set;
+		paths.forEach(path => walk(this._parent, path));
+		options = Object.freeze(Array.from(result));
+		_uniqueCache.set(this, options);
+		return options;
+
+		function walk(option, path) {
+			if (!path.length) { return result.add(option); }
+			const segment = path.shift();
+			switch (segment) {
+				case '.': {
+					walk(option, path);
+				} break;
+				case '..': {
+					walk(option.parent, path);
+				} break;
+				case '*': {
+					option.children.forEach(child => walk(child, path));
+				} break;
+				default: {
+					walk(option.children[segment], path);
+				} break;
+			}
+		}
 	}
 }
 
-function callAll(callbacks, value, values, path) {
+function callAll(callbacks, value, values, old, path) {
 	callbacks && callbacks.forEach(listener => { try {
-		listener(value, values);
+		listener(value, values, old);
 	} catch (error) { console.error('Options change listener for "'+ path +'" threw', error); } });
 }
 
@@ -175,9 +224,9 @@ addChangeListener((key, values) => {
 	const is = values.find(x => x);
 	const was = old.find(x => x);
 
-	callAll(OnChange.get(option), values[0], list, path);
-	is && !was && callAll(OnTrue.get(option), values[0], list, path);
-	!is && was && callAll(OnFalse.get(option), values[0], list, path);
+	callAll(OnChange.get(option), values[0], list, old, path);
+	is && !was && callAll(OnTrue.get(option), values[0], list, old, path);
+	!is && was && callAll(OnFalse.get(option), values[0], list, old, path);
 });
 
 return storage.get(Array.from(Options.keys()).map(path => prefix + path))

@@ -8,6 +8,7 @@ body {
 }
 ::-webkit-scrollbar {
 	width: 8px;
+	height: 8px;
 }
 
 /* invalid inputs */
@@ -61,6 +62,9 @@ h1, h3 {
 /* sizes */
 input[type="text"] {
 	min-width: 500px;
+}
+pre {
+	white-space: pre-wrap;
 }
 
 /* transitions */
