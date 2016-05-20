@@ -1,8 +1,13 @@
 const script = window.script = function(options)  { 'use strict';
 
+const { token, } = options;
+
 const log = (...args) => (console.log(...args), args.pop());
 
-const context = {
+const randomFontFactor = (rand => () => 0.75 + rand() / (2 * 256 * 256))(new Random(256 * 256));
+
+const context = getContext() || setContext(log('creating context', {
+	token,
 	fakes: new WeakMap,
 	hiddenFunctions: new WeakMap,
 	devicePixelRatio: 1,
@@ -19,7 +24,7 @@ const context = {
 		availLeft: 0,
 	},
 	get(fake, api, prop) {
-		console.log('content.get', api, prop, fake.window.frameElement);
+		console.log(token, 'content.get', api, prop, fake.window.frameElement);
 		switch (api) {
 			case 'devicePixelRatio': {
 				return this.devicePixelRatio;
@@ -29,17 +34,31 @@ const context = {
 			} break;
 		}
 		notImplemented();
-	}
-};
-
+	},
+	getOffsetSize(client, offset, element) {
+		const correct = offset.call(element);
+		if (!correct || client.call(element)) { return correct; }
+		const factor = randomFontFactor();
+		return correct === correct << 0 ? Math.round(correct * factor) : correct * factor;
+	},
+}));
+function setContext(context) { try { window.context = context; window.parent.context = context; window.top.context = context; } finally { return context; } }
+function getContext() { try { return window.context || window.parent.context || window.top.context; } catch (e) { } }
 
 class FakedAPIs {
 	constructor(window, context) {
 		this.context = context;
 		this.window = window;
-		this.functionToString = window.Function.prototype.toString;
-		this.iFrameContentDocument = Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentDocument').get;
-		this.iFrameContentWindow = Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentWindow').get;
+		this.originals = {
+			devicePixelRatio: window.devicePixelRatio,
+			functionToString: window.Function.prototype.toString, // TODO: Object.prototype.toString
+			iFrameContentDocument: Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentDocument').get,
+			iFrameContentWindow: Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentWindow').get,
+			htmlElementOffsetWidth: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, 'offsetWidth').get,
+			htmlElementOffsetHeight: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, 'offsetHeight').get,
+			elementClientWidth: Object.getOwnPropertyDescriptor(window.Element.prototype, 'clientWidth').get,
+			elementClientHeight: Object.getOwnPropertyDescriptor(window.Element.prototype, 'clientHeight').get,
+		};
 		this.fakeAPIs = fakeAPIs;
 		this.build();
 	}
@@ -50,11 +69,14 @@ class FakedAPIs {
 
 	// executed in the target window itself
 	_build() {
-		const { context, functionToString, iFrameContentDocument, iFrameContentWindow, fakeAPIs, } = this;
-		const { hiddenFunctions, } = context;
+		const _this = this;
+		const { context, originals, fakeAPIs, window, } = this;
+		const { functionToString, iFrameContentDocument, iFrameContentWindow, devicePixelRatio, htmlElementOffsetWidth, htmlElementOffsetHeight, elementClientWidth, elementClientHeight, } = originals;
+		const { hiddenFunctions, token, getOffsetSize, } = context;
 		const get = context.get.bind(context, this);
 		const apis = {
-			get devicePixelRatio() { return get('devicePixelRatio'); },
+			get devicePixelRatio() { console.log('devicePixelRatio', token, devicePixelRatio / 2, window.frameElement); return devicePixelRatio / 2; },
+			// get devicePixelRatio() { return get('devicePixelRatio'); },
 		};
 
 		// fake function+'' => [native code]
@@ -64,6 +86,7 @@ class FakedAPIs {
 			return func;
 		}
 		function hideAllCode(object) {
+			// TODO: hide stack traces
 			Object.keys(object).forEach(key => typeof object[key] === 'function' && hideCode(object[key]));
 			return object;
 		}
@@ -74,6 +97,7 @@ class FakedAPIs {
 			return functionToString.call(this);
 		};
 
+		// catch all calls that retrieve an window object from an iframe and make sure that iframe is wrapped
 		apis.iFrameGetters = hideAllCode({
 			contentWindow() {
 				const window = iFrameContentWindow.call(this);
@@ -84,6 +108,7 @@ class FakedAPIs {
 			},
 			// TODO: contentDocument
 		});
+		// TODO: window.frames
 
 		// screen
 		const screenGetters = apis.screenGetters = { };
@@ -112,17 +137,55 @@ class FakedAPIs {
 		const pluginArrayInstance = apis.pluginArrayInstance = Object.create(PluginArray.prototype);
 		navigatorGetters.plugins = hideCode(function() { return pluginArrayInstance; });
 
+		// navigator.mimeTypes
+		const MimeTypeArray = apis.MimeTypeArray = hideCode(function MimeTypeArray() { throw new TypeError('Illegal constructor'); });
+		Object.assign(MimeTypeArray.prototype, hideAllCode({
+			item() { return null; },
+			namedItem() { return null; },
+		}));
+		Object.defineProperties(MimeTypeArray.prototype, {
+			length: { get: hideCode(function() { return 0; }), enumerable: true, configurable: true, },
+			[Symbol.iterator]: { value: hideCode(function values() { return [][Symbol.iterator](); }), writable: true, enumerable: false, configurable: true, },
+			[Symbol.toStringTag]: { value: 'MimeTypeArray', writable: false, enumerable: false, configurable: true, },
+		});
+		const mimeTypeArrayInstance = apis.mimeTypeArrayInstance = Object.create(MimeTypeArray.prototype);
+		navigatorGetters.mimeTypes = hideCode(function() { return mimeTypeArrayInstance; });
+
+		// navigator.sendBeacon
+		apis.navigatorSendBeacon = /*hideCode*/(function sendBeacon(arg) {
+			if (!arguments.length) { throw new window.TypeError('Not enough arguments to Navigator.sendBeacon.'); }
+			return true;
+		});
+
+		// HTMLElement.offsetWidth/Height
+		apis.htmlElementGetters = hideAllCode({
+			offsetWidth(old) {
+				return getOffsetSize(elementClientWidth, htmlElementOffsetWidth, this);
+			},
+			offsetHeight(old) {
+				return getOffsetSize(elementClientHeight, htmlElementOffsetHeight, this);
+			},
+		});
+
 		return apis;
 	}
 
 	apply() {
 		const { window, apis, } = this;
+
 		window.Function.prototype.toString = apis.functionToString;
 		setGetters(window.HTMLIFrameElement.prototype, apis.iFrameGetters);
+
 		window.devicePixelRatio = apis.devicePixelRatio;
 		setGetters(window.Screen.prototype, apis.screenGetters);
+
+		window.PluginArray = apis.PluginArray;
+		window.MimeTypeArray = apis.MimeTypeArray;
 		setGetters(window.Navigator.prototype, apis.navigatorGetters);
+		window.Navigator.prototype.sendBeacon = apis.navigatorSendBeacon;
 		window.MediaDevices.prototype.enumerateDevices = apis.mediaDevicesEnumerateDevices;
+
+		setGetters(window.HTMLElement.prototype, apis.htmlElementGetters);
 	}
 }
 
@@ -157,7 +220,7 @@ function fakeAPIs(window) {
 
 function main() {
 	fakeAPIs(window);
-	//const observer = new MutationObserver(mutations => (mutations.forEach(({ target: element, }) => {
+
 	const observer = new MutationObserver(mutations => mutations.forEach(({ addedNodes, }) => Array.prototype.forEach.call(addedNodes, element => {
 		if (element.tagName === 'IFRAME') {
 			// console.log('direct: attaching to iframe', element);
@@ -170,157 +233,6 @@ function main() {
 		}
 	})));
 	observer.observe(document, { subtree: true, childList: true, });
-}
-
-
-/**
- * This function does the actual work of this add-on. All the other code just makes sure that this function is called on every window object that gets created.
- * @param  {Window}  window   The global object that just got created. Needs to be passed in before any page scripts could read it.
- */
-function _fakeAPIs(window) {
-	/* globals Screen, MediaDevices, Navigator, PluginArray, MimeTypeArray */
-
-	// emulate standard fullHD screen
-	window.devicePixelRatio = 1;
-	fakeGetters(window.Screen.prototype, { bind: true, }, {
-		width() { return 1920; },
-		availWidth() { return 1920; },
-		height() { return 1080; },
-		availHeight() { return 1040; }, // 40px for taskbar at bottom
-		colorDepth() { return 24; },
-		pixelDepth() { return 24; },
-		top() { return 0; },
-		left() { return 0; },
-		availTop() { return 0; },
-		availLeft() { return 0; },
-	});
-
-	// hide media devices
-	window.MediaDevices.prototype.enumerateDevices = new window.Function('return Promise.resolve([ ])').bind();
-	// window.MediaDevices.prototype.enumerateDevices = function enumerateDevices() { return window.Promise.resolve([ ]); }.bind();
-
-	// make navigator.userAgent related properties match (if a custom ua is set)
-	fakeGetters(window.Navigator.prototype, {
-		oscpu() {
-			const ua = (this.wrappedJSObject || this).userAgent || ''; // TODO: make sure iframes match their .parent
-			const match = (/\((.*?); ?rv:/).exec(ua);
-			return match && match[1] || 'Windows NT 6.1; Win64; x64';
-		},
-		productSub() {
-			const ua = (this.wrappedJSObject || this).userAgent || '';
-			const match = (/Gecko\/(\d+)/).exec(ua);
-			return match && match[1] || '20100101';
-		},
-		appName() { return 'Netscape'; },
-		appCodeName() { return 'Mozilla'; },
-		appVersion() {
-			const ua = (this.wrappedJSObject || this).userAgent || '';
-			const match = (/\((\w+)/).exec(ua);
-			return `5.0 (${ match && match[1] || 'Windows' })`;
-		},
-		product() { return 'Gecko'; },
-		platform() { return 'Win64'; }, // TODO: get this from .userAgent
-	});
-
-	// hide plugins
-	fakeGetters(window.Navigator.prototype, {
-		plugins() {
-			return Object.create(window.PluginArray.prototype);
-		},
-		mimeTypes() {
-			return Object.create(window.MimeTypeArray.prototype);
-		},
-	});
-	toStringTag(window.PluginArray.prototype);
-	toStringTag(window.MimeTypeArray.prototype);
-	fakeGetters(window.PluginArray.prototype, { bind: true, }, {
-		length() { return 0; },
-	});
-	window.Object.assign(window.PluginArray.prototype, {
-		refresh() { },
-		namedItem() { return null; },
-	});
-	fakeGetters(window.MimeTypeArray.prototype, { bind: true, }, {
-		length() { return 0; },
-	});
-	window.Object.assign(window.MimeTypeArray.prototype, {
-		namedItem() { return null; },
-		item() { return null; },
-	});
-
-	// disable navigator.sendBeacon(), but keep the function signature
-	window.Navigator.prototype.sendBeacon = function sendBeacon(arg) {
-		if (!arguments.length) { throw new window.TypeError('Not enough arguments to Navigator.sendBeacon.'); }
-		return true;
-	}.bind();
-
-	/**
-	 * Add a bit of randomness to inline elements width and height to confuse font detection:
-	 * Every time a context requests the size of an inline element, the actual size of that element gets scaled by a random factor.
-	 * This factor is then saved for the elements <window> and font, so that repetitive calls of the same window
-	 * for the same font seem deterministic, but different windows will get different results for the same font.
-	 */
-	const randomBit = new Decrementor(new Random(64));
-	const newFactor = font => { const steps = (/,/).test(font) ? 8 : 1; return 1 + 0.1 * randomBit(steps) - 0.1 * randomBit(steps); };
-	const font2factor = new Map;
-
-	function getSize(element, getter) {
-		const correct = getter.call(element);
-		if (!correct || correct === 1 || element.clientWidth) { return correct; }
-		const style = window.getComputedStyle(element);
-		const font = style.font || style.fontFamily;
-		let factor; if (!(factor = font2factor.get(font))) {
-			factor = newFactor(font);
-			font2factor.set(font, factor);
-		}
-		return window.Math.round(correct * factor);
-	}
-	fakeGetters(window.HTMLElement.prototype, { old: true, }, {
-		offsetWidth(old) {
-			return getSize(this, old);
-		},
-		offsetHeight(old) {
-			return getSize(this, old);
-		},
-	});
-
-};
-
-
-/**
- * Overwrites all getters in object with those from getters.
- * @param  {object}  object   The target object.
- * @param  {object}  options  Optional options containing:
- * @param  {bool}    .bind    If true .bind() is used to hide the new getters source (which will make the this reference undefined).
- * @param  {bool}    .old     If true the old getter will be passed as the first argument to the new getter at every call.
- * @param  {bool}    .add     Unless true, getters wil only be replaced and not added.
- * @param  {object}  getters  Object whose members will be used as the new getters.
- * @return {object}           The first argument.
- */
-function fakeGetters(object, options, getters) {
-	if (!getters) { getters = options; options = { }; }
-	const bind = options && options.bind;
-	const old = options && options.old;
-	const add = options && options.add;
-	Object.keys(getters).forEach(key => {
-		const desc = Object.getOwnPropertyDescriptor(object, key);
-		if (!add && ! desc) { return; }
-		const get = old && desc.get;
-		Object.defineProperty(object, key, { get: bind ? getters[key].bind(bind, get) : get ? function() { return getters[key].call(this, get); } : getters[key], });
-	});
-	return object;
-}
-
-/**
- * Should set <instnace>.__proto__[Symbol.toStringTag] = () => '[object '+ constructor.name +']'
- * Until that works, we'll have to settle with toString().
- */
-function toStringTag(proto, name = proto.constructor.name) {
-	const string = '[object '+ name +']';
-	Object.defineProperty(proto, 'toString', {
-		enumerable: false, writable: true, configurable: true,
-		value: function toString() { return string; }, // TODO: Use Symbol.toStringTag
-	});
 }
 
 /**
@@ -369,9 +281,6 @@ function Decrementor(source) {
 function notImplemented() {
 	throw new Error('not implemented');
 }
-
-
-const { token, } = options;
 
 try {
 	main();

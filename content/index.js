@@ -1,14 +1,15 @@
 'use strict'; /* global script */
 
+const token = window.token = (() => { try { return window.parent.token; } catch (e) { } })() || generateToken();
+
 const url = location.href;
-/*chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, ({ error, value, }) => {
+chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, ({ error, value, }) => {
 	if (error) { throw error; }
-	if (!value) { console.log('skiping ', url); return; }
-});*/
-
+	if (!value) { return console.log('skiping ', url); }
 	inject(script);
+});
 
-function inject(script, token = generateToken()) {
+function inject(script, token = window.token) {
 	let element;
 	try {
 		element = document.createElement('div');
@@ -29,5 +30,8 @@ function inject(script, token = generateToken()) {
 }
 
 function generateToken() {
-	return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+	const token = Math.random().toString(36).slice(2); // + Math.random().toString(36).slice(2);
+	console.log('generated token', token);
+	return token;
 }
+

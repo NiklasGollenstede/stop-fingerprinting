@@ -1,5 +1,10 @@
 'use strict'; /* global chrome */
 
+const { Tabs, Messages, } = require('web-ext-utils/chrome');
+Messages.isExclusiveMessageHandler = true;
+const { matchPatternToRegExp, } = require('web-ext-utils/utils');
+
+
 // modify CSPs to allow unsafe script evaluation
 chrome.webRequest.onHeadersReceived.addListener(
 	(details) => {
@@ -20,21 +25,12 @@ const escape = string => string.replace(/[\-\[\]\{\}\(\)\*\+\?\.\,\\\^\$\|\#]/g,
 require('background/options').then(options => {
 	const matchPattern = options.excludePattern.restrict.match;
 
-	options.excludeRegEx.whenChange((_, { current: values, }) => excludes = excludePattern.concat(excludeRegEx = values.map(string => new RegExp(string))));
+	options.excludeRegEx.whenChange((_, { current: values, }) => excludes = excludePattern.concat(excludeRegEx = values.map(s => new RegExp(s))));
 
-	options.excludePattern.whenChange((_, { current: values, }) => excludes = excludeRegEx.concat(excludePattern = values.map(pattern => {
-		const [ , sheme, host, path, ] = matchPattern.exec(pattern);
-		return new RegExp('^(?:'+
-			(sheme === '*' ? '(?:https?|ftp|file|ftp)' : sheme)
-			+':\/\/'+
-			escape(host).replace(/\\\*/g, '[^\/]*')
-			+'\/'+
-			escape(path).replace(/\\\*/g, '.*')
-		+')$');
-	})));
+	options.excludePattern.whenChange((_, { current: values, }) => excludes = excludeRegEx.concat(excludePattern = values.map(matchPatternToRegExp)));
 });
 
-require('web-ext-utils/chrome').messages.addHandler('getOptionsForUrl', url => {
+Messages.addHandler('getOptionsForUrl', url => {
 	console.log('getOptionsForUrl', url);
 	for (let i = 0; i < excludes.length; ++i) {
 		const match = excludes[i].exec(url);

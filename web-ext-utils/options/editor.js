@@ -4,7 +4,7 @@
 	{ dom: { createElement, getParent, }, }
 ) {
 
-return function loadEditor({ host, options, onCommand, layout, theme, }) {
+return function loadEditor({ host, options, onCommand, }) {
 
 	host.addEventListener('click', function({ target, button, }) {
 		if (button || !target.matches) { return; }
@@ -44,10 +44,6 @@ return function loadEditor({ host, options, onCommand, layout, theme, }) {
 		if (!target.matches || !target.matches('.value-input')) { return; }
 		saveInput(target);
 	});
-
-	host.appendChild(createElement('style', {
-
-	}));
 
 	displayPreferences(options, host);
 };
