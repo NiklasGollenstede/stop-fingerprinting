@@ -1,49 +1,71 @@
-const script = window.script = function(options)  { 'use strict';
-
-const { token, } = options;
+const script = window.script = function(__arg__)  { 'use strict'; const { token, } = __arg__;
 
 const log = (...args) => (console.log(...args), args.pop());
 
 const randomFontFactor = (rand => () => 0.75 + rand() / (2 * 256 * 256))(new Random(256 * 256));
 
-const context = getContext() || setContext(log('creating context', {
-	token,
-	fakes: new WeakMap,
-	hiddenFunctions: new WeakMap,
-	devicePixelRatio: 1,
-	screen: {
-		width: 1920,
-		availWidth: 1920,
-		height: 1080,
-		availHeight: 1040, // 40px for taskbar at bottom
-		colorDepth: 24,
-		pixelDepth: 24,
-		top: 0,
-		left: 0,
-		availTop: 0,
-		availLeft: 0,
-	},
-	get(fake, api, prop) {
-		console.log(token, 'content.get', api, prop, fake.window.frameElement);
-		switch (api) {
-			case 'devicePixelRatio': {
-				return this.devicePixelRatio;
-			} break;
-			case 'screen': {
-				return this.screen[prop];
-			} break;
-		}
-		notImplemented();
-	},
-	getOffsetSize(client, offset, element) {
-		const correct = offset.call(element);
-		if (!correct || client.call(element)) { return correct; }
-		const factor = randomFontFactor();
-		return correct === correct << 0 ? Math.round(correct * factor) : correct * factor;
-	},
-}));
-function setContext(context) { try { window.context = context; window.parent.context = context; window.top.context = context; } finally { return context; } }
-function getContext() { try { return window.context || window.parent.context || window.top.context; } catch (e) { } }
+let context = null;
+
+function createContext(options) {
+	const context = {
+		token,
+		fakes: new WeakMap,
+		hiddenFunctions: new WeakMap,
+		devicePixelRatio: 1,
+		screen: {
+			width: 1920,
+			availWidth: 1920,
+			height: 1080,
+			availHeight: 1040, // 40px for taskbar at bottom
+			colorDepth: 24,
+			pixelDepth: 24,
+			top: 0,
+			left: 0,
+			availTop: 0,
+			availLeft: 0,
+		},
+		get(fake, api, prop) {
+			console.log(token, 'content.get', api, prop, fake.window.frameElement);
+			switch (api) {
+				case 'devicePixelRatio': {
+					return this.devicePixelRatio;
+				} break;
+				case 'screen': {
+					return this.screen[prop];
+				} break;
+			}
+			notImplemented();
+		},
+		getOffsetSize(client, offset, element) {
+			const correct = offset.call(element);
+			if (!correct || client.call(element)) { return correct; }
+			const factor = randomFontFactor();
+			return correct === correct << 0 ? Math.round(correct * factor) : correct * factor;
+		},
+	};
+	log('created context', context);
+	return context;
+}
+
+function setContext(context) {
+	window.addEventListener('getStopFingerprintingContext', onGetStopFingerprintingContext);
+	return context;
+}
+
+function getContext() {
+	let context, root = window;
+	try { do {
+		root.dispatchEvent(new CustomEvent('getStopFingerprintingContext', { detail: { token, return(c) { context = c; }, }, }));
+	} while (!context && root.parent !== root && (root = root.parent)); } catch (e) { }
+	context && console.log('found context', token, context);
+	return context;
+}
+
+function onGetStopFingerprintingContext(event) {
+	console.log('onGetStopFingerprintingContext', event);
+	const { detail, } = event;
+	if (detail && detail.token === token) { detail.return(context); }
+}
 
 class FakedAPIs {
 	constructor(window, context) {
@@ -174,7 +196,7 @@ class FakedAPIs {
 		const { window, apis, } = this;
 
 		window.Function.prototype.toString = apis.functionToString;
-		setGetters(window.HTMLIFrameElement.prototype, apis.iFrameGetters);
+		// setGetters(window.HTMLIFrameElement.prototype, apis.iFrameGetters);
 
 		window.devicePixelRatio = apis.devicePixelRatio;
 		setGetters(window.Screen.prototype, apis.screenGetters);
@@ -218,9 +240,7 @@ function fakeAPIs(window) {
 	// console.log('fake.apply', host);
 }
 
-function main() {
-	fakeAPIs(window);
-
+function attachObserver() {
 	const observer = new MutationObserver(mutations => mutations.forEach(({ addedNodes, }) => Array.prototype.forEach.call(addedNodes, element => {
 		if (element.tagName === 'IFRAME') {
 			// console.log('direct: attaching to iframe', element);
@@ -261,36 +281,28 @@ function Random(n) {
 	};
 }
 
-/**
- * Returns a function that decrements an internal random number at every call. returns true exactly when the internal random reaches zero and starts anew.
- * @param {function}  source  A function that is called to fill the internal random slot.
- */
-function Decrementor(source) {
-	let current = source();
-	function get(steps = 1) {
-		if (current <= steps) {
-			current = source();
-			return true;
-		}
-		current -= steps;
-		return false;
-	}
-	return get;
-}
-
 function notImplemented() {
 	throw new Error('not implemented');
 }
 
-try {
-	main();
-	this.dataset.done = true;
-} catch (error) {
-	console.error(error);
-	this.dataset.error = JSON.stringify(
-		typeof error !== 'object' || error === null || !(error instanceof Error) ? error
-		: { name: error.name, message: error.message, stack: error.stack, }
-	);
-}
+
+
+return (function main() {
+	context = getContext();
+	if (context) {
+		fakeAPIs(window);
+		attachObserver();
+		return { };
+	} else {
+		window.addEventListener('stopFingerprintingOptionsLoaded', function onLoaded({ detail, }) {
+			if (!detail || detail.token !== token) { return; }
+			window.removeEventListener('stopFingerprintingOptionsLoaded', onLoaded);
+			context = setContext(createContext(detail.options));
+			fakeAPIs(window);
+			attachObserver();
+		});
+		return { getOptions: true, };
+	}
+})();
 
 };

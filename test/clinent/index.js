@@ -29,7 +29,7 @@ const iframes = window.iframes = {
 	windowFrames() {
 		const iframe = document.createElement('iframe');
 		document.body.appendChild(iframe);
-		return (window.last = window.frames[window.frames]);
+		return (window.last = window.frames[window.frames.length - 1]);
 	},
 
 };
@@ -44,6 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
 		window[frame.id.replace(/-(\w)/g, (_, c) => c.toUpperCase())] = cw;
 	});
 
-	// test(iframes.contentWindow(), 'loose frame');
+	test(iframes.contentWindow(), 'loose contentWindow');
+	test(iframes.contentDocument(), 'loose contentDocument');
+	test(iframes.windowFrames(), 'loose windowFrames');
 
 });

@@ -1,1 +1,1 @@
-console.log('frame content', window.devicePixelRatio);
+console.log('frame content', window.devicePixelRatio, window.frameElement);
