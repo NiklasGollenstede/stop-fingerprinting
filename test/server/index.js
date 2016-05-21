@@ -40,7 +40,7 @@ app.all('/*', (r, x, n) => (console.log(r.method, r.hostname + (r.originalUrl = 
 app.use(require('serve-favicon')(__dirname + './../../icon.png'));
 
 // employ CSP
-// CSP(app);
+CSP(app);
 app.use('/csp', BodyParser.json({ limit: '10kb', type: [ 'application/csp-report', mimeTypes.json, ], }));
 app.post('/csp', CSP.onerror);
 

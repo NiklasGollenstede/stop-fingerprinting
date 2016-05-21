@@ -9,10 +9,10 @@ let element;
 	if (!getOptions) { return console.log('attached to context', window); }
 
 	chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, ({ error, value, }) => {
-		if (error) { throw error; }
-		if (!value) { return console.log('skiping ', url); }
+		if (error) { throw parseError(error); }
+		console.log('loaded options', url, value);
 		inject((token, options) => {
-			window.dispatchEvent(new CustomEvent('stopFingerprintingOptionsLoaded', { detail: { token, options, }, }));
+			window.dispatchEvent(new CustomEvent('stopFingerprintingOptionsLoaded$'+ token, { detail: { options, }, }));
 		}, token, value);
 		console.log('attached to context', window);
 	});
@@ -23,7 +23,7 @@ let element;
 } })();
 
 function generateToken() {
-	const token = Math.random().toString(36).slice(2); // + Math.random().toString(36).slice(2);
+	const token = Array.prototype.map.call(window.crypto.getRandomValues(new Uint32Array(6)), r => r.toString(36)).join('');
 	console.log('generated token', token);
 	return token;
 }
@@ -54,6 +54,16 @@ function inject(script, ...args) {
 	}
 	if (!element.dataset.done) { throw new Error('Script was not executed at all'); }
 	return JSON.parse(element.dataset.value);
+}
+
+function parseError(string) {
+	if (typeof string !== 'string') { return string; }
+	return JSON.parse(string, (key, value) => {
+		if (!value || typeof value !== 'string' || !value.startsWith('$_ERROR_$')) { return value; }
+		const object = JSON.parse(value.slice(9));
+		const constructor = object.name ? window[object.name] || Error : Error;
+		return Object.assign(new constructor, object);
+	});
 }
 
 })();

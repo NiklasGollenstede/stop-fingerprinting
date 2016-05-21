@@ -48,14 +48,14 @@ function createContext(options) {
 }
 
 function setContext(context) {
-	window.addEventListener('getStopFingerprintingContext', onGetStopFingerprintingContext);
+	window.addEventListener('getStopFingerprintingContext$'+ token, onGetStopFingerprintingContext);
 	return context;
 }
 
 function getContext() {
 	let context, root = window;
 	try { do {
-		root.dispatchEvent(new CustomEvent('getStopFingerprintingContext', { detail: { token, return(c) { context = c; }, }, }));
+		root.dispatchEvent(new CustomEvent('getStopFingerprintingContext$'+ token, { detail: { return(c) { context = c; }, }, }));
 	} while (!context && root.parent !== root && (root = root.parent)); } catch (e) { }
 	context && console.log('found context', token, context);
 	return context;
@@ -64,7 +64,7 @@ function getContext() {
 function onGetStopFingerprintingContext(event) {
 	console.log('onGetStopFingerprintingContext', event);
 	const { detail, } = event;
-	if (detail && detail.token === token) { detail.return(context); }
+	event.detail.return(context);
 }
 
 class FakedAPIs {
@@ -294,9 +294,8 @@ return (function main() {
 		attachObserver();
 		return { };
 	} else {
-		window.addEventListener('stopFingerprintingOptionsLoaded', function onLoaded({ detail, }) {
-			if (!detail || detail.token !== token) { return; }
-			window.removeEventListener('stopFingerprintingOptionsLoaded', onLoaded);
+		window.addEventListener('stopFingerprintingOptionsLoaded$'+ token, function onLoaded({ detail, }) {
+			window.removeEventListener('stopFingerprintingOptionsLoaded$'+ token, onLoaded);
 			context = setContext(createContext(detail.options));
 			fakeAPIs(window);
 			attachObserver();
