@@ -8,7 +8,8 @@
 	},
 	"title": "Stop Fingerprinting",
 	"dependencies": {
-		"es6lib": "NiklasGollenstede/es6lib"
+		"es6lib": "NiklasGollenstede/es6lib",
+		"web-ext-utils": "NiklasGollenstede/web-ext-utils"
 	},
 	"devDependencies": {
 		"body-parser": "^1.15.1",

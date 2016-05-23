@@ -5,3 +5,4 @@
 - Add option to disable WebRTC and geo location API (default: disable)
 - Add option to enable DNT (default: unchanged)
 - Add option to set HTTP_ACCEPT (default: unchanged)
+- do image sets with variable resolution or css media queries leak the true devicePixelRatio?

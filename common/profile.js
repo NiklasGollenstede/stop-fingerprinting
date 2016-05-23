@@ -90,13 +90,13 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 				name: 'disable',
 				title: 'Disable',
 				description: 'Completely disable this extension for all matching sites',
-				addDefault: false,
+				addDefault: true,
 				type: 'bool',
 			}), optional({
 				name: 'devicePixelRatio',
 				title: 'devicePixelRatio',
+				addDefault: { from: 1, to: 1.5, },
 				type: 'interval',
-				default: { from: 1, to: 1.5, },
 			}),
 		],
 	}, {
