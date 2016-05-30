@@ -10,34 +10,12 @@ let context = null;
 
 function createContext(options) {
 	const context = {
-		token,
+		values: options,
+
+		token, log,
 		fakes: new WeakMap,
 		hiddenFunctions: new WeakMap,
-		devicePixelRatio: 1,
-		screen: {
-			width: 1920,
-			availWidth: 1920,
-			height: 1080,
-			availHeight: 1040, // 40px for taskbar at bottom
-			colorDepth: 24,
-			pixelDepth: 24,
-			top: 0,
-			left: 0,
-			availTop: 0,
-			availLeft: 0,
-		},
-		get(fake, api, prop) {
-			console.log(token, 'content.get', api, prop, fake.window.frameElement);
-			switch (api) {
-				case 'devicePixelRatio': {
-					return this.devicePixelRatio;
-				} break;
-				case 'screen': {
-					return this.screen[prop];
-				} break;
-			}
-			notImplemented();
-		},
+
 		getOffsetSize(client, offset, element) {
 			const correct = offset.call(element);
 			if (!correct || client.call(element)) { return correct; }
@@ -56,15 +34,14 @@ function setContext(context) {
 
 function getContext() {
 	let context, root = window;
-	try { do {
+	try { do { /* jshint -W083 */
 		root.dispatchEvent(new CustomEvent('getStopFingerprintingContext$'+ token, { detail: { return(c) { context = c; }, }, }));
-	} while (!context && root.parent !== root && (root = root.parent)); } catch (e) { }
+	} while (!context && root.parent !== root && (root = root.parent)); } catch (e) { } /* jshint +W083 */
 	context && console.log('found context', token, context);
 	return context;
 }
 
 function onGetStopFingerprintingContext(event) {
-	console.log('onGetStopFingerprintingContext', event);
 	const { detail, } = event;
 	event.detail.return(context);
 }
@@ -75,7 +52,7 @@ class FakedAPIs {
 		this.window = window;
 		this.originals = {
 			devicePixelRatio: window.devicePixelRatio,
-			functionToString: window.Function.prototype.toString, // TODO: Object.prototype.toString
+			functionToString: window.Function.prototype.toString, // TODO: Function.prototype.toSource (firefox), Object.prototype.toString
 			iFrameContentDocument: Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentDocument').get,
 			iFrameContentWindow: Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentWindow').get,
 			htmlElementOffsetWidth: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, 'offsetWidth').get,
@@ -96,8 +73,7 @@ class FakedAPIs {
 		const _this = this;
 		const { context, originals, fakeAPIs, window, } = this;
 		const { functionToString, iFrameContentDocument, iFrameContentWindow, devicePixelRatio, htmlElementOffsetWidth, htmlElementOffsetHeight, elementClientWidth, elementClientHeight, } = originals;
-		const { hiddenFunctions, token, getOffsetSize, } = context;
-		const get = context.get.bind(context, this);
+		const { hiddenFunctions, token, getOffsetSize, values, log, } = context;
 		const apis = { };
 
 		// fake function+'' => [native code]
@@ -143,10 +119,10 @@ class FakedAPIs {
 		// screen
 		const screen = apis['Screen.prototype'] = { };
 		[ 'width', 'availWidth', 'height', 'availHeight', 'colorDepth', 'pixelDepth', 'top', 'left', 'availTop', 'availLeft', ]
-		.forEach(prop => screen[prop] = { get: hideCode(function() { return get('screen', prop); }), });
+		.forEach(prop => screen[prop] = { get: hideCode(function() { return values.screen[prop]; }), });
 		apis.window = {
 			devicePixelRatio: {
-				get: hideCode({ get devicePixelRatio() { return get('devicePixelRatio'); }, }),
+				get: hideCode({ get devicePixelRatio() { return values.screen.devicePixelRatio; }, }),
 				set: hideCode({ set devicePixelRatio(v) { }, }),
 			},
 		};
@@ -157,8 +133,8 @@ class FakedAPIs {
 
 		// navigator string values
 		const navigator = apis['Navigator.prototype'] = { };
-		[ ] // XXX
-		.forEach(prop => screen[prop] = { get: hideCode(function() { return get('navigator', prop); }), });
+		[ 'userAgent', 'platform', ] // XXX
+		.forEach(prop => navigator[prop] = { get: hideCode(function() { return values.navigator[prop]; }), });
 
 		// navigator.plugins
 		const PluginArray = apis.PluginArray = hideCode(function PluginArray() { throw new TypeError('Illegal constructor'); });

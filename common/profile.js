@@ -104,11 +104,6 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 				description: 'Completely disable this extension for all matching sites',
 				addDefault: true,
 				type: 'bool',
-			}), optional({
-				name: 'devicePixelRatio',
-				title: 'devicePixelRatio',
-				addDefault: { from: 1, to: 1.5, type: 'number', },
-				type: 'interval',
 			}), {
 				name: 'navigator',
 				title: 'Navigator',
@@ -128,7 +123,7 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 						description: 'For any resulting set of rules the Navigator/User Agent will be randomly regenerated every:',
 						addDefault: 10,
 						unit: 'minutes',
-						restrict: { from: 0.1, to: 45000/*~1 month*/, },
+						restrict: { from: 0.005, to: 45000/*~1 month*/, },
 						type: 'number',
 					}), ({
 						name: 'browser',
@@ -202,7 +197,87 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 						type: 'string',
 					}),
 				],
-			},
+			}, optional({
+				name: 'windowName',
+				title: 'Allow window.name',
+				description: `Unless checked, the window.name property gets reset at every load`,
+				addDefault: true,
+				type: 'bool',
+			}), {
+				name: 'screen',
+				title: 'Screen',
+				description: `Decide which values the window.screen and and window.devicePixelRatio should have.
+				<br>These values are randomly generated according to the parameters below`,
+				type: 'label',
+				children: [
+					optional({
+						name: 'disabled',
+						title: 'Disable',
+						description: 'Expose your true screen values to the websites',
+						addDefault: true,
+						type: 'bool',
+					}), optional({
+						name: 'devicePixelRatio',
+						title: 'devicePixelRatio',
+						addDefault: { from: 1, to: 1.5, },
+						restrict: { from: 0.5, to: 8, type: 'number', },
+						type: 'interval',
+					}), optional({
+						name: 'width',
+						title: 'screen.width',
+						addDefault: { from: 1368, to: 3840, },
+						restrict: { from: 1024, to: 8192, type: 'number', },
+						unit: 'pixels',
+						type: 'interval',
+					}), optional({
+						name: 'height',
+						title: 'screen.height',
+						addDefault: { from: 768, to: 2160, },
+						restrict: { from: 600, to: 8192, type: 'number', },
+						unit: 'pixels',
+						type: 'interval',
+					}), optional({
+						name: 'ratio',
+						title: 'Aspect ratio',
+						description: 'The quotient screen.width / screen.height',
+						addDefault: { from: 1.3, to: 2.4, },
+						restrict: { from: 0.5, to: 8, type: 'number', },
+						type: 'interval',
+					}), {
+						name: 'offset',
+						title: 'Offset',
+						description: 'The amount of space at each edge of the screen that is occupied by task/title bars etc',
+						type: 'label',
+						children: [
+							optional({
+								name: 'top',
+								title: 'Top',
+								addDefault: { from: 0, to: 0, },
+								restrict: { from: 0, to: 200, type: 'number', },
+								type: 'interval',
+							}), optional({
+								name: 'right',
+								title: 'Right',
+								addDefault: { from: 0, to: 0, },
+								restrict: { from: 0, to: 200, type: 'number', },
+								type: 'interval',
+							}), optional({
+								name: 'bottom',
+								title: 'Bottom',
+								addDefault: { from: 30, to: 50, },
+								restrict: { from: 0, to: 200, type: 'number', },
+								type: 'interval',
+							}), optional({
+								name: 'left',
+								title: 'Left',
+								addDefault: { from: 0, to: 0, },
+								restrict: { from: 0, to: 200, type: 'number', },
+								type: 'interval',
+							}),
+						],
+					},
+				],
+			}
 		],
 	}, {
 		name: 'manage',

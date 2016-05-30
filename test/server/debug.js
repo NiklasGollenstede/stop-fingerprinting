@@ -26,7 +26,7 @@ if (!('electron' in process.versions)) { // started as node.js program, launch e
 
 	(App.isReady() ? now : App.once.bind(App, 'ready'))(() => {
 
-		let win = new BrowserWindow({ width: 1700, height: 1300, });
+		let win = new BrowserWindow({ width: 1700, height: 1390, });
 		win.loadURL('about:blank');
 
 		win.webContents.executeJavaScript(`

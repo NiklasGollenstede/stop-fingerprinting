@@ -56,8 +56,24 @@ function weakenCsp({ type, responseHeaders, }) {
 	return changed ? { responseHeaders, } : { };
 }
 
-Messages.addHandler('getOptionsForUrl', url => {
+
+chrome.webRequest.onBeforeSendHeaders.addListener(fakeRequest, { urls: [ '<all_urls>', ], }, [ 'blocking', 'requestHeaders', ]);
+
+function fakeRequest({ url, requestHeaders, }) {
 	const domain = ((/^[^:\/\\]+:\/\/([^\/\\]+)/).exec(url) || [ , '<invalid domain>', ])[1];
+	const profile = Profiles.get(url);
+	const ua = profile.getNavigator(domain).userAgent;
+	const header = requestHeaders.find(header => (/^User-Agent$/i).test(header.name));
+	console.log('onBeforeSendHeaders', url, domain, { old: header.value, new: ua, });
+	if (ua !== header.value) {
+		header.value = ua;
+		return { requestHeaders, };
+	}
+	return { };
+}
+
+Messages.addHandler('getOptionsForUrl', url => {
+	const domain = (/^[^:\/\\]+:\/\/([^\/\\]+)/).exec(url)[1];
 	console.log('getOptionsForUrl', url, domain);
 	const profile = Profiles.get(url);
 	return profile.getInjectOptions(domain);

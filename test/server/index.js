@@ -34,7 +34,7 @@ const https = config.https && {
 const app = Express();
 
 // log
-app.all('/*', (r, x, n) => (console.log(r.method, r.hostname + (r.originalUrl = r.url), r.xhr ? 'xhr' : ''), n()));
+app.all('/*', (r, x, n) => (console.log(r.method, r.hostname + (r.originalUrl = r.url), r.xhr ? 'xhr' : '', r.headers['user-agent']), n()));
 
 // serve favicon
 app.use(require('serve-favicon')(__dirname + './../../icon.png'));

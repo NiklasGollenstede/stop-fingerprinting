@@ -220,6 +220,7 @@ const Generator = exports.Generator = class Generator {
 	}
 };
 
+Generator.keys = [ 'platform', 'userAgent', 'productSub', ];
 
 class Navigator {
 	constructor(config) {
@@ -234,8 +235,8 @@ class Navigator {
 		this.random = rand();
 		this.json = null;
 	}
-	get plattform() {
-		setValue(this, 'plattform', (() => { switch (this.os) {
+	get platform() {
+		return setValue(this, 'platform', (() => { switch (this.os) {
 			case 'win': switch (this.arch) {
 				case '32_32': switch (this.browser) {
 					case 'chrome':  return 'Win32';
@@ -244,13 +245,13 @@ class Navigator {
 					case 'opera':   return 'Win32';
 				} break;
 				case '32_64': switch (this.browser) {
-					case 'chrome':  return 'WOW64';
+					case 'chrome':  return 'Win32';
 					case 'firefox': return 'WOW64';
 					case 'ie':      return 'WOW64';
 					case 'opera':   return 'WOW64';
 				} break;
 				case '64_64': switch (this.browser) {
-					case 'chrome':  return 'Win64';
+					case 'chrome':  return 'Win32';
 					case 'firefox': return 'Win64';
 					case 'ie':      return 'Win64';
 					case 'opera':   return 'Win64';
@@ -353,8 +354,7 @@ class Navigator {
 	toJSON() {
 		if (this.json) { return this.json; }
 		const json = { };
-		[ 'plattform', 'userAgent', 'productSub', ]
-		.forEach(key => json[key] = this[key]);
+		Generator.keys.forEach(key => json[key] = this[key]);
 		return (this.json = json);
 	}
 }
