@@ -1,11 +1,13 @@
 'use strict'; define('common/profile', [
 	'web-ext-utils/options',
 	'web-ext-utils/chrome',
-	'es6lib/format',
+	'es6lib',
 ], function(
 	Options,
 	{ storage: Storage, },
-	{ RegExpX, }
+	{
+		format: { RegExpX, },
+	}
 ) {
 
 
@@ -19,7 +21,7 @@ const boolOption = {
 	],
 };
 const optionalOption = {
-	inLength: 0,
+	minLength: 0,
 	maxLength: 1,
 };
 function optional(option) {
@@ -35,6 +37,10 @@ const defaults = [
 	}, {
 		name: 'priority',
 		title: 'Profile priority',
+		description: `<pre>
+You don't have to specify all possible parameters for a website in a single profile, multiple profiles can apply to the same site.
+If a value is set in more than one profile, the value of the profile with the higher priority applies.
+</pre>`,
 		default: 0,
 		restrict: { from: -Infinity, to: Infinity, },
 		type: 'number',
@@ -59,13 +65,19 @@ Examples:
 </pre>`,
 				maxLength: Infinity,
 				addDefault: '*://*.domain.com/*',
-				restrict: { match: RegExpX`^(?:
-					( \* | http | https | file | ftp ) # <scheme>
-					:\/\/
-					( \* | (?:\*\.)? [^\/\*]+ | ) # <host>
-					\/
-					( .* ) # <path>
-				)$`, unique: '.', message: 'Each pattern must be of the form <scheme>://<host>/<path>', },
+				restrict: {
+					match: {
+						exp: RegExpX`^(?:
+							( \* | http | https | file | ftp ) # <scheme>
+							:\/\/
+							( \* | (?:\*\.)? [^\/\*]+ | ) # <host>
+							\/
+							( .* ) # <path>
+						)$`,
+						message: 'Each pattern must be of the form <scheme>://<host>/<path>',
+					},
+					unique: '.',
+				},
 				type: 'string',
 			}, {
 				name: 'regExp',
@@ -76,7 +88,7 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 </pre>`,
 				maxLength: Infinity,
 				addDefault: String.raw`^(?:https?://www\.domain\.com/.*)$`,
-				restrict: { type: 'string', unique: '.', },
+				restrict: { isRegExp: true, unique: '.', },
 				type: 'string',
 			},
 		],
@@ -87,7 +99,7 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 		type: 'label',
 		children: [
 			optional({
-				name: 'disable',
+				name: 'disabled',
 				title: 'Disable',
 				description: 'Completely disable this extension for all matching sites',
 				addDefault: true,
@@ -95,9 +107,102 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 			}), optional({
 				name: 'devicePixelRatio',
 				title: 'devicePixelRatio',
-				addDefault: { from: 1, to: 1.5, },
+				addDefault: { from: 1, to: 1.5, type: 'number', },
 				type: 'interval',
-			}),
+			}), {
+				name: 'navigator',
+				title: 'Navigator',
+				description: `Decide which values the window.navigator and the User-Agent HTTP header should have.
+				<br>These values are randomly generated according to the parameters below`,
+				type: 'label',
+				children: [
+					optional({
+						name: 'disabled',
+						title: 'Disable',
+						description: 'Disable User Agent spoofing for all matching sites and use the browsers default values',
+						addDefault: true,
+						type: 'bool',
+					}), optional({
+						name: 'maxAge',
+						title: 'Lifetime',
+						description: 'For any resulting set of rules the Navigator/User Agent will be randomly regenerated every:',
+						addDefault: 10,
+						unit: 'minutes',
+						restrict: { from: 0.1, to: 45000/*~1 month*/, },
+						type: 'number',
+					}), ({
+						name: 'browser',
+						title: 'Browsers',
+						description: 'The browsers that can be chosen from',
+						type: 'menulist',
+						addDefault: 'chrome',
+						maxLength: 3,
+						restrict: { unique: '.', },
+						options: [
+							{ value: 'chrome',  label: 'Chrome', },
+							{ value: 'firefox', label: 'Firefox', },
+							{ value: 'ie',      label: 'Internet Explorer / Edge', },
+						],
+					}), optional({
+						name: 'browserAge',
+						title: 'Browser Age',
+						description: 'The age of the browser version, chose negative values to allow beta versions',
+						unit: 'weeks',
+						restrict: { from: -10, to: 150, type: 'number', },
+						addDefault: { from: -1, to: 12, },
+						type: 'interval',
+					}), ({
+						name: 'os',
+						title: 'Operating Systems',
+						description: 'The operating systems that can be chosen from',
+						type: 'menulist',
+						addDefault: 'win',
+						maxLength: 3,
+						restrict: { unique: '.', },
+						options: [
+							{ value: 'win', label: 'Windows', },
+							// { value: 'mac', label: 'Mac OS', },
+							// { value: 'lin', label: 'Linux', },
+						],
+					}), ({
+						name: 'osArch',
+						title: 'Processor Architecture',
+						description: 'The processor and process architectures that can be chosen from',
+						type: 'menulist',
+						addDefault: '32_32',
+						maxLength: 3,
+						restrict: { unique: '.', },
+						options: [
+							{ value: '32_32', label: '32 bit', },
+							{ value: '32_64', label: '32 on 64 bit', },
+							{ value: '64_64', label: '64 bit', },
+						],
+					}), optional({
+						name: 'osAge',
+						title: 'Operating Systems Age',
+						description: 'The age of the operating system version',
+						unit: 'years',
+						restrict: { from: 0, to: 10, type: 'number', },
+						addDefault: { from: 0, to: 3, },
+						type: 'interval',
+					}), optional({
+						name: 'ieFeatureCount',
+						title: 'Number of Internet Explorer "features"',
+						description: `This is rather a detail and only applies if an Internet Explorer User Agent is generated.
+						<br>The IE User Agent contains things like the installed versions on .NET and others. This option restricts the number of these "features"`,
+						restrict: { from: 0, to: 7, type: 'number', },
+						addDefault: { from: 0, to: 4, },
+						type: 'interval',
+					}), optional({
+						name: 'ieFeatureExclude',
+						title: 'Exclude Internet Explorer "features"',
+						description: `Any feature strings partially matched by the regular expression below will be excluded`,
+						addDefault: '(?!)',
+						restrict: { isRegExp: true, },
+						type: 'string',
+					}),
+				],
+			},
 		],
 	}, {
 		name: 'manage',
@@ -106,6 +211,8 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 		type: 'control',
 	},
 ];
+
+const listerners = new WeakMap;
 
 return id => new Options({
 	defaults: [ {
@@ -116,9 +223,15 @@ return id => new Options({
 	}, ].concat(defaults),
 	prefix: id,
 	storage: Storage.sync || Storage.local,
-	addChangeListener: listener => {
+	addChangeListener(listener) {
 		const onChanged = changes => Object.keys(changes).forEach(key => key.startsWith(id) && listener(key, changes[key].newValue));
+		listerners.set(listener, onChanged);
 		Storage.onChanged.addListener(onChanged);
+	},
+	removeChangeListener(listener) {
+		const onChanged = listerners.get(listener);
+		listerners.delete(listener);
+		Storage.onChanged.removeListener(onChanged);
 	},
 });
 

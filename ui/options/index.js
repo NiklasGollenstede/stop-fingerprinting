@@ -2,7 +2,7 @@
 
 const {
 	concurrent: { async, },
-	dom: { createElement, },
+	dom: { createElement, DOMContentLoaded, },
 	format: { Guid },
 } = require('es6lib');
 
@@ -13,42 +13,46 @@ const Profile = require('common/profile');
 require('common/options').then(options => {
 
 window.options = options;
+window.profiles = { };
 
 const deleteProfile = async(function*(profile) {
-	(yield options.profiles.values.splice(options.profiles.values.current.indexOf(profile.id.value), 1));
-	(function reset(options) {
-		options.forEach(option => {
-			option.values.reset();
-			reset(option.children);
-		});
-	})(profile);
+	const id = profile.children.id.value;
+	(yield options.children.profiles.values.splice(options.children.profiles.values.current.indexOf(id), 1));
+	profile.resetAll();
 	tabs.active = 'options';
-	tabs.remove(profile.id.value);
+	tabs.remove(id);
 	editors.delete(profile);
+	delete window.profiles[id];
 });
 
 const addProfile = async(function*(id) {
 	let created = false;
 	if (!id) {
 		id = `{${ Guid() }}`;
-		(yield options.profiles.values.splice(Infinity, 0, id));
+		(yield options.children.profiles.values.splice(Infinity, 0, id));
 		created = true;
 	}
-	console.log('addProfile', id);
 	const profile = (yield Profile(id));
 	tabs.add({
 		id,
 		data:  { branch: profile, },
 	});
-	profile.title.whenChange(title => {
+	profile.children.title.whenChange(title => {
 		tabs.set({ id, title, });
 	});
+	profile.children.priority.whenChange(prio => {
+		tabs.set({ id, icon: createElement('span', { textContent: prio, style: {
+			color: `hsl(${ prio * 10 }, 100%, 70%)`, fontWeight: 'bold',
+			position: 'relative', top: '-6px',
+		}, }), });
+	});
 	created && (tabs.active = id);
+	window.profiles[id] = profile;
 });
 
 function onOptionCommand({ name, }, value) {
 	({
-		addProfile: () => addProfile(),
+		addProfile: addProfile.bind(null, null, null),
 	})[name](value);
 }
 
@@ -93,6 +97,6 @@ const tabs = new Tabs({
 	},
 });
 
-options.profiles.values.current.forEach(addProfile);
+options.children.profiles.values.current.forEach(addProfile);
 
 });

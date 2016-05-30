@@ -31,11 +31,9 @@ function generateToken() {
 function inject(script, ...args) {
 	const element = document.createElement('div');
 	element.setAttribute('onclick', `
-		try {
+		try { const script = (${ script });
 			const args = JSON.parse(\`${ JSON.stringify(args) }\`);
-			const value = (
-			${ script }
-			).apply(null, args);
+			const value = script.apply(null, args);
 			this.dataset.done = true;
 			this.dataset.value = JSON.stringify(value) || 'null';
 		} catch (error) {

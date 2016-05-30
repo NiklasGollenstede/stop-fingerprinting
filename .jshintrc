@@ -12,6 +12,7 @@
 	"eqnull": true,
 	"laxbreak": true,
 	"validthis": true,
+	"elision": true,
 
 	"esversion": 6,
 	"strict": true,

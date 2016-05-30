@@ -44,8 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
 		window[frame.id.replace(/-(\w)/g, (_, c) => c.toUpperCase())] = cw;
 	});
 
-	test(iframes.contentWindow(), 'loose contentWindow');
-	test(iframes.contentDocument(), 'loose contentDocument');
-	test(iframes.windowFrames(), 'loose windowFrames');
+	// test(iframes.contentWindow(), 'loose contentWindow');
+	// test(iframes.contentDocument(), 'loose contentDocument');
+	// test(iframes.windowFrames(), 'loose windowFrames');
 
 });

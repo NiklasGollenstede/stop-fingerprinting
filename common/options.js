@@ -25,7 +25,7 @@ Disallowing code injection is generally a good security practice, but it will re
 			{ value: false, label: 'Keep the CSP, but potentially disable this extension', },
 		],
 		restrict: { type: 'boolean', },
-		unit: 'on sites that employ a CSP'
+		unit: 'on sites that employ a CSP',
 	}, {
 		name: 'profiles',
 		maxLength: Infinity,
@@ -39,13 +39,21 @@ Disallowing code injection is generally a good security practice, but it will re
 	},
 ];
 
+const listerners = new WeakMap;
+
 return new Options({
 	defaults,
 	prefix: 'options',
 	storage: Storage.sync || Storage.local,
-	addChangeListener: listener => {
+	addChangeListener(listener) {
 		const onChanged = changes => Object.keys(changes).forEach(key => key.startsWith('options') && listener(key, changes[key].newValue));
+		listerners.set(listener, onChanged);
 		Storage.onChanged.addListener(onChanged);
+	},
+	removeChangeListener(listener) {
+		const onChanged = listerners.get(listener);
+		listerners.delete(listener);
+		Storage.onChanged.removeListener(onChanged);
 	},
 });
 

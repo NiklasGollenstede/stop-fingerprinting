@@ -1,3 +1,5 @@
+// two lines
+// padding
 const script = window.script = function(__arg__)  { 'use strict'; const { token, } = __arg__;
 
 const log = (...args) => (console.log(...args), args.pop());
@@ -86,7 +88,7 @@ class FakedAPIs {
 	}
 
 	build() {
-		this.apis = new this.window.Function('"use strict"; return (function '+ this._build +').call(this);').call(this);
+		this.apis = new this.window.Function('"use strict"; return (function '+ (this._build +'').replace(/^(function )?/, '') +').call(this);').call(this);
 	}
 
 	// executed in the target window itself
@@ -96,14 +98,18 @@ class FakedAPIs {
 		const { functionToString, iFrameContentDocument, iFrameContentWindow, devicePixelRatio, htmlElementOffsetWidth, htmlElementOffsetHeight, elementClientWidth, elementClientHeight, } = originals;
 		const { hiddenFunctions, token, getOffsetSize, } = context;
 		const get = context.get.bind(context, this);
-		const apis = {
-			get devicePixelRatio() { console.log('devicePixelRatio', token, devicePixelRatio / 2, window.frameElement); return devicePixelRatio / 2; },
-			// get devicePixelRatio() { return get('devicePixelRatio'); },
-		};
+		const apis = { };
 
 		// fake function+'' => [native code]
 		function hideCode(name, func) {
-			!func && (func = name) && (name = func.name);
+			if (typeof name === 'object') {
+				const prop = Object.getOwnPropertyDescriptor(name, Object.keys(name)[0]);
+				func = prop.get || prop.set;
+				name = func.name;
+			} else if (!func) {
+				func = name;
+				name = func.name;
+			}
 			hiddenFunctions.set(func, name || '');
 			return func;
 		}
@@ -112,37 +118,47 @@ class FakedAPIs {
 			Object.keys(object).forEach(key => typeof object[key] === 'function' && hideCode(object[key]));
 			return object;
 		}
-		apis.functionToString = function() {
-			if (hiddenFunctions.has(this)) {
-				return 'function '+ hiddenFunctions.get(this) +'() { [native code] }';
-			}
-			return functionToString.call(this);
+		apis['Function.prototype'] = {
+			toString: { value: hideCode(function toString() {
+				if (hiddenFunctions.has(this)) {
+					return 'function '+ hiddenFunctions.get(this) +'() { [native code] }';
+				}
+				return functionToString.call(this);
+			}), },
 		};
 
 		// catch all calls that retrieve an window object from an iframe and make sure that iframe is wrapped
-		apis.iFrameGetters = hideAllCode({
-			contentWindow() {
+		/*apis['HTMLIFrameElement.prototype'] = {
+			contentWindow: { get: hideCode(function() {
 				const window = iFrameContentWindow.call(this);
 				if (window) { try {
 					fakeAPIs(window);
 				} catch (error) { console.error('fakeAPIs in get contentWindow failed', error); } }
 				return window;
-			},
+			}), },
 			// TODO: contentDocument
-		});
+		};*/
 		// TODO: window.frames
 
 		// screen
-		const screenGetters = apis.screenGetters = { };
+		const screen = apis['Screen.prototype'] = { };
 		[ 'width', 'availWidth', 'height', 'availHeight', 'colorDepth', 'pixelDepth', 'top', 'left', 'availTop', 'availLeft', ]
-		.forEach(prop => screenGetters[prop] = hideCode(function() { return get('screen', prop); }));
+		.forEach(prop => screen[prop] = { get: hideCode(function() { return get('screen', prop); }), });
+		apis.window = {
+			devicePixelRatio: {
+				get: hideCode({ get devicePixelRatio() { return get('devicePixelRatio'); }, }),
+				set: hideCode({ set devicePixelRatio(v) { }, }),
+			},
+		};
 
-		apis.mediaDevicesEnumerateDevices = hideCode(function enumerateDevices() { return Promise.resolve([ ]); });
+		apis['MediaDevices.prototype'] = {
+			enumerateDevices: { value: hideCode(function enumerateDevices() { return Promise.resolve([ ]); }), },
+		};
 
 		// navigator string values
-		const navigatorGetters = apis.navigatorGetters = { };
+		const navigator = apis['Navigator.prototype'] = { };
 		[ ] // XXX
-		.forEach(prop => navigatorGetters[prop] = hideCode(function() { return get('navigator', prop); }));
+		.forEach(prop => screen[prop] = { get: hideCode(function() { return get('navigator', prop); }), });
 
 		// navigator.plugins
 		const PluginArray = apis.PluginArray = hideCode(function PluginArray() { throw new TypeError('Illegal constructor'); });
@@ -156,8 +172,8 @@ class FakedAPIs {
 			[Symbol.iterator]: { value: hideCode(function values() { return [][Symbol.iterator](); }), writable: true, enumerable: false, configurable: true, },
 			[Symbol.toStringTag]: { value: 'PluginArray', writable: false, enumerable: false, configurable: true, },
 		});
-		const pluginArrayInstance = apis.pluginArrayInstance = Object.create(PluginArray.prototype);
-		navigatorGetters.plugins = hideCode(function() { return pluginArrayInstance; });
+		const pluginArrayInstance = Object.create(PluginArray.prototype);
+		navigator.plugins = { get: hideCode({ get plugins() { return pluginArrayInstance; }, }), };
 
 		// navigator.mimeTypes
 		const MimeTypeArray = apis.MimeTypeArray = hideCode(function MimeTypeArray() { throw new TypeError('Illegal constructor'); });
@@ -170,24 +186,24 @@ class FakedAPIs {
 			[Symbol.iterator]: { value: hideCode(function values() { return [][Symbol.iterator](); }), writable: true, enumerable: false, configurable: true, },
 			[Symbol.toStringTag]: { value: 'MimeTypeArray', writable: false, enumerable: false, configurable: true, },
 		});
-		const mimeTypeArrayInstance = apis.mimeTypeArrayInstance = Object.create(MimeTypeArray.prototype);
-		navigatorGetters.mimeTypes = hideCode(function() { return mimeTypeArrayInstance; });
+		const mimeTypeArrayInstance = Object.create(MimeTypeArray.prototype);
+		navigator.mimeTypes = { get: hideCode({ get mimeTypes() { return mimeTypeArrayInstance; }, }), };
 
 		// navigator.sendBeacon
-		apis.navigatorSendBeacon = /*hideCode*/(function sendBeacon(arg) {
+		navigator.sendBeacon = { value: hideCode(function sendBeacon(arg) {
 			if (!arguments.length) { throw new window.TypeError('Not enough arguments to Navigator.sendBeacon.'); }
 			return true;
-		});
+		}), };
 
 		// HTMLElement.offsetWidth/Height
-		apis.htmlElementGetters = hideAllCode({
-			offsetWidth(old) {
+		apis['HTMLElement.prototype'] = {
+			offsetWidth: { get: hideCode({ get offsetWidth() {
 				return getOffsetSize(elementClientWidth, htmlElementOffsetWidth, this);
-			},
-			offsetHeight(old) {
+			}, }), },
+			offsetHeight: { get: hideCode({ get offsetHeight() {
 				return getOffsetSize(elementClientHeight, htmlElementOffsetHeight, this);
-			},
-		});
+			}, }), },
+		};
 
 		return apis;
 	}
@@ -195,22 +211,22 @@ class FakedAPIs {
 	apply() {
 		const { window, apis, } = this;
 
-		window.Function.prototype.toString = apis.functionToString;
-		// setGetters(window.HTMLIFrameElement.prototype, apis.iFrameGetters);
-
-		window.devicePixelRatio = apis.devicePixelRatio;
-		setGetters(window.Screen.prototype, apis.screenGetters);
-
-		window.PluginArray = apis.PluginArray;
-		window.MimeTypeArray = apis.MimeTypeArray;
-		setGetters(window.Navigator.prototype, apis.navigatorGetters);
-		window.Navigator.prototype.sendBeacon = apis.navigatorSendBeacon;
-		window.MediaDevices.prototype.enumerateDevices = apis.mediaDevicesEnumerateDevices;
-
-		setGetters(window.HTMLElement.prototype, apis.htmlElementGetters);
+		Object.keys(apis).forEach(key => {
+			const target = key.split('.').reduce((object, key) => object[key], window);
+			setProps(target, apis[key]);
+		});
 	}
 }
 
+function setProps(object, props) {
+	Object.keys(props).forEach(key => {
+		const prop = props[key];
+		if (!prop.add && !object.hasOwnProperty(key)) { return; }
+		if (prop.delete) { return delete object[key]; }
+		Object.defineProperty(object, key, prop);
+	});
+	return object;
+}
 function setGetters(object, getters) {
 	Object.keys(getters).forEach(key => {
 		if (!object.hasOwnProperty(key)) { return; }
