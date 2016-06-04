@@ -208,6 +208,7 @@ const Generator = exports.Generator = class Generator {
 		this.browser_age = parseRange(config.browserAge, { from: -1, to: 12, });
 		this.ie_feature_count = parseRange(config.ieFeatureCount, { from: 0, to: 3, });
 		this.ie_feature = config.ie_feature_exclude ? ieFeatures.filter(f => !f.match(config.ieFeatureExclude)) : ie_feature;
+		this.dnt_chance = parseRange(config.dntChance, { from: 1, to: 30, });
 		this.validate();
 	}
 	validate() {
@@ -235,6 +236,8 @@ class Navigator {
 		const browser_release = Date.now() - randInRange(config.browser_age) * 604800000/*1 week*/;
 		this.browser_version = browser_version[this.browser].find(({ date, }) => date < browser_release).version;
 		this.browser === 'ie' && (this.ie_feature = chooseSomeRandom(config.ie_feature, config.ie_feature_count).map(({ feature, }) => feature));
+		const randA = Math.random();
+		this.dntValue = randA < config.dnt_chance.from / 100 ? '0' : randA < config.dnt_chance.to / 100 ? '1' : null;
 		this.random = rand();
 		this.json = null;
 	}
@@ -354,13 +357,27 @@ class Navigator {
 		return '20121011'; // TODO
 	}
 
+	get doNotTrack() {
+		return this.dntValue;
+	}
+
 	toJSON() {
 		if (this.json) { return this.json; }
 		const json = { };
-		Generator.keys.forEach(key => json[key] = this[key]);
+		Navigator.keys.forEach(key => json[key] = this[key]);
 		return (this.json = json);
 	}
 }
+Navigator.keys = Object.getOwnPropertyNames(Navigator.prototype).filter(key => {
+	const getter = Object.getOwnPropertyDescriptor(Navigator.prototype, key).get;
+	if (!getter) { return false; }
+	Object.defineProperty(Navigator.prototype, key, { get() {
+		const value = getter.call(this);
+		Object.defineProperty(this, key, { value, configurable: true, });
+		return value;
+	}, });
+	return true;
+});
 
 function setValue(object, key, value) {
 	Object.defineProperty(object, key, { value, enumerable: true, configurable: true, writable: true, });

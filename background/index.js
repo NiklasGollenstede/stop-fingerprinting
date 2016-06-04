@@ -84,14 +84,43 @@ chrome.webRequest.onBeforeSendHeaders.addListener(modifyRequestHeaders, { urls: 
 function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) {
 	const domain = getDomain(url);
 	const profile = (type === 'main_frame' ? Profiles.create({ requestId, url, }) : Profiles.get({ tabId, url, })).getDomain(domain);
-	const ua = profile.navigator.userAgent;
-	const header = requestHeaders.find(header => (/^User-Agent$/i).test(header.name));
-	// console.log('onBeforeSendHeaders', url, domain, { old: header.value, new: ua, });
-	if (header.value !== ua) {
+
+	let changed = false;
+	requestHeaders.forEach(header => {
+		if ((/^User-Agent$/i).test(header.name) && header.value) { return replaceUA(header); }
+	});
+	setDNT();
+	return changed ? { requestHeaders, } : { };
+
+	function replaceUA(header) {
+		const ua = profile.navigator.userAgent;
+		if (header.value === ua) { return; }
+		changed = true;
 		header.value = ua;
-		return { requestHeaders, };
 	}
-	return { };
+
+	function setDNT() {
+		const index = requestHeaders.findIndex(({ name, }) => (/^DNT$/i).test(name));
+		if (index !== -1) {
+			switch (profile.navigator.doNotTrack) {
+				case '0': {
+					if (requestHeaders[index].value === '0') { return; }
+					requestHeaders[index].value = '0';
+				} break;
+				case '1': {
+					if (requestHeaders[index].value === '1') { return; }
+					requestHeaders[index].value = '1';
+				} break;
+				default: {
+					requestHeaders.splice(index, 1);
+				} break;
+			}
+		} else {
+			if (profile.navigator.doNotTrack == null) { return; }
+			requestHeaders.splice(Infinity, 0, { name: 'DNT', value: profile.navigator.doNotTrack, }); // TODO: use correct index
+		}
+		changed = true;
+	}
 }
 
 Messages.addHandler('getOptionsForUrl', function (url) {

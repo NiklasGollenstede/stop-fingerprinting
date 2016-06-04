@@ -108,6 +108,7 @@ class ProfileStack {
 			browserAge: this.get('navigator.browserAge'),
 			ieFeatureCount: this.get('navigator.ieFeatureCount'),
 			ieFeatureExclude: this.get('navigator.ieFeatureExclude'),
+			dntChance: this.get('navigator.dntChance'),
 		});
 		console.log('created navGen', value);
 		Object.defineProperty(this, 'navGen', { value, configurable: true, });

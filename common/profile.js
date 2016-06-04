@@ -102,8 +102,8 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 				type: 'bool',
 			}), {
 				name: 'navigator',
-				title: 'Navigator',
-				description: `Decide which values the window.navigator and the User-Agent HTTP header should have.
+				title: 'Navigator and Requests',
+				description: `Decide which values the window.navigator and some HTTP-request header fields should have.
 				<br>These values are randomly generated according to the parameters below`,
 				type: 'label',
 				children: [
@@ -113,14 +113,6 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 						description: 'Disable User Agent spoofing for all matching sites and use the browsers default values',
 						addDefault: true,
 						type: 'bool',
-					}), optional({
-						name: 'maxAge',
-						title: 'Lifetime',
-						description: 'For any resulting set of rules the Navigator/User Agent will be randomly regenerated every:',
-						addDefault: 10,
-						unit: 'minutes',
-						restrict: { from: 0.005, to: 45000/*~1 month*/, },
-						type: 'number',
 					}), ({
 						name: 'browser',
 						title: 'Browsers',
@@ -175,6 +167,15 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 						unit: 'years',
 						restrict: { from: 0, to: 10, type: 'number', },
 						addDefault: { from: 0, to: 3, },
+						type: 'interval',
+					}), optional({
+						name: 'dntChance',
+						title: 'Do-Not-Track header',
+						description: `If you would trust the <a href="https://en.wikipedia.org/wiki/Do_Not_Track">Do Not Track</a> concept, you wouldn't be using this extension.
+						<br>So the best use for it is probably to send random values`,
+						unit: '<chance to set the header> - <chance to opt in to tracking>',
+						addDefault: { from: 30, to: 3, },
+						restrict: { from: 0, to: 100, type: 'number', },
 						type: 'interval',
 					}), optional({
 						name: 'ieFeatureCount',
