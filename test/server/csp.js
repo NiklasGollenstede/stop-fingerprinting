@@ -28,7 +28,7 @@ const CSP = module.exports = function CSP(app) {
 			// formAction: [ ],
 			// frameAncestors: self(),
 			// frameSrc: self(),
-			// imgSrc: self('data:'),
+			imgSrc: self('data:'),
 			// manifestSrc: [ ],
 			// mediaSrc: [ ],
 			// objectSrc: [ ],
@@ -68,9 +68,11 @@ CSP.onerror = function(request, response) {
 
 
 function self(...others) {
-	return config.origins
-	? config.origins.concat("'self'")
-	: [ "'self'", 'https://$$', 'http://$$', 'https://*.$$', 'http://*.$$', ].map(s => s.replace(/\$\$/, () => config.host));
+	return (
+		config.origins
+		? config.origins.concat("'self'")
+		: [ "'self'", 'https://$$', 'http://$$', 'https://*.$$', 'http://*.$$', ].map(s => s.replace(/\$\$/, () => config.host))
+	).concat(others);
 }
 
 })();

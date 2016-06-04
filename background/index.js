@@ -25,33 +25,29 @@ function weakenCsp({ type, responseHeaders, }) {
 			if ((/^script-src\s+/i).test(directive)) { return scriptSrc.push(directive.split(/\s+/g).slice(1)); }
 			others.push(directive);
 		});
-		const isOk = defaultSrc.every(sources => !sources.includes("'none'") && sources.includes("'unsafe-eval'") && sources.includes("'unsafe-inline'"));
+		const isOk = defaultSrc.every(sources => !sources.includes("'none'") && sources.includes("'unsafe-inline'"));
 		if (isOk && !scriptSrc.length) { return; }
 		if (scriptSrc.length) {
 			scriptSrc = scriptSrc.map(sources => {
 				if (sources.includes("'none'")) {
 					changed = true;
-					return [ "'unsafe-eval'", "'unsafe-inline'", ];
+					return [ "'nonce-abc'", ]; // TODO: XXX: use real nonce
 				}
 				if (!sources.includes("'unsafe-inline'")) {
 					changed = true;
-					sources.unshift("'unsafe-inline'");
-				}
-				if (!sources.includes("'unsafe-eval'")) {
-					changed = true;
-					sources.unshift("'unsafe-eval'");
+					sources.unshift("'nonce-abc'"); // TODO: XXX: use real nonce
 				}
 				return sources;
 			});
 		} else {
 			changed = true;
-			scriptSrc = [ [ "'unsafe-eval'", "'unsafe-inline'", ].concat(defaultSrc[0] || [ ]), ];
+			scriptSrc = [ [ "'nonce-abc'", ].concat(defaultSrc[0] || [ ]), ]; // TODO: XXX: use real nonce
 		}
 		header.value
 		= defaultSrc.map(sources => 'default-src '+ sources.join(' ') +'; ')
 		+ scriptSrc.map(sources => 'script-src '+ sources.join(' ') +'; ')
 		+ others.join('; ');
-		// console.log('build CSP\n', header.value, '\nfrom', defaultSrc, scriptSrc, others);
+		console.log('build CSP\n', header.value, '\nfrom', defaultSrc, scriptSrc, others);
 	});
 	return changed ? { responseHeaders, } : { };
 }

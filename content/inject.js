@@ -1,18 +1,57 @@
-// two lines
-// padding
-const script = window.script = function(__arg__)  { 'use strict'; const { token, } = __arg__;
+const script = window.script = function()  { 'use strict'; const [ { token, }, ] = arguments;
 
 const log = (...args) => (console.log(...args), args.pop());
 
-const randomFontFactor = (rand => () => 0.75 + rand() / (2 * 256 * 256))(new Random(256 * 256));
-
 let context = null;
 
+function randomizeCanvas(canvas, originals) {
+	console.log('randomizeCanvas');
+	const ctx = canvas.getContext('2d');
+	const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height); // TODO: don't use getters
+	const clone = originals.Node_p.cloneNode.call(canvas, true);
+	clone.getContext('2d').putImageData(imageData, 0, 0);
+	return clone;
+}
+
+function getRandomBytes(length) {
+	const buffer = new ArrayBuffer(length);
+	for (let offset = 0; offset < length; offset += 65536) {
+		crypto.getRandomValues(new Uint8Array(buffer, offset, Math.min(length - offset, 65536)));
+	}
+	return new Uint8Array(buffer);
+}
+
+function randomizeUInt8Array(data) {
+	const rnd = getRandomBytes(data.length);
+	let w = 0, mask = 0;
+	for (let i = 0, l = data.length; i < l; ++i) {
+		w = data[i];
+		mask = (1 << (32 - Math.clz32(w))) - 1 >>> 2; // TODO: this leaves deterministic bits
+		data[i] = w ^ (mask & rnd[i]);
+	}
+	return data;
+}
+
+function randomizeTypedArray(array) {
+	console.trace('not implemented');
+	// TODO: manipulate values in array
+	return array;
+}
+
 function createContext(options) {
+
+	const randomFontFactor = (() => {
+		const dispersion = options.fonts.dispersion / 100;
+		const offset = 1 - dispersion;
+		const factor = 2 * dispersion / (256 * 256);
+		const rand = new Random(256 * 256);
+		return () => offset + rand() * factor;
+	})();
+
 	const context = {
 		values: options,
 
-		token, log,
+		token, log, notImplemented,
 		fakes: new WeakMap,
 		hiddenFunctions: new WeakMap,
 
@@ -22,6 +61,8 @@ function createContext(options) {
 			const factor = randomFontFactor();
 			return correct === correct << 0 ? Math.round(correct * factor) : correct * factor;
 		},
+
+		randomizeCanvas, randomizeTypedArray, randomizeUInt8Array,
 	};
 	log('created context', context);
 	return context;
@@ -51,29 +92,66 @@ class FakedAPIs {
 		this.context = context;
 		this.window = window;
 		this.originals = {
-			devicePixelRatio: window.devicePixelRatio,
-			functionToString: window.Function.prototype.toString, // TODO: Function.prototype.toSource (firefox), Object.prototype.toString
-			iFrameContentDocument: Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentDocument').get,
-			iFrameContentWindow: Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentWindow').get,
-			htmlElementOffsetWidth: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, 'offsetWidth').get,
-			htmlElementOffsetHeight: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, 'offsetHeight').get,
-			elementClientWidth: Object.getOwnPropertyDescriptor(window.Element.prototype, 'clientWidth').get,
-			elementClientHeight: Object.getOwnPropertyDescriptor(window.Element.prototype, 'clientHeight').get,
+			Error_p: {
+				constructor: window.Error,
+				get_stack: exists(Object.getOwnPropertyDescriptor(window.Error.prototype, 'stack'), 'get'),
+			},
+			Function_p: {
+				toString: window.Function.prototype.toString, // TODO: Function.prototype.toSource (firefox), Object.prototype.toString
+			},
+			Node_p: {
+				cloneNode: window.Node.prototype.cloneNode,
+			},
+			Element_p: {
+				get_clientWidth: Object.getOwnPropertyDescriptor(window.Element.prototype, 'clientWidth').get,
+				get_clientHeight: Object.getOwnPropertyDescriptor(window.Element.prototype, 'clientHeight').get,
+			},
+			HTMLElement_p: {
+				get_offsetWidth: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, 'offsetWidth').get,
+				get_offsetHeight: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, 'offsetHeight').get,
+			},
+			HTMLIFrameElement_p: {
+				get_contentDocument: Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentDocument').get,
+				get_contentWindow: Object.getOwnPropertyDescriptor(window.HTMLIFrameElement.prototype, 'contentWindow').get,
+			},
+			HTMLCanvasElement_p: {
+				toDataURL: window.HTMLCanvasElement.prototype.toDataURL,
+				toBlob: window.HTMLCanvasElement.prototype.toBlob,
+				mozGetAsFile: window.HTMLCanvasElement.prototype.mozGetAsFile,
+			},
+			CanvasRenderingContext2D_p: {
+				getImageData: window.CanvasRenderingContext2D.prototype.getImageData,
+			},
+			WebGLRenderingContext_p: {
+				readPixels: window.WebGLRenderingContext.prototype.readPixels,
+			},
 		};
 		this.fakeAPIs = fakeAPIs;
 		this.build();
 	}
 
 	build() {
-		this.apis = new this.window.Function('"use strict"; return (function '+ (this._build +'').replace(/^(function )?/, '') +').call(this);').call(this);
+		this.apis = evaluateInWindow(this.window, this._build, this);
 	}
 
 	// executed in the target window itself
 	_build() {
+		'use strict';
 		const _this = this;
 		const { context, originals, fakeAPIs, window, } = this;
-		const { functionToString, iFrameContentDocument, iFrameContentWindow, devicePixelRatio, htmlElementOffsetWidth, htmlElementOffsetHeight, elementClientWidth, elementClientHeight, } = originals;
-		const { hiddenFunctions, token, getOffsetSize, values, log, } = context;
+		const {
+			Error_p, Function_p,
+			HTMLIFrameElement_p,
+			Node_p, Element_p, HTMLElement_p,
+			HTMLCanvasElement_p, CanvasRenderingContext2D_p, WebGLRenderingContext_p,
+		} = originals;
+		const {
+			hiddenFunctions,
+			values, token,
+			log, notImplemented,
+			getOffsetSize,
+			randomizeCanvas, randomizeTypedArray, randomizeUInt8Array,
+		} = context;
 		const apis = { };
 
 		// fake function+'' => [native code]
@@ -99,26 +177,32 @@ class FakedAPIs {
 				if (hiddenFunctions.has(this)) {
 					return 'function '+ hiddenFunctions.get(this) +'() { [native code] }';
 				}
-				return functionToString.call(this);
+				return Function_p.toString.call(this);
 			}), },
 		};
 
 		// catch all calls that retrieve an window object from an iframe and make sure that iframe is wrapped
-		/*apis['HTMLIFrameElement.prototype'] = {
+		apis['HTMLIFrameElement.prototype'] = {
 			contentWindow: { get: hideCode(function() {
-				const window = iFrameContentWindow.call(this);
+				const window = HTMLIFrameElement_p.get_contentWindow.call(this);
 				if (window) { try {
 					fakeAPIs(window);
 				} catch (error) { console.error('fakeAPIs in get contentWindow failed', error); } }
 				return window;
 			}), },
-			// TODO: contentDocument
-		};*/
+			contentDocument: { get: hideCode(function() {
+				const document = HTMLIFrameElement_p.get_contentDocument.call(this);
+				if (document) { try {
+					fakeAPIs(document.defaultView);
+				} catch (error) { console.error('fakeAPIs in get contentDocument failed', error); } }
+				return document;
+			}), },
+		};
 		// TODO: window.frames
 
 		// screen
 		const screen = apis['Screen.prototype'] = { };
-		[ 'width', 'availWidth', 'height', 'availHeight', 'colorDepth', 'pixelDepth', 'top', 'left', 'availTop', 'availLeft', ]
+		Object.keys(values.screen)
 		.forEach(prop => screen[prop] = { get: hideCode(function() { return values.screen[prop]; }), });
 		apis.window = {
 			devicePixelRatio: {
@@ -133,7 +217,7 @@ class FakedAPIs {
 
 		// navigator string values
 		const navigator = apis['Navigator.prototype'] = { };
-		[ 'userAgent', 'platform', ] // XXX
+		Object.keys(values.navigator) // XXX
 		.forEach(prop => navigator[prop] = { get: hideCode(function() { return values.navigator[prop]; }), });
 
 		// navigator.plugins
@@ -174,11 +258,29 @@ class FakedAPIs {
 		// HTMLElement.offsetWidth/Height
 		apis['HTMLElement.prototype'] = {
 			offsetWidth: { get: hideCode({ get offsetWidth() {
-				return getOffsetSize(elementClientWidth, htmlElementOffsetWidth, this);
+				return getOffsetSize(Element_p.get_clientWidth, HTMLElement_p.get_offsetWidth, this);
 			}, }), },
 			offsetHeight: { get: hideCode({ get offsetHeight() {
-				return getOffsetSize(elementClientHeight, htmlElementOffsetHeight, this);
+				return getOffsetSize(Element_p.get_clientHeight, HTMLElement_p.get_offsetHeight, this);
 			}, }), },
+		};
+
+		// HTMLCanvasElement
+		const canvas = apis['HTMLCanvasElement.prototype'] = { };
+		[ 'toDataURL', 'toBlob', 'mozGetAsFile', ]
+		.forEach(prop => canvas[prop] = { value: hideCode(prop, function() { log('HTMLCanvasElement.prototype.', prop); return HTMLCanvasElement_p[prop].apply(randomizeCanvas(this, originals), arguments); }), });
+		apis['CanvasRenderingContext2D.prototype'] = {
+			getImageData: { value: hideCode(function getImageData(a, b, c, d) {
+				const data = CanvasRenderingContext2D_p.getImageData.apply(this, arguments);
+				randomizeUInt8Array(data.data);
+				return data;
+			}), },
+		};
+		apis['WebGLRenderingContext.prototype'] = {
+			readPixels: { value: hideCode(function readPixels(a, b, c, d, e, f, data) {
+				WebGLRenderingContext_p.readPixels.apply(this, arguments);
+				randomizeTypedArray(data);
+			}), },
 		};
 
 		return apis;
@@ -200,13 +302,6 @@ function setProps(object, props) {
 		if (!prop.add && !object.hasOwnProperty(key)) { return; }
 		if (prop.delete) { return delete object[key]; }
 		Object.defineProperty(object, key, prop);
-	});
-	return object;
-}
-function setGetters(object, getters) {
-	Object.keys(getters).forEach(key => {
-		if (!object.hasOwnProperty(key)) { return; }
-		Object.defineProperty(object, key, { get: getters[key], });
 	});
 	return object;
 }
@@ -251,7 +346,7 @@ function attachObserver() {
  * Returns a function that returns pseudo randoms without calling Math.random() each time for small numbers.
  * @param {number}  n  Exclusive upper bound of the randoms. (0 <= random < n)
  */
-function Random(n) {
+function Random(n) { // TODO: test
 	const shift = Math.ceil(Math.log2(n));
 	const factor = n / Math.pow(2, shift);
 	const mask = (1 << shift) - 1;
@@ -260,7 +355,7 @@ function Random(n) {
 
 	function get() {
 		index = 0;
-		let random = Math.random() * Number.MAX_SAFE_INTEGER;
+		let random = Math.random() * Number.MAX_SAFE_INTEGER << 0;
 		for (let i = shift, j = 0; i < 32; i += shift, ++j) {
 			buffer[j] = ((random & mask) * factor) << 0;
 			random = random >> shift;
@@ -273,11 +368,38 @@ function Random(n) {
 	};
 }
 
+function exists(obj, ...keys) {
+	return keys.reduce((obj, key) => obj && obj[key], obj);
+}
+
 function notImplemented() {
 	throw new Error('not implemented');
 }
 
-
+function evaluateInWindow(window, script, thisArg, ...args) {
+	const { document, } = window;
+	const element = document.createElement('script');
+	element.async = false;
+	element.setAttribute('nonce', 'abc'); // TODO: XXX: use a real nonce
+	element.textContent =
+	(`function inject({ detail, }) { try { const script = (function ${ (script +'').replace(/^(function )?/, '') });
+		window.removeEventListener('inject', inject);
+		console.log('detail', detail);
+		detail.return(script.apply(detail.thisArg, detail.args));
+	} catch (error) {
+		detail.throw(error);
+	} }; window.addEventListener('inject', inject);`);
+	document.documentElement.appendChild(element).remove();
+	let value, error, hasThrown, hasReturned;
+	window.dispatchEvent(new CustomEvent('inject', { detail: {
+		return(v) { value = v; hasReturned = true; },
+		throw(e) { error = e; hasThrown = true; },
+		thisArg, args,
+	}, }));
+	if (hasThrown) { throw error; }
+	if (!hasReturned) { throw new Error('Failed to evaluate function'); }
+	return value;
+}
 
 return (function main() {
 	context = getContext();

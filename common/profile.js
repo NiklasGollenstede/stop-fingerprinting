@@ -246,7 +246,7 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 					}), {
 						name: 'offset',
 						title: 'Offset',
-						description: 'The amount of space at each edge of the screen that is occupied by task/title bars etc',
+						description: 'The amount of space at each edge of the screen that is occupied by task/title bars etc.',
 						type: 'label',
 						children: [
 							optional({
@@ -277,7 +277,30 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 						],
 					},
 				],
-			}
+			}, {
+				name: 'fonts',
+				title: 'Fonts',
+				description: `The set of fonts installed on a computer can be quite unique.
+				<br>There are simple ways to detect these fonts:
+				<ul>
+					<li>Plugins like flash allow to list the fonts directly</li>
+					<li>JavaScript can test the presence of a font by displaying (hidden) text in that font and checking how it is rendered</li>
+				</ul>
+				`,
+				type: 'label',
+				children: [
+					optional({
+						name: 'dispersion',
+						title: 'JavaScript randomness',
+						description: `To prevent JavaScript from detecting fonts, this adds some randomness to the size of text elements.
+						<br>On most websites this should not have any visible effects, but the font detection will effectively disabled if the randomness is greater zero`,
+						unit: '%',
+						addDefault: 25,
+						restrict: { from: 0, to: 75, },
+						type: 'number',
+					}),
+				],
+			},
 		],
 	}, {
 		name: 'manage',

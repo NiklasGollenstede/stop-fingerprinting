@@ -43,7 +43,7 @@ const addProfile = async(function*(id) {
 	profile.children.priority.whenChange(prio => {
 		tabs.set({ id, icon: createElement('span', { textContent: prio, style: {
 			color: `hsl(${ prio * 10 }, 100%, 70%)`, fontWeight: 'bold',
-			position: 'relative', top: '-6px',
+			position: 'relative', top: '-7px',
 		}, }), });
 	});
 	created && (tabs.active = id);

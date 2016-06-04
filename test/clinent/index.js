@@ -48,4 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
 	// test(iframes.contentDocument(), 'loose contentDocument');
 	// test(iframes.windowFrames(), 'loose windowFrames');
 
+	testCanvas(window);
+
 });

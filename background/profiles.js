@@ -20,11 +20,11 @@
 
 return function(options) {
 
-const profiles = new Map; // uuid ==> Profile(id)
-const profileIncludes = new WeakMap; // Profile(id) ==> { all: [RegExp], }
-const profileStacks = new Map; // [uuid].join($) ==> ProfileStack
-const profileInStack = new MultiMap; // Profile(id) ==> ProfileStack
-let sortedProfiles = [ ]; // [Profile(id)] sorted by .priority
+const profiles          = new Map;            // id                ==>  Profile(id)
+const profileIncludes   = new WeakMap;        // Profile(id)       ==>  { all: [RegExp], }
+const profileStacks     = new Map;            // [id].join($)      ==>  ProfileStack
+const profileInStack    = new MultiMap;       // Profile(id)       ==>  ProfileStack
+let   sortedProfiles    = [ ];                // [Profile(id)] sorted by .priority
 
 const addProfile = async(function*(id) {
 	const profile = (yield Profile(id));
@@ -70,6 +70,7 @@ const defaults = {
 	'screen.height':  { from: screen.height * 0.8, to: 2160, },
 	'screen.devicePixelRatio': { from: 1, to: window.devicePixelRatio * 1.25, },
 	'screen.offset.bottom': { from: 30, to: 50, },
+	'fonts.dispersion': 25,
 };
 
 const realNavigator = NavGen.keys.reduce((result, key) => ((result[key] = window.navigator[key]), result), { });
@@ -162,6 +163,9 @@ class ProfileStack {
 			navigator: this.getNavigator(domain),
 			screen: this.getScreen(domain),
 			windowName: this.get('windowName'),
+			fonts: {
+				dispersion: this.get('fonts.dispersion'),
+			},
 		};
 	}
 

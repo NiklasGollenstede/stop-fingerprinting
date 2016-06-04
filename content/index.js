@@ -29,22 +29,24 @@ function generateToken() {
 }
 
 function inject(script, ...args) {
-	const element = document.createElement('div');
-	element.setAttribute('onclick', `
-		try { const script = (${ script });
-			const args = JSON.parse(\`${ JSON.stringify(args) }\`);
-			const value = script.apply(null, args);
-			this.dataset.done = true;
-			this.dataset.value = JSON.stringify(value) || 'null';
-		} catch (error) {
-			console.error(error);
-			this.dataset.error = JSON.stringify(
-				typeof error !== 'object' || error === null || !(error instanceof Error) ? error
-				: { name: error.name, message: error.message, stack: error.stack, }
-			);
-		}
-	`);
-	element.click();
+	const { document, } = this || window;
+	const element = document.createElement('script');
+	element.async = false;
+	element.id = 'injector';
+	element.textContent =
+	(`(function () { try { const script = (${ script });
+		const args = JSON.parse(\`${ JSON.stringify(args) }\`);
+		const value = script.apply(null, args);
+		this.dataset.done = true;
+		this.dataset.value = JSON.stringify(value) || 'null';
+	} catch (error) {
+		console.error(error);
+		this.dataset.error = JSON.stringify(
+			typeof error !== 'object' || error === null || !(error instanceof Error) ? error
+			: { name: error.name, message: error.message, stack: error.stack, }
+		);
+	} }).call(document.querySelector('script#injector'));`);
+	document.documentElement.appendChild(element).remove();
 	if (element.dataset.error) {
 		const error = JSON.parse(element.dataset.error);
 		const constructor = window[error && error.name] || Error;
