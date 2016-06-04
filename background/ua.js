@@ -218,6 +218,9 @@ const Generator = exports.Generator = class Generator {
 	navigator() {
 		return new Navigator(this);
 	}
+	generate() {
+		return this.navigator();
+	}
 };
 
 Generator.keys = [ 'platform', 'userAgent', 'productSub', ];

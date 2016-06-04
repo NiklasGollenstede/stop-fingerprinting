@@ -5,7 +5,7 @@
 		<script src="./index.js"></script>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 		<title>Stop Fingerprinting Test</title>
-		<script>alert('inline script should not be allowed!');</script>
+		<!-- <script>alert('inline script should not be allowed!');</script> -->
 	</head>
 	<body>
 		<h1>Stop Fingerprinting Test</h1>
@@ -14,8 +14,8 @@
 		<!-- <iframe id="same-sandboxed" sandbox="allow-same-origin" src="/frame.html"></iframe> -->
 		<!-- <iframe id="js-uri" src="javascript:console.log('js-uri content', window.devicePixelRatio)"></iframe> -->
 		<!-- <iframe id="data-uri" src="data:text/html;charset=utf-8,%3C%21DOCTYPE%20html%3E%0D%0A%3Chtml%3E%0D%0A%09%3Chead%3E%0D%0A%09%09%3Cscript%20src%3D%22http%3A%2F%2Fvivaldii.xyz%2Fframe.js%22%3E%3C%2Fscript%3E%0D%0A%09%09%3Cmeta%20http-equiv%3D%22Content-Type%22%20content%3D%22text%2Fhtml%3B%20charset%3Dutf-8%22%3E%0D%0A%09%09%3Ctitle%3EStop%20Fingerprinting%20Test%20Frame%3C%2Ftitle%3E%0D%0A%09%3C%2Fhead%3E%0D%0A%09%3Cbody%3E%0D%0A%09%09%3Ch1%3EStop%20Fingerprinting%20Test%20Frame%3C%2Fh1%3E%0D%0A%09%3C%2Fbody%3E%0D%0A%3C%2Fhtml%3E"></iframe> -->
-		<!-- <iframe id="cross-sandboxed" sandbox="allow-same-origin" src="//google.com"></iframe> -->
-		<!-- <iframe id="cross" src="//google.com"></iframe> -->
+		<!-- <iframe id="cross-sandboxed" sandbox="allow-same-origin" src="//en.wikipedia.org/"></iframe> -->
+		<!-- <iframe id="cross" src="//en.wikipedia.org/"></iframe> -->
 		<!-- <iframe id="local" src="//localhost/frame.html"></iframe> -->
 		<!-- <iframe id="remote" src="//localhost.io/frame.html"></iframe> -->
 	</body>

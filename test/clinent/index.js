@@ -16,18 +16,21 @@ function test(window, message) {
 }
 
 const iframes = window.iframes = {
-	contentWindow() {
+	contentWindow(url) {
 		const iframe = document.createElement('iframe');
+		url && (iframe.src = url);
 		document.body.appendChild(iframe);
 		return (window.last = iframe.contentWindow);
 	},
-	contentDocument() {
+	contentDocument(url) {
 		const iframe = document.createElement('iframe');
+		url && (iframe.src = url);
 		document.body.appendChild(iframe);
 		return (window.last = iframe.contentDocument.defaultView);
 	},
-	windowFrames() {
+	windowFrames(url) {
 		const iframe = document.createElement('iframe');
+		url && (iframe.src = url);
 		document.body.appendChild(iframe);
 		return (window.last = window.frames[window.frames.length - 1]);
 	},

@@ -1,38 +1,36 @@
 (function() { 'use strict'; /* global script */
 
-const token = window.token = (() => { try { return window.parent.token; } catch (e) { } })() || generateToken();
-const url = location.href;
+getOptions(options => {
+	options = JSON.parse(options);
+	const { nonce, } = options;
+	const { getOptions, } = inject(nonce, script, { token: nonce, });
 
-let element;
-(() => { try {
-	const { getOptions, } = inject(script, { token, });
-	if (!getOptions) { return console.log('attached to context', window); }
+	getOptions && inject(nonce, (nonce, options) => {
+		window.dispatchEvent(new CustomEvent('stopFingerprintingOptionsLoaded$'+ nonce, { detail: { options, }, }));
+	}, nonce, options);
+});
+
+function getOptions(callback) {
+	let root = window, url; try { do {
+		url = root.location.href;
+	} while (root.parent !== root && (root = root.parent) && root.location.href); } catch (e) { }
+
+	if (root.options) { return void callback(root.options); }
 
 	chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, ({ error, value, }) => {
 		if (error) { throw parseError(error); }
-		console.log('loaded options', url, value);
-		inject((token, options) => {
-			window.dispatchEvent(new CustomEvent('stopFingerprintingOptionsLoaded$'+ token, { detail: { options, }, }));
-		}, token, value);
-		console.log('attached to context', window);
+		root.options = value;
+		console.log('loaded options', value);
+		callback(value);
 	});
-
-} catch(error) {
-	alert('Failed to inject Stop Fingerprinting script: "'+ (error && error.message || 'unknown error') +'"!');
-	throw error;
-} })();
-
-function generateToken() {
-	const token = Array.prototype.map.call(window.crypto.getRandomValues(new Uint32Array(6)), r => r.toString(36)).join('');
-	console.log('generated token', token);
-	return token;
 }
 
-function inject(script, ...args) {
+function inject(nonce, script, ...args) {
 	const { document, } = this || window;
 	const element = document.createElement('script');
 	element.async = false;
 	element.id = 'injector';
+	element.setAttribute('nonce', nonce);
 	element.textContent =
 	(`(function () { try { const script = (${ script });
 		const args = JSON.parse(\`${ JSON.stringify(args) }\`);

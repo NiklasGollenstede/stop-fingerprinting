@@ -156,6 +156,9 @@ const Generator = exports.Generator = class Generator {
 			devicePixelRatio: dpr,
 		};
 	}
+	generate() {
+		return this.screen();
+	}
 };
 Generator.keys = [ 'top', 'left', 'height', 'width', 'colorDepth', 'availTop', 'availLeft', 'availHeight', 'availWidth', 'pixelDepth', 'devicePixelRatio', ];
 

@@ -9,7 +9,7 @@
 	{ Generator : NavGen, },
 	{ Generator : ScreenGen, },
 	Profile,
-	{ applications, },
+	{ applications, Tabs, },
 	{ matchPatternToRegExp, },
 	{
 		concurrent: { async, },
@@ -18,6 +18,8 @@
 	}
 ) {
 
+const missing = Symbol('missing argument');
+
 return function(options) {
 
 const profiles          = new Map;            // id                ==>  Profile(id)
@@ -25,6 +27,7 @@ const profileIncludes   = new WeakMap;        // Profile(id)       ==>  { all: [
 const profileStacks     = new Map;            // [id].join($)      ==>  ProfileStack
 const profileInStack    = new MultiMap;       // Profile(id)       ==>  ProfileStack
 let   sortedProfiles    = [ ];                // [Profile(id)] sorted by .priority
+const uncommittetTabs   = new Map;            // requestId         ==>  TabProfile
 
 const addProfile = async(function*(id) {
 	const profile = (yield Profile(id));
@@ -37,7 +40,7 @@ const addProfile = async(function*(id) {
 
 	profile.children.priority.onChange(sortProfiles);
 
-	console.log('added profile', profiles, profile);
+	console.log('added profile', profile);
 });
 
 function removeProfile(id) {
@@ -64,7 +67,6 @@ options.children.profiles.whenChange((_, { current: ids, }) => {
 });
 
 const defaults = {
-	'navigator.maxAge': 10,
 	'navigator.browser': applications.current,
 	'screen.width':  { from: screen.width * 0.8, to: 3840, },
 	'screen.height':  { from: screen.height * 0.8, to: 2160, },
@@ -88,20 +90,52 @@ class ProfileStack {
 		this.rules.forEach(rule => rule.parent.onAnyChange((value, { parent: { path, }, }) => this.clearCache(path.replace(/^\.?rules\./, ''))));
 		profileStacks.set(this.key, this);
 		settings.forEach(s => profileInStack.add(s, this));
-		this.navGen = null;
-		this.navigators = { };
-		this.screenGen = null;
-		this.screens = { };
 		this.cache = new Map;
+		this.tabs = new Map;
 
 		console.log('created ProfileStack', this);
 	}
 
+	get navGen() {
+		const value = this.get('navigator.disabled')
+		? { generate() { return realNavigator; }, }
+		: new NavGen({
+			browser: this.get('navigator.browser'),
+			os: this.get('navigator.os'),
+			osArch: this.get('navigator.osArch'),
+			osAge: this.get('navigator.osAge'),
+			browserAge: this.get('navigator.browserAge'),
+			ieFeatureCount: this.get('navigator.ieFeatureCount'),
+			ieFeatureExclude: this.get('navigator.ieFeatureExclude'),
+		});
+		console.log('created navGen', value);
+		Object.defineProperty(this, 'navGen', { value, configurable: true, });
+		return value;
+	}
+
+	get screenGen() {
+		const value = this.get('screen.disabled')
+		? { generate() { return realScreen; }, }
+		: new ScreenGen({
+			ratio: this.get('screen.ratio'),
+			width: this.get('screen.width'),
+			height: this.get('screen.height'),
+			devicePixelRatio: this.get('screen.devicePixelRatio'),
+			top: this.get('screen.offset.top'),
+			right: this.get('screen.offset.right'),
+			bottom: this.get('screen.offset.bottom'),
+			left: this.get('screen.offset.left'),
+		});
+		console.log('created screenGen', value);
+		Object.defineProperty(this, 'screenGen', { value, configurable: true, });
+		return value;
+	}
+
 	clearCache(key) {
-		key.startsWith('navigator') && (this.navGen = null) === (this.navigators = { });
-		key.startsWith('screen') && (this.screenGen = null) === (this.screens = { });
+		console.log('ProfileStack.clearCache', key);
+		key.startsWith('navigator') && (delete this.navGen);
+		key.startsWith('screen') && (delete this.screenGen);
 		this.cache.delete(key);
-		console.log('ProfileStack.clearCache ed', this, key);
 	}
 
 	get(key) {
@@ -116,68 +150,21 @@ class ProfileStack {
 		return value;
 	}
 
-	getNavigator(domain) {
-		if (this.get('navigator.disabled')) { return realNavigator; }
-		let current = (this.navigators[domain] || (this.navigators[domain] = { date: 0, navigator: null, }));
-		const now = Date.now();
-		now - current.date > this.get('navigator.maxAge') * 60000 && (current.navigator = this.createNavigator(domain)) && (current.date = now);
-		return current.navigator;
-	}
-	createNavigator(domain) {
-		!this.navGen && (this.navGen = new NavGen({
-			browser: this.get('navigator.browser'),
-			os: this.get('navigator.os'),
-			osArch: this.get('navigator.osArch'),
-			osAge: this.get('navigator.osAge'),
-			browserAge: this.get('navigator.browserAge'),
-			ieFeatureCount: this.get('navigator.ieFeatureCount'),
-			ieFeatureExclude: this.get('navigator.ieFeatureExclude'),
-		}));
-		return log('created navigator for', domain, this.navGen.navigator());
-	}
-
-	getScreen(domain) {
-		if (this.get('screen.disabled')) { return realScreen; }
-		let current = (this.screens[domain] || (this.screens[domain] = { date: 0, screen: null, }));
-		const now = Date.now();
-		now - current.date > this.get('navigator.maxAge') * 60000 && (current.screen = this.createScreen(domain)) && (current.date = now);
-		return current.screen;
-	}
-	createScreen(domain) {
-		!this.screenGen && (this.screenGen = new ScreenGen({
-			ratio: this.get('screen.ratio'),
-			width: this.get('screen.width'),
-			height: this.get('screen.height'),
-			devicePixelRatio: this.get('screen.devicePixelRatio'),
-			top: this.get('screen.offset.top'),
-			right: this.get('screen.offset.right'),
-			bottom: this.get('screen.offset.bottom'),
-			left: this.get('screen.offset.left'),
-		}));
-		return log('created screen for', domain, this.screenGen.screen());
-	}
-
-	getInjectOptions(domain) {
-		if (this.get('disabled')) { return false; }
-		return {
-			navigator: this.getNavigator(domain),
-			screen: this.getScreen(domain),
-			windowName: this.get('windowName'),
-			fonts: {
-				dispersion: this.get('fonts.dispersion'),
-			},
-		};
+	getTab(id) {
+		let tab = this.tabs.get(id);
+		/*if (!tab) {
+			tab = new TabProfile(this);
+			this.tabs.set(id, tab);
+		}*/
+		return tab;
 	}
 
 	destroy() {
 		profileStacks.delete(this.key, this);
 		this.profiles.forEach(s => profileInStack.delete(s, this));
 	}
-}
 
-
-return {
-	get(url) {
+	static find(url) {
 		const matching = sortedProfiles.filter(profile => {
 			return profileIncludes.get(profile).all.find(exp => {
 				const match = exp.exec(url);
@@ -186,6 +173,102 @@ return {
 		});
 
 		return new ProfileStack(matching);
+	}
+}
+
+class TabProfile {
+	constructor(stack, requestId = missing) {
+		requestId !== missing && uncommittetTabs.set(requestId, this);
+		this.requestId = requestId;
+		this.stack = stack;
+
+		this.domains = new Map;
+	}
+	commit({ tabId, url, }) {
+		uncommittetTabs.delete(this.requestId);
+		this.stack.tabs.set(tabId, this);
+		this.tabId = tabId;
+		console.log('TabProfile.commited', this);
+	}
+	destroy() {
+		!uncommittetTabs.delete(this.requestId)
+		&& this.stack.tabs.delete(this.tabId);
+		console.log('TabProfile.destroyed', this);
+	}
+	get(name) {
+		let domain = this.domains.get(name);
+		if (!domain) {
+			domain = new DomainProfile(this, name);
+			this.domains.set(name, domain);
+		}
+		return domain;
+	}
+}
+
+class DomainProfile {
+	constructor(tab, domain) {
+		this.tab = tab;
+		this.domain = domain;
+		this.stack = tab.stack;
+		console.log('DomainProfile.created', this);
+	}
+
+	get nonce() {
+		return Array.prototype.map.call(window.crypto.getRandomValues(new Uint32Array(6)), r => r.toString(36)).join('');
+	}
+
+	get navigator() {
+		return this.stack.navGen.generate();
+	}
+
+	get screen() {
+		return this.stack.screenGen.generate();
+	}
+
+	get windowName() {
+		return this.stack.get('windowName');
+	}
+
+	get fonts() {
+		return {
+			dispersion: this.stack.get('fonts.dispersion'),
+		};
+	}
+
+	toJSON() {
+		if (this.json) { return this.json; }
+		if (this.stack.get('disabled')) { return false; }
+		const json = { };
+		DomainProfile.keys.forEach(key => json[key] = this[key]);
+		return (this.json = json);
+	}
+}
+DomainProfile.keys = Object.getOwnPropertyNames(DomainProfile.prototype).filter(key => {
+	const getter = Object.getOwnPropertyDescriptor(DomainProfile.prototype, key).get;
+	if (!getter) { return false; }
+	Object.defineProperty(DomainProfile.prototype, key, { get() {
+		const value = getter.call(this);
+		Object.defineProperty(this, key, { value, configurable: true, });
+		console.log('DomainProfile.'+ key, this.tab.tabId, this.tab.requestId, this.domain, value);
+		return value;
+	}, });
+	return true;
+});
+
+
+return {
+	create({ requestId, url, }) {
+		const stack = ProfileStack.find(url);
+		return new TabProfile(stack, requestId);
+	},
+	get({ requestId = missing, tabId, url = missing, }) {
+		if (requestId === missing && url === missing) { throw new Error('requestId or url must be set'); }
+		const tab = uncommittetTabs.get(requestId);
+		if (tab) { return tab; }
+		return ProfileStack.find(url).getTab(tabId);
+	},
+	resetTab(tabId) {
+		profileStacks.forEach(stack => stack.resetTab(tabId));
 	},
 };
 

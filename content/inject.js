@@ -131,7 +131,7 @@ class FakedAPIs {
 	}
 
 	build() {
-		this.apis = evaluateInWindow(this.window, this._build, this);
+		this.apis = evaluateInWindow(this.window, this.context.values.nonce, this._build, this);
 	}
 
 	// executed in the target window itself
@@ -376,11 +376,15 @@ function notImplemented() {
 	throw new Error('not implemented');
 }
 
-function evaluateInWindow(window, script, thisArg, ...args) {
+function evaluateInWindow(window, nonce, script, thisArg, ...args) {
+	return script.apply(thisArg, args);
+}
+
+function evaluateInWindow_real(window, nonce, script, thisArg, ...args) {
 	const { document, } = window;
 	const element = document.createElement('script');
 	element.async = false;
-	element.setAttribute('nonce', 'abc'); // TODO: XXX: use a real nonce
+	element.setAttribute('nonce', nonce);
 	element.textContent =
 	(`function inject({ detail, }) { try { const script = (function ${ (script +'').replace(/^(function )?/, '') });
 		window.removeEventListener('inject', inject);
