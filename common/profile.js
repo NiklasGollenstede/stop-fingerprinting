@@ -10,16 +10,6 @@
 	}
 ) {
 
-
-const boolOption = {
-	type: 'menulist',
-	default: null,
-	options: [
-		{ value: null, label: 'unset', },
-		{ value: true, label: 'yes', },
-		{ value: false, label: 'no', },
-	],
-};
 const optionalOption = {
 	minLength: 0,
 	maxLength: 1,
@@ -102,6 +92,12 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 				name: 'disabled',
 				title: 'Disable',
 				description: 'Completely disable this extension for all matching sites',
+				addDefault: true,
+				type: 'bool',
+			}), optional({
+				name: 'hstsDisabled',
+				title: 'Disable HSTS',
+				description: 'Completely disable <a href="https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security">HTTP Strict Transport Security</a> for all matching sites', // TODO: write better description (need to clear all browsing data)
 				addDefault: true,
 				type: 'bool',
 			}), {

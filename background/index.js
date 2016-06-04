@@ -9,15 +9,22 @@ window.options = options;
 const Profiles = require('background/profiles')(options);
 
 // modify CSPs to allow script injection
-chrome.webRequest.onHeadersReceived.addListener(modifyResponseHeaders, { urls: [ '*://*/*', ], types: [ 'main_frame', 'sub_frame', ], }, [ 'blocking', 'responseHeaders', ]);
+chrome.webRequest.onHeadersReceived.addListener(modifyResponseHeaders, { urls: [ '*://*/*', ], }, [ 'blocking', 'responseHeaders', ]);
 
 function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }) {
 	const domain = ((/^[^:\/\\]+:\/\/([^\/\\]+)/).exec(url) || [ , '<invalid domain>', ])[1];
-	const profile = Profiles.get({ requestId, tabId, url, }).get(domain);
+	const profile = Profiles.get({ requestId, tabId, url, }).getDomain(domain);
 
 	let changed = false;
-	responseHeaders.forEach(header => {
-		if (!(/^(?:(?:X-)?Content-Security-Policy|X-WebKit-CSP)$/i).test(header.name) || !header.value) { return; }
+	(type === 'main_frame' || type === 'sub_frame') && responseHeaders.forEach(header => {
+		if ((/^(?:(?:X-)?Content-Security-Policy|X-WebKit-CSP)$/i).test(header.name) && header.value) { return injectCSP(header); }
+	});
+	profile.get('hstsDisabled') && responseHeaders.forEach(header => {
+		if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return removeHSTS(header); }
+	});
+	return changed ? { responseHeaders, } : { };
+
+	function injectCSP(header) {
 		let defaultSrc = [ ], scriptSrc = [ ], others = [ ];
 		header.value.trim().split(/\s*;\s*/g).forEach(directive => {
 			if ((/^default-src\s+/i).test(directive)) { return defaultSrc.push(directive.split(/\s+/g).slice(1)); }
@@ -42,14 +49,19 @@ function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }
 			changed = true;
 			scriptSrc = [ [ `'nonce-${ profile.nonce }'`, ].concat(defaultSrc[0] || [ ]), ];
 		}
+		if (!changed) { return; }
 		header.value
 		= defaultSrc.map(sources => 'default-src '+ sources.join(' ') +'; ')
 		+ scriptSrc.map(sources => 'script-src '+ sources.join(' ') +'; ')
 		+ others.join('; ');
-		// console.log('build CSP\n', header.value, '\nfrom', defaultSrc, scriptSrc, others);
-	});
-	changed && console.log('injected nonce-'+ profile.nonce);
-	return changed ? { responseHeaders, } : { };
+		console.log('build CSP\n', header.value, '\nfrom', defaultSrc, scriptSrc, others);
+	}
+
+	function removeHSTS(header) {
+		changed = true;
+		header.value = header.value.replace(/max-age=\d+/gi, () => 'max-age=0');
+		console.log('hsts header removed', header);
+	}
 }
 
 const allMainFrames = { urls: [ '<all_urls>', ], types: [ 'main_frame', ], };
@@ -71,7 +83,7 @@ chrome.webRequest.onBeforeSendHeaders.addListener(modifyRequestHeaders, { urls: 
 
 function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) {
 	const domain = getDomain(url);
-	const profile = (type === 'main_frame' ? Profiles.create({ requestId, url, }) : Profiles.get({ tabId, url, })).get(domain);
+	const profile = (type === 'main_frame' ? Profiles.create({ requestId, url, }) : Profiles.get({ tabId, url, })).getDomain(domain);
 	const ua = profile.navigator.userAgent;
 	const header = requestHeaders.find(header => (/^User-Agent$/i).test(header.name));
 	// console.log('onBeforeSendHeaders', url, domain, { old: header.value, new: ua, });
@@ -85,7 +97,7 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 Messages.addHandler('getOptionsForUrl', function (url) {
 	const tabId = this.tab.id;
 	const domain = getDomain(url);
-	const profile = Profiles.get({ tabId, url, }).get(domain);
+	const profile = Profiles.get({ tabId, url, }).getDomain(domain);
 	console.log('getOptionsForUrl', url, domain, profile);
 	return JSON.stringify(profile);
 });

@@ -67,6 +67,7 @@ options.children.profiles.whenChange((_, { current: ids, }) => {
 });
 
 const defaults = {
+	'hstsDisabled': true,
 	'navigator.browser': applications.current,
 	'screen.width':  { from: screen.width * 0.8, to: 3840, },
 	'screen.height':  { from: screen.height * 0.8, to: 2160, },
@@ -152,10 +153,10 @@ class ProfileStack {
 
 	getTab(id) {
 		let tab = this.tabs.get(id);
-		/*if (!tab) {
+		if (!tab) {
 			tab = new TabProfile(this);
 			this.tabs.set(id, tab);
-		}*/
+		}
 		return tab;
 	}
 
@@ -195,7 +196,7 @@ class TabProfile {
 		&& this.stack.tabs.delete(this.tabId);
 		console.log('TabProfile.destroyed', this);
 	}
-	get(name) {
+	getDomain(name) {
 		let domain = this.domains.get(name);
 		if (!domain) {
 			domain = new DomainProfile(this, name);
@@ -211,6 +212,10 @@ class DomainProfile {
 		this.domain = domain;
 		this.stack = tab.stack;
 		console.log('DomainProfile.created', this);
+	}
+
+	get(key) {
+		return this.stack.get(key);
 	}
 
 	get nonce() {
@@ -262,8 +267,7 @@ return {
 		return new TabProfile(stack, requestId);
 	},
 	get({ requestId = missing, tabId, url = missing, }) {
-		if (requestId === missing && url === missing) { throw new Error('requestId or url must be set'); }
-		const tab = uncommittetTabs.get(requestId);
+		let tab = requestId !== missing && uncommittetTabs.get(requestId);
 		if (tab) { return tab; }
 		return ProfileStack.find(url).getTab(tabId);
 	},
