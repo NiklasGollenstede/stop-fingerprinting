@@ -116,7 +116,7 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 				} break;
 			}
 		} else {
-			if (profile.navigator.doNotTrack == null) { return; }
+			if (![ '0', '1', ].includes(profile.navigator.doNotTrack)) { return; }
 			requestHeaders.splice(Infinity, 0, { name: 'DNT', value: profile.navigator.doNotTrack, }); // TODO: use correct index
 		}
 		changed = true;

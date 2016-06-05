@@ -144,8 +144,8 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 						restrict: { unique: '.', },
 						options: [
 							{ value: 'win', label: 'Windows', },
-							// { value: 'mac', label: 'Mac OS', },
-							// { value: 'lin', label: 'Linux', },
+							{ value: 'mac', label: 'Mac OS', },
+							{ value: 'lin', label: 'Linux', },
 						],
 					}), ({
 						name: 'osArch',
