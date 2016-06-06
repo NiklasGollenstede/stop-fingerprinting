@@ -161,6 +161,13 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 							{ value: '64_64', label: '64 bit', },
 						],
 					}), optional({
+						name: 'cpuCores',
+						title: 'CPU cores',
+						description: 'Number of (virtual) CPU cores',
+						restrict: { from: 1, to: 16, type: 'number', },
+						addDefault: { from: 1, to: 8, },
+						type: 'interval',
+					}), optional({
 						name: 'osAge',
 						title: 'Operating Systems Age',
 						description: 'The age of the operating system version',

@@ -217,8 +217,11 @@ class FakedAPIs {
 
 		// navigator string values
 		const navigator = apis['Navigator.prototype'] = { };
-		Object.keys(values.navigator) // XXX
-		.forEach(prop => navigator[prop] = { get: hideCode(function() { return values.navigator[prop]; }), });
+		Object.keys(values.navigator)
+		.forEach(prop => navigator[prop] = { get: hideCode(function() { return values.navigator[prop]; }), enumerable: true, configurable: true, add: true, });
+		Object.keys(values.navigator.undefinedValues)
+		.forEach(prop => navigator[prop] = { delete: true, });
+		delete navigator.undefinedValues;
 
 		// navigator.plugins
 		const PluginArray = apis.PluginArray = hideCode(function PluginArray() { throw new TypeError('Illegal constructor'); });

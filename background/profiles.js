@@ -6,8 +6,8 @@
 	'web-ext-utils/utils',
 	'es6lib',
 ], function(
-	{ Generator : NavGen, },
-	{ Generator : ScreenGen, },
+	{ Generator: NavGen, Navigator: { prototype: { toJSON: NavToJSON, }, }, },
+	{ Generator: ScreenGen, },
 	Profile,
 	{ applications, Tabs, },
 	{ matchPatternToRegExp, },
@@ -76,7 +76,7 @@ const defaults = {
 	'fonts.dispersion': 25,
 };
 
-const realNavigator = NavGen.keys.reduce((result, key) => ((result[key] = window.navigator[key]), result), { });
+const realNavigator = NavToJSON.call(window.navigator);
 const realScreen = ScreenGen.keys.reduce((result, key) => ((result[key] = window.screen[key]), result), { });
 realScreen.devicePixelRatio = window.devicePixelRatio;
 
@@ -104,6 +104,7 @@ class ProfileStack {
 			browser: this.get('navigator.browser'),
 			os: this.get('navigator.os'),
 			osArch: this.get('navigator.osArch'),
+			cpuCores: this.get('navigator.cpuCores'),
 			osAge: this.get('navigator.osAge'),
 			browserAge: this.get('navigator.browserAge'),
 			ieFeatureCount: this.get('navigator.ieFeatureCount'),

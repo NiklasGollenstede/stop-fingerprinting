@@ -284,13 +284,13 @@ const Generator = exports.Generator = class Generator {
 	constructor(config = { }) {
 		this.browser_os = browser_os.filter(({ browser, os, }) => (!config.browser || config.browser.includes(browser)) && (!config.os || config.os.includes(os)));
 		this.osArch = config.arch ? osArch.filter(({ arch, }) => config.arch.includes(arch)) : osArch;
+		const coreRange = parseRange(config.cpuCores, { from: 1, to: 16, });
+		this.cpuCores = cpuCores.filter(({ virtual, }) => isIn(virtual, coreRange));
 		this.osAge = parseRange(config.osAge, { from: 0, to: 3, });
 		this.browserAge = parseRange(config.browserAge, { from: -1, to: 12, });
 		this.ieFeatureCount = parseRange(config.ieFeatureCount, { from: 0, to: 3, });
 		this.ieFeature = config.ieFeature_exclude ? ieFeature.filter(f => !f.match(config.ieFeatureExclude)) : ieFeature;
 		this.dntChance = parseRange(config.dntChance, { from: 1, to: 30, });
-		const coreRange = parseRange(config.cpuCores, { from: 1, to: 16, });
-		this.cpuCores = cpuCores.filter(({ virtual, }) => isIn(virtual, coreRange));
 		this.validate();
 	}
 	validate() {
@@ -306,7 +306,7 @@ const Generator = exports.Generator = class Generator {
 	}
 };
 
-class Navigator {
+const Navigator = exports.Navigator = class Navigator {
 	constructor(config) {
 		const { os, browser, } = chooseWeightedRandom(config.browser_os);
 		this.os = os; this.browser = browser;
@@ -322,7 +322,7 @@ class Navigator {
 		this.random = rand();
 		this.json = null;
 	}
-	get appname() {
+	get appName() {
 		return 'Netscape';
 	}
 	get appVersion() {
@@ -332,14 +332,14 @@ class Navigator {
 		return '5.0 ('+ this.userAgent.match(/^Mozilla\/5\.0 \((\w+)/)[1] +')';
 	}
 	get buildID() {
-		if (this.browser !== 'firefox') { return; }
+		if (this.browser !== 'firefox') { return undefined; }
 		return new Date(this.browserRelease).toISOString().replace(/[-T:]|\..*/g, ''); // this should be unique per version/patch_version/os/bitness
 	}
 	get hardwareConcurrency() {
 		return this.cpuCores;
 	}
 	get oscpu() {
-		if (this.browser !== 'firefox') { return; }
+		if (this.browser !== 'firefox') { return undefined; }
 		return firefoxOscpu(this);
 	}
 	get platform() {
@@ -445,7 +445,7 @@ class Navigator {
 			case 'safari':  return 'Apple Computer, Inc.';
 		}
 	}
-	get vendorsub() {
+	get vendorSub() {
 		return '';
 	}
 
@@ -474,11 +474,16 @@ class Navigator {
 
 	toJSON() {
 		if (this.json) { return this.json; }
-		const json = { };
-		Navigator.keys.forEach(key => json[key] = this[key]);
+		const json = { }, undef = [ ];
+		Navigator.keys.forEach(key => {
+			const value = this[key];
+			if (value === undefined) { return undef.push(key); }
+			json[key] = value;
+		});
+		json.undefinedValues = undef;
 		return (this.json = json);
 	}
-}
+};
 Navigator.keys = Object.getOwnPropertyNames(Navigator.prototype).filter(key => {
 	const getter = Object.getOwnPropertyDescriptor(Navigator.prototype, key).get;
 	if (!getter) { return false; }
