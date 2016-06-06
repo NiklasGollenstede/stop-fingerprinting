@@ -1,4 +1,6 @@
-const script = window.script = function()  { 'use strict'; const [ { token, }, ] = arguments;
+const script = window.script = function(options)  { 'use strict';
+
+const { nonce: token, } = options;
 
 const log = (...args) => (console.log(...args), args.pop());
 
@@ -180,6 +182,7 @@ class FakedAPIs {
 				return Function_p.toString.call(this);
 			}), },
 		};
+		// TODO: wrap mutation observer and mutation events to hide script injection
 
 		// catch all calls that retrieve an window object from an iframe and make sure that iframe is wrapped
 		apis['HTMLIFrameElement.prototype'] = {
@@ -410,19 +413,9 @@ function evaluateInWindow_real(window, nonce, script, thisArg, ...args) {
 
 return (function main() {
 	context = getContext();
-	if (context) {
-		fakeAPIs(window);
-		attachObserver();
-		return { };
-	} else {
-		window.addEventListener('stopFingerprintingOptionsLoaded$'+ token, function onLoaded({ detail, }) {
-			window.removeEventListener('stopFingerprintingOptionsLoaded$'+ token, onLoaded);
-			context = setContext(createContext(detail.options));
-			fakeAPIs(window);
-			attachObserver();
-		});
-		return { getOptions: true, };
-	}
+	!context && (context = setContext(createContext(options)));
+	fakeAPIs(window);
+	attachObserver();
 })();
 
 };

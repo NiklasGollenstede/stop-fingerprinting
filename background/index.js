@@ -128,7 +128,7 @@ Messages.addHandler('getOptionsForUrl', function (url) {
 	const domain = getDomain(url);
 	const profile = Profiles.get({ tabId, url, }).getDomain(domain);
 	console.log('getOptionsForUrl', url, domain, profile);
-	return JSON.stringify(profile);
+	return { options: JSON.stringify(profile), nonce: profile.nonce, };
 });
 
 function getDomain(url) {

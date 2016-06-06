@@ -1,20 +1,16 @@
 (function() { 'use strict'; /* global script */
 
-getOptions(options => {
-	options = JSON.parse(options);
-	const { nonce, } = options;
-	const { getOptions, } = inject(nonce, script, { token: nonce, });
+let root = window, url; try { do {
+	url = root.location.href;
+} while (root.parent !== root && (root = root.parent) && root.location.href); } catch (e) { }
 
-	getOptions && inject(nonce, (nonce, options) => {
-		window.dispatchEvent(new CustomEvent('stopFingerprintingOptionsLoaded$'+ nonce, { detail: { options, }, }));
-	}, nonce, options);
+getOptions(({ options, nonce, }) => {
+	if (options === 'false') { return console.log('Spoofing is disabled for ', url, window); }
+
+	inject(nonce, script, options);
 });
 
 function getOptions(callback) {
-	let root = window, url; try { do {
-		url = root.location.href;
-	} while (root.parent !== root && (root = root.parent) && root.location.href); } catch (e) { }
-
 	if (root.options) { return void callback(root.options); }
 
 	chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, ({ error, value, }) => {
@@ -25,7 +21,7 @@ function getOptions(callback) {
 	});
 }
 
-function inject(nonce, script, ...args) {
+function inject(nonce, script, jsonArg) {
 	const { document, } = this || window;
 	const element = document.createElement('script');
 	element.async = false;
@@ -33,8 +29,8 @@ function inject(nonce, script, ...args) {
 	element.setAttribute('nonce', nonce);
 	element.textContent =
 	(`(function () { try { const script = (${ script });
-		const args = JSON.parse(\`${ JSON.stringify(args) }\`);
-		const value = script.apply(null, args);
+		const arg = JSON.parse(\`${ jsonArg }\`);
+		const value = script.call(null, arg);
 		this.dataset.done = true;
 		this.dataset.value = JSON.stringify(value) || 'null';
 	} catch (error) {
