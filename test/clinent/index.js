@@ -5,11 +5,13 @@ test(window, 'top window');
 function test(window, message) {
 	try {
 		console.log(message, 'external', window.devicePixelRatio);
+		/*
 		window.document.body.setAttribute('onclick', 'return window');
 		const content = window.document.body.onclick();
 		if (window === content) { return; }
 		window.document.body.setAttribute('onclick', "console.log('internal', window.devicePixelRatio);");
 		window.document.body.click();
+		*/
 	} catch (error) {
 		console.info(message, 'accsess denied');
 	}

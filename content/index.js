@@ -13,6 +13,19 @@ getOptions(({ options, nonce, }) => {
 function getOptions(callback) {
 	if (root.options) { return void callback(root.options); }
 
+	/*
+	const request = new XMLHttpRequest();
+	request.open('GET', chrome.extension.getURL('background/get-options') +'?url='+ url, false); // sync
+	request.send(null);
+	const error = request.getResponseHeader('X-Error');
+	if (error) { throw parseError(error); }
+	const options = request.getResponseHeader('X-Options');
+	const nonce = request.getResponseHeader('X-Nonce');
+	if (!nonce) { throw new Error('failed to load options'); }
+
+	callback(root.options = { options, nonce, });
+	*/
+
 	chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, ({ error, value, }) => {
 		if (error) { throw parseError(error); }
 		root.options = value;

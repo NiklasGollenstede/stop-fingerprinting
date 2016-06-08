@@ -186,6 +186,7 @@ class TabProfile {
 		this.stack = stack;
 
 		this.domains = new Map;
+		console.log('TabProfile.created', this);
 	}
 	commit({ tabId, url, }) {
 		uncommittetTabs.delete(this.requestId);
@@ -242,6 +243,10 @@ class DomainProfile {
 		};
 	}
 
+	get misc() {
+		return { };
+	}
+
 	toJSON() {
 		if (this.json) { return this.json; }
 		if (this.stack.get('disabled')) { return false; }
@@ -268,10 +273,10 @@ return {
 		const stack = ProfileStack.find(url);
 		return new TabProfile(stack, requestId);
 	},
-	get({ requestId = missing, tabId, url = missing, }) {
+	get({ requestId = missing, tabId = missing, url = missing, }) {
 		let tab = requestId !== missing && uncommittetTabs.get(requestId);
 		if (tab) { return tab; }
-		return ProfileStack.find(url).getTab(tabId);
+		return url !== missing && tabId !== missing && ProfileStack.find(url).getTab(tabId);
 	},
 	resetTab(tabId) {
 		profileStacks.forEach(stack => stack.resetTab(tabId));

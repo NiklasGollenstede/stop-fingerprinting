@@ -97,7 +97,7 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 			}), optional({
 				name: 'hstsDisabled',
 				title: 'Disable HSTS',
-				description: 'Completely disable <a href="https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security">HTTP Strict Transport Security</a> for all matching sites', // TODO: write better description (need to clear all browsing data)
+				description: 'Completely disable <a href="https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security">HTTP Strict Transport Security</a> for all matching sites', // TODO: write better description (need to clear all browsing data), and it doesn't work in firefox
 				addDefault: true,
 				type: 'bool',
 			}), {

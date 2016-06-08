@@ -10,7 +10,6 @@ const Profiles = require('background/profiles')(options);
 
 // modify CSPs to allow script injection
 chrome.webRequest.onHeadersReceived.addListener(modifyResponseHeaders, { urls: [ '*://*/*', ], }, [ 'blocking', 'responseHeaders', ]);
-
 function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }) {
 	const domain = ((/^[^:\/\\]+:\/\/([^\/\\]+)/).exec(url) || [ , '<invalid domain>', ])[1];
 	const profile = Profiles.get({ requestId, tabId, url, }).getDomain(domain);
@@ -31,13 +30,17 @@ function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }
 			if ((/^script-src\s+/i).test(directive)) { return scriptSrc.push(directive.split(/\s+/g).slice(1)); }
 			others.push(directive);
 		});
-		const isOk = defaultSrc.every(sources => !sources.includes("'none'") && sources.includes("'unsafe-inline'"));
+		const isOk = defaultSrc.every(sources => !sources.includes("'none'") && sources.includes("'unsafe-inline'") && sources.includes("'unsafe-eval'"));
 		if (isOk && !scriptSrc.length) { return; }
 		if (scriptSrc.length) {
 			scriptSrc = scriptSrc.map(sources => {
 				if (sources.includes("'none'")) {
-					changed = true;
-					return [ `'nonce-${ profile.nonce }'`, ];
+					changed = true; profile.misc.disableEval = true;
+					return [ `'nonce-${ profile.nonce }'`, `'unsafe-eval'`, ];
+				}
+				if (!sources.includes("'unsafe-eval'")) {
+					changed = true; profile.misc.disableEval = true;
+					sources.unshift(`'unsafe-eval'`);
 				}
 				if (!sources.includes("'unsafe-inline'")) {
 					changed = true;
@@ -46,8 +49,8 @@ function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }
 				return sources;
 			});
 		} else {
-			changed = true;
-			scriptSrc = [ [ `'nonce-${ profile.nonce }'`, ].concat(defaultSrc[0] || [ ]), ];
+			changed = true; profile.misc.disableEval = true;
+			scriptSrc = [ [ `'nonce-${ profile.nonce }'`, `'unsafe-eval'`, ].concat(defaultSrc[0] || [ ]), ];
 		}
 		if (!changed) { return; }
 		header.value
@@ -122,6 +125,20 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 		changed = true;
 	}
 }
+
+/*
+const getOptionsUrl = chrome.extension.getURL('background/get-options');
+chrome.webRequest.onBeforeRequest.addListener(getOptionsForUrl, { urls: [ getOptionsUrl +'*', ], }, [ 'blocking', ]);
+function getOptionsForUrl({ url, tabId, }) {
+	url = (url.match(/url=(.*)/) || [ ])[1];
+	if (!url) { return; }
+	const domain = getDomain(url);
+	const profile = Profiles.get({ tabId, url, }).getDomain(domain);
+	console.log('getOptionsForUrl', url, domain, profile);
+	// return { redirectUrl: getOptionsUrl +'&data='+ JSON.stringify({ options: JSON.stringify(profile), nonce: profile.nonce, }), };
+	return { redirectUrl: 'data:text/plain;charset=utf-8,'+ JSON.stringify({ options: JSON.stringify(profile), nonce: profile.nonce, }), };
+}
+*/
 
 Messages.addHandler('getOptionsForUrl', function (url) {
 	const tabId = this.tab.id;

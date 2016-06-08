@@ -99,6 +99,7 @@ class FakedAPIs {
 				get_stack: exists(Object.getOwnPropertyDescriptor(window.Error.prototype, 'stack'), 'get'),
 			},
 			Function_p: {
+				constructor: window.Function,
 				toString: window.Function.prototype.toString, // TODO: Function.prototype.toSource (firefox), Object.prototype.toString
 			},
 			Node_p: {
@@ -127,13 +128,16 @@ class FakedAPIs {
 			WebGLRenderingContext_p: {
 				readPixels: window.WebGLRenderingContext.prototype.readPixels,
 			},
+			setTimeout: window.setTimeout, setInterval: window.setInterval, setImmediate: window.setImmediate,
 		};
 		this.fakeAPIs = fakeAPIs;
 		this.build();
 	}
 
 	build() {
-		this.apis = evaluateInWindow(this.window, this.context.values.nonce, this._build, this);
+		this.apis = new this.originals.Function_p.constructor(`
+			return (function ${ (this._build +'').replace(/^(function )?/, '') }).call(this);
+		`).call(this);
 	}
 
 	// executed in the target window itself
@@ -146,6 +150,7 @@ class FakedAPIs {
 			HTMLIFrameElement_p,
 			Node_p, Element_p, HTMLElement_p,
 			HTMLCanvasElement_p, CanvasRenderingContext2D_p, WebGLRenderingContext_p,
+			setTimeout, setInterval, setImmediate,
 		} = originals;
 		const {
 			hiddenFunctions,
@@ -155,6 +160,12 @@ class FakedAPIs {
 			randomizeCanvas, randomizeTypedArray, randomizeUInt8Array,
 		} = context;
 		const apis = { };
+
+		function define(name, object) {
+			const current = apis[name] || { };
+			if (typeof object === 'function') { object = object(current); }
+			return (apis[name] = Object.assign(current, object));
+		}
 
 		// fake function+'' => [native code]
 		function hideCode(name, func) {
@@ -170,22 +181,37 @@ class FakedAPIs {
 			return func;
 		}
 		function hideAllCode(object) {
-			// TODO: hide stack traces
 			Object.keys(object).forEach(key => typeof object[key] === 'function' && hideCode(object[key]));
 			return object;
 		}
-		apis['Function.prototype'] = {
+		define('Function.prototype', {
 			toString: { value: hideCode(function toString() {
 				if (hiddenFunctions.has(this)) {
 					return 'function '+ hiddenFunctions.get(this) +'() { [native code] }';
 				}
 				return Function_p.toString.call(this);
 			}), },
-		};
+		});
+		// TODO: hide stack traces
 		// TODO: wrap mutation observer and mutation events to hide script injection
 
+		// disable CSPs 'unsafe-eval' if it was inserted by the background scripts
+		if (values.misc.disableEval) {
+			const Function = hideCode(function Function(x) { throw new Error('call to Function() blocked by CSP'); });
+			define('Function.prototype', {
+				constructor: { value: Function, },
+			});
+			define('window', {
+				Function: { value: Function, },
+				eval: { value: hideCode('eval', function(x) { throw new Error('call to eval() blocked by CSP'); }), },
+				setTimeout: { value: hideCode(function setTimeout(x) { return typeof x === 'function' ? setTimeout.apply(this, arguments) : 0; }), },
+				setInterval: { value: hideCode(function setInterval(x) { return typeof x === 'function' ? setInterval.apply(this, arguments) : 0; }), },
+				setImmediate: { value: hideCode(function setImmediate(x) { return typeof x === 'function' ? setImmediate.apply(this, arguments) : 0; }), },
+			}); // TODO: any more?
+		}
+
 		// catch all calls that retrieve an window object from an iframe and make sure that iframe is wrapped
-		apis['HTMLIFrameElement.prototype'] = {
+		define('HTMLIFrameElement.prototype', {
 			contentWindow: { get: hideCode(function() {
 				const window = HTMLIFrameElement_p.get_contentWindow.call(this);
 				if (window) { try {
@@ -200,26 +226,26 @@ class FakedAPIs {
 				} catch (error) { console.error('fakeAPIs in get contentDocument failed', error); } }
 				return document;
 			}), },
-		};
+		});
 		// TODO: window.frames
 
 		// screen
-		const screen = apis['Screen.prototype'] = { };
-		Object.keys(values.screen)
-		.forEach(prop => screen[prop] = { get: hideCode(function() { return values.screen[prop]; }), });
-		apis.window = {
+		define('Screen.prototype', screen => Object.keys(values.screen).forEach(
+			prop => screen[prop] = { get: hideCode(function() { return values.screen[prop]; }), }
+		));
+		define('window', {
 			devicePixelRatio: {
 				get: hideCode({ get devicePixelRatio() { return values.screen.devicePixelRatio; }, }),
 				set: hideCode({ set devicePixelRatio(v) { }, }),
 			},
-		};
+		});
 
-		apis['MediaDevices.prototype'] = {
+		define('MediaDevices.prototype', {
 			enumerateDevices: { value: hideCode(function enumerateDevices() { return Promise.resolve([ ]); }), },
-		};
+		});
 
 		// navigator string values
-		const navigator = apis['Navigator.prototype'] = { };
+		const navigator = define('Navigator.prototype', { });
 		Object.keys(values.navigator)
 		.forEach(prop => navigator[prop] = { get: hideCode(function() { return values.navigator[prop]; }), enumerable: true, configurable: true, add: true, });
 		Object.keys(values.navigator.undefinedValues)
@@ -262,32 +288,32 @@ class FakedAPIs {
 		}), };
 
 		// HTMLElement.offsetWidth/Height
-		apis['HTMLElement.prototype'] = {
+		define('HTMLElement.prototype', {
 			offsetWidth: { get: hideCode({ get offsetWidth() {
 				return getOffsetSize(Element_p.get_clientWidth, HTMLElement_p.get_offsetWidth, this);
 			}, }), },
 			offsetHeight: { get: hideCode({ get offsetHeight() {
 				return getOffsetSize(Element_p.get_clientHeight, HTMLElement_p.get_offsetHeight, this);
 			}, }), },
-		};
+		});
 
 		// HTMLCanvasElement
-		const canvas = apis['HTMLCanvasElement.prototype'] = { };
+		const canvas = define('HTMLCanvasElement.prototype', { });
 		[ 'toDataURL', 'toBlob', 'mozGetAsFile', ]
 		.forEach(prop => canvas[prop] = { value: hideCode(prop, function() { log('HTMLCanvasElement.prototype.', prop); return HTMLCanvasElement_p[prop].apply(randomizeCanvas(this, originals), arguments); }), });
-		apis['CanvasRenderingContext2D.prototype'] = {
+		define('CanvasRenderingContext2D.prototype', {
 			getImageData: { value: hideCode(function getImageData(a, b, c, d) {
 				const data = CanvasRenderingContext2D_p.getImageData.apply(this, arguments);
 				randomizeUInt8Array(data.data);
 				return data;
 			}), },
-		};
-		apis['WebGLRenderingContext.prototype'] = {
+		});
+		define('WebGLRenderingContext.prototype', {
 			readPixels: { value: hideCode(function readPixels(a, b, c, d, e, f, data) {
 				WebGLRenderingContext_p.readPixels.apply(this, arguments);
 				randomizeTypedArray(data);
 			}), },
-		};
+		});
 
 		return apis;
 	}
@@ -380,35 +406,6 @@ function exists(obj, ...keys) {
 
 function notImplemented() {
 	throw new Error('not implemented');
-}
-
-function evaluateInWindow(window, nonce, script, thisArg, ...args) {
-	return script.apply(thisArg, args);
-}
-
-function evaluateInWindow_real(window, nonce, script, thisArg, ...args) {
-	const { document, } = window;
-	const element = document.createElement('script');
-	element.async = false;
-	element.setAttribute('nonce', nonce);
-	element.textContent =
-	(`function inject({ detail, }) { try { const script = (function ${ (script +'').replace(/^(function )?/, '') });
-		window.removeEventListener('inject', inject);
-		console.log('detail', detail);
-		detail.return(script.apply(detail.thisArg, detail.args));
-	} catch (error) {
-		detail.throw(error);
-	} }; window.addEventListener('inject', inject);`);
-	document.documentElement.appendChild(element).remove();
-	let value, error, hasThrown, hasReturned;
-	window.dispatchEvent(new CustomEvent('inject', { detail: {
-		return(v) { value = v; hasReturned = true; },
-		throw(e) { error = e; hasThrown = true; },
-		thisArg, args,
-	}, }));
-	if (hasThrown) { throw error; }
-	if (!hasReturned) { throw new Error('Failed to evaluate function'); }
-	return value;
 }
 
 return (function main() {
