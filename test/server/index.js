@@ -5,10 +5,11 @@
 const config = process.project_config = {
 	host: 'localhost',
 	origins: null,
-	https: false,
+	https: true,
 	httpsPort: 443,
 	httpPort: 80,
 	forceHttps: false,
+	certPath: './cert/test',
 };
 
 
@@ -27,8 +28,8 @@ const {
 const CSP = require('./csp.js');
 
 const https = config.https && {
-	key: FS.readFile(config.certPath +'.key', 'utf8'),
-	cert: FS.readFile(config.certPath +'.crt', 'utf8'),
+	key: FS.readFile(Path.resolve(__dirname, config.certPath +'.key'), 'utf8'),
+	cert: FS.readFile(Path.resolve(__dirname, config.certPath +'.crt'), 'utf8'),
 };
 
 const app = Express();
