@@ -1,99 +1,25 @@
 const script = window.script = function(options)  { 'use strict';
 
-const { nonce: token, } = options;
+const context = (() => {
+	const token = options.nonce;
 
-const log = (...args) => (console.log(...args), args.pop());
-
-let context = null;
-
-function randomizeCanvas(canvas, originals) {
-	console.log('randomizeCanvas');
-	const ctx = canvas.getContext('2d');
-	const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height); // TODO: don't use getters
-	const clone = originals.Node_p.cloneNode.call(canvas, true);
-	clone.getContext('2d').putImageData(imageData, 0, 0);
-	return clone;
-}
-
-function getRandomBytes(length) {
-	const buffer = new ArrayBuffer(length);
-	for (let offset = 0; offset < length; offset += 65536) {
-		crypto.getRandomValues(new Uint8Array(buffer, offset, Math.min(length - offset, 65536)));
-	}
-	return new Uint8Array(buffer);
-}
-
-function randomizeUInt8Array(data) {
-	const rnd = getRandomBytes(data.length);
-	let w = 0, mask = 0;
-	for (let i = 0, l = data.length; i < l; ++i) {
-		w = data[i];
-		mask = (1 << (32 - Math.clz32(w))) - 1 >>> 2; // TODO: this leaves deterministic bits
-		data[i] = w ^ (mask & rnd[i]);
-	}
-	return data;
-}
-
-function randomizeTypedArray(array) {
-	console.trace('not implemented');
-	// TODO: manipulate values in array
-	return array;
-}
-
-function createContext(options) {
-
-	const randomFontFactor = (() => {
-		const dispersion = options.fonts.dispersion / 100;
-		const offset = 1 - dispersion;
-		const factor = 2 * dispersion / (256 * 256);
-		const rand = new Random(256 * 256);
-		return () => offset + rand() * factor;
-	})();
-
-	const context = {
-		values: options,
-
-		token, log, notImplemented,
-		fakes: new WeakMap,
-		hiddenFunctions: new WeakMap,
-
-		getOffsetSize(client, offset, element) {
-			const correct = offset.call(element);
-			if (!correct || client.call(element)) { return correct; }
-			const factor = randomFontFactor();
-			return correct === correct << 0 ? Math.round(correct * factor) : correct * factor;
-		},
-
-		randomizeCanvas, randomizeTypedArray, randomizeUInt8Array,
-	};
-	log('created context', context);
-	return context;
-}
-
-function setContext(context) {
-	window.addEventListener('getStopFingerprintingContext$'+ token, onGetStopFingerprintingContext);
-	return context;
-}
-
-function getContext() {
+	// search for existing context
 	let context, root = window;
 	try { do { /* jshint -W083 */
 		root.dispatchEvent(new CustomEvent('getStopFingerprintingContext$'+ token, { detail: { return(c) { context = c; }, }, }));
 	} while (!context && root.parent !== root && (root = root.parent)); } catch (e) { } /* jshint +W083 */
 	context && console.log('found context', token, context);
-	return context;
-}
+	if (context) { return context; }
 
-function onGetStopFingerprintingContext(event) {
-	const { detail, } = event;
-	event.detail.return(context);
-}
+	// create context
+	context = {
+		values: options, options,
 
-class FakedAPIs {
-	constructor(window, context) {
-		this.context = context;
-		this.window = window;
-		this.originals = {
+		log, notImplemented,
+		fakes: new WeakMap, fakeAPIs,
+		hiddenFunctions: new WeakMap,
+
+		originals: {
 			Error_p: {
 				constructor: window.Error,
 				get_stack: exists(Object.getOwnPropertyDescriptor(window.Error.prototype, 'stack'), 'get'),
@@ -129,36 +55,81 @@ class FakedAPIs {
 				readPixels: window.WebGLRenderingContext.prototype.readPixels,
 			},
 			setTimeout: window.setTimeout, setInterval: window.setInterval, setImmediate: window.setImmediate,
-		};
-		this.fakeAPIs = fakeAPIs;
+		},
+
+		// Element.offsetWith/Height randomization
+		getOffsetSize(client, offset, element) {
+			const correct = offset.call(element);
+			if (!correct || client.call(element)) { return correct; }
+			const factor = this.randomFontFactor();
+			return correct === correct << 0 ? Math.round(correct * factor) : correct * factor;
+		},
+		randomFontFactor: (() => {
+			const dispersion = options.fonts.dispersion / 100;
+			const offset = 1 - dispersion;
+			const factor = 2 * dispersion / (256 * 256);
+			const rand = new Random(256 * 256);
+			return () => offset + rand() * factor;
+		})(),
+
+		// <canvas> randomization
+		randomizeCanvas(canvas, originals) {
+			console.log('randomizeCanvas');
+			const ctx = canvas.getContext('2d');
+			const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height); // TODO: don't use getters
+			const clone = originals.Node_p.cloneNode.call(canvas, true);
+			clone.getContext('2d').putImageData(imageData, 0, 0);
+			return clone;
+		},
+		getRandomBytes(length) {
+			const buffer = new ArrayBuffer(length);
+			for (let offset = 0; offset < length; offset += 65536) {
+				crypto.getRandomValues(new Uint8Array(buffer, offset, Math.min(length - offset, 65536)));
+			}
+			return new Uint8Array(buffer);
+		},
+		randomizeUInt8Array(data) {
+			const rnd = this.getRandomBytes(data.length);
+			let w = 0, mask = 0;
+			for (let i = 0, l = data.length; i < l; ++i) {
+				w = data[i];
+				mask = (1 << (32 - Math.clz32(w))) - 1 >>> 2; // TODO: this leaves deterministic bits
+				data[i] = w ^ (mask & rnd[i]);
+			}
+			return data;
+		},
+		randomizeTypedArray(array) {
+			console.trace('not implemented');
+			// TODO: manipulate values in array
+			return array;
+		},
+	};
+	Object.keys(context).forEach(key => typeof context[key] === 'function' && (context[key] = context[key].bind(context)));
+	log('created context', context);
+
+	// 'save' context
+	window.addEventListener('getStopFingerprintingContext$'+ token, event => event.detail.return(context));
+
+	return context;
+})();
+
+
+class FakedAPIs {
+	constructor(window) {
+		this.window = window;
 		this.build();
 	}
 
 	build() {
-		this.apis = new this.originals.Function_p.constructor(`
+		this.apis = new context.originals.Function_p.constructor('context', `
+			const { ${ Object.keys(context).join(', ') }, } = context;
+			const { ${ Object.keys(context.originals).join(', ') }, } = context.originals;
 			return (function ${ (this._build +'').replace(/^(function )?/, '') }).call(this);
-		`).call(this);
+		`).call(this, context);
 	}
 
-	// executed in the target window itself
+	// executed in the target window itself with context and context.originals expanded in the surrounding scope
 	_build() {
-		'use strict';
-		const _this = this;
-		const { context, originals, fakeAPIs, window, } = this;
-		const {
-			Error_p, Function_p,
-			HTMLIFrameElement_p,
-			Node_p, Element_p, HTMLElement_p,
-			HTMLCanvasElement_p, CanvasRenderingContext2D_p, WebGLRenderingContext_p,
-			setTimeout, setInterval, setImmediate,
-		} = originals;
-		const {
-			hiddenFunctions,
-			values, token,
-			log, notImplemented,
-			getOffsetSize,
-			randomizeCanvas, randomizeTypedArray, randomizeUInt8Array,
-		} = context;
 		const apis = { };
 
 		function define(name, object) {
@@ -178,6 +149,7 @@ class FakedAPIs {
 				name = func.name;
 			}
 			hiddenFunctions.set(func, name || '');
+			options.debug && (func.isFaked = true);
 			return func;
 		}
 		function hideAllCode(object) {
@@ -325,6 +297,11 @@ class FakedAPIs {
 			const target = key.split('.').reduce((object, key) => object[key], window);
 			setProps(target, apis[key]);
 		});
+
+		if (options.debug) {
+			window.applyCount = (window.applyCount || 0) + 1;
+			window.context = context;
+		}
 	}
 }
 
@@ -351,7 +328,7 @@ function fakeAPIs(window) {
 
 	let fake = context.fakes.get(window);
 	if (!fake) {
-		fake = new FakedAPIs(window, context);
+		fake = new FakedAPIs(window);
 		context.fakes.set(window, fake);
 		console.log('fake.build', host);
 	}
@@ -408,9 +385,11 @@ function notImplemented() {
 	throw new Error('not implemented');
 }
 
+function log() {
+	console.log.apply(console, arguments); return arguments[arguments.length - 1];
+}
+
 return (function main() {
-	context = getContext();
-	!context && (context = setContext(createContext(options)));
 	fakeAPIs(window);
 	attachObserver();
 })();

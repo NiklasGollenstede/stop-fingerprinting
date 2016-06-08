@@ -1,8 +1,9 @@
 (function() { 'use strict'; /* global script */
+console.log('context/index on', location.href);
 
 let root = window, url; try { do {
 	url = root.location.href;
-} while (root.parent !== root && (root = root.parent) && root.location.href); } catch (e) { }
+} while (root.parent !== root && root.parent.location.href && (root = root.parent)); } catch (e) { }
 
 getOptions(({ options, nonce, }) => {
 	if (options === 'false') { return console.log('Spoofing is disabled for ', url, window); }
@@ -12,19 +13,6 @@ getOptions(({ options, nonce, }) => {
 
 function getOptions(callback) {
 	if (root.options) { return void callback(root.options); }
-
-	/*
-	const request = new XMLHttpRequest();
-	request.open('GET', chrome.extension.getURL('background/get-options') +'?url='+ url, false); // sync
-	request.send(null);
-	const error = request.getResponseHeader('X-Error');
-	if (error) { throw parseError(error); }
-	const options = request.getResponseHeader('X-Options');
-	const nonce = request.getResponseHeader('X-Nonce');
-	if (!nonce) { throw new Error('failed to load options'); }
-
-	callback(root.options = { options, nonce, });
-	*/
 
 	chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, ({ error, value, }) => {
 		if (error) { throw parseError(error); }

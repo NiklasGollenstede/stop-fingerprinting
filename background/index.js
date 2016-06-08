@@ -63,7 +63,7 @@ function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }
 	function removeHSTS(header) {
 		changed = true;
 		header.value = header.value.replace(/max-age=\d+/gi, () => 'max-age=0');
-		console.log('hsts header removed', header);
+		console.log('hsts header removed', domain, header);
 	}
 }
 
@@ -125,20 +125,6 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 		changed = true;
 	}
 }
-
-/*
-const getOptionsUrl = chrome.extension.getURL('background/get-options');
-chrome.webRequest.onBeforeRequest.addListener(getOptionsForUrl, { urls: [ getOptionsUrl +'*', ], }, [ 'blocking', ]);
-function getOptionsForUrl({ url, tabId, }) {
-	url = (url.match(/url=(.*)/) || [ ])[1];
-	if (!url) { return; }
-	const domain = getDomain(url);
-	const profile = Profiles.get({ tabId, url, }).getDomain(domain);
-	console.log('getOptionsForUrl', url, domain, profile);
-	// return { redirectUrl: getOptionsUrl +'&data='+ JSON.stringify({ options: JSON.stringify(profile), nonce: profile.nonce, }), };
-	return { redirectUrl: 'data:text/plain;charset=utf-8,'+ JSON.stringify({ options: JSON.stringify(profile), nonce: profile.nonce, }), };
-}
-*/
 
 Messages.addHandler('getOptionsForUrl', function (url) {
 	const tabId = this.tab.id;

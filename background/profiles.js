@@ -247,6 +247,10 @@ class DomainProfile {
 		return { };
 	}
 
+	get debug() {
+		return options.children.debug.value;
+	}
+
 	toJSON() {
 		if (this.json) { return this.json; }
 		if (this.stack.get('disabled')) { return false; }
