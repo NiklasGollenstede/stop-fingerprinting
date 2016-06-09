@@ -1,7 +1,9 @@
 'use strict'; /* global chrome */
 
-const { Tabs, Messages, } = require('web-ext-utils/chrome');
+const { Tabs, Messages, Notifications, } = require('web-ext-utils/chrome');
 Messages.isExclusiveMessageHandler = true;
+
+const { notify, } = require('common/utils');
 
 require('common/options').then(options => {
 window.options = options;
@@ -126,12 +128,18 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 	}
 }
 
-Messages.addHandler('getOptionsForUrl', function (url) {
+Messages.addHandler('getOptionsForUrl', function(url) {
 	const tabId = this.tab.id;
 	const domain = getDomain(url);
 	const profile = Profiles.get({ tabId, url, }).getDomain(domain);
 	console.log('getOptionsForUrl', url, domain, profile);
 	return { options: JSON.stringify(profile), nonce: profile.nonce, };
+});
+
+Messages.addHandler('report', function(level, title, message) {
+	const { id: tabId, url, title: tabTitle, } = this.tab;
+	notify(level, { title, message, url, tabId, tabTitle, });
+	console[level](this, title, message);
 });
 
 function getDomain(url) {

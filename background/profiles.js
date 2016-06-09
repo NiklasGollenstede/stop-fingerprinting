@@ -2,6 +2,7 @@
 	'background/ua',
 	'background/screen',
 	'common/profile',
+	'common/utils',
 	'web-ext-utils/chrome',
 	'web-ext-utils/utils',
 	'es6lib',
@@ -9,6 +10,7 @@
 	{ Generator: NavGen, Navigator: { prototype: { toJSON: NavToJSON, }, }, },
 	{ Generator: ScreenGen, },
 	Profile,
+	{ notify, },
 	{ applications, Tabs, },
 	{ matchPatternToRegExp, },
 	{
@@ -226,7 +228,9 @@ class DomainProfile {
 	}
 
 	get navigator() {
-		return this.stack.navGen.generate();
+		const navigator = this.stack.navGen.generate();
+		notify.log({ title: 'Generated UA', message: navigator.userAgent.replace(/^Mozilla\/5\.0 /, ''), url: this.domain +'...', tabId: this.tab.tabId, });
+		return navigator;
 	}
 
 	get screen() {

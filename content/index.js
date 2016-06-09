@@ -8,22 +8,23 @@ let root = window, url; try { do {
 getOptions(({ options, nonce, }) => {
 	if (options === 'false') { return console.log('Spoofing is disabled for ', url, window); }
 
+	window.addEventListener('getStopFingerprintingPostMessage$'+ nonce, event => {
+		chrome.runtime.sendMessage(Object.assign(event.detail, { post: true, }));
+	});
+
 	inject(nonce, script, options);
 });
 
 function getOptions(callback) {
 	if (root.options) { return void callback(root.options); }
 
-	chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, ({ error, value, }) => {
-		if (error) { throw parseError(error); }
-		root.options = value;
-		console.log('loaded options', value);
-		callback(value);
+	chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, arg => {
+		if ('error' in arg) { throw parseError(arg.error); }
+		callback(root.options = arg.value);
 	});
 }
 
 function inject(nonce, script, jsonArg) {
-	const { document, } = this || window;
 	const element = document.createElement('script');
 	element.async = false;
 	element.id = 'injector';

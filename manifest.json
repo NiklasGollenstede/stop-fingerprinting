@@ -7,7 +7,13 @@
 
 	"description": "Disables / modifies some browser APIs that would otherwise allow browser fingerprinting",
 	"icons": {
-		"64": "icon.png"
+			"16": "icons/default/16.png",
+			"18": "icons/default/18.png",
+			"38": "icons/default/38.png",
+			"48": "icons/default/48.png",
+			"64": "icons/default/64.png",
+			"128": "icons/default/128.png",
+			"256": "icons/default/256.png"
 	},
 
 	"minimum_chrome_version": "49.0.0",
@@ -19,6 +25,7 @@
 	},
 
 	"permissions": [
+		"notifications",
 		"storage",
 		"tabs",
 		"webRequest",
@@ -45,7 +52,13 @@
 	],
 	"browser_action": {
 		"default_icon": {
-			"64": "icon.png"
+			"16": "icons/default/16.png",
+			"18": "icons/default/18.png",
+			"38": "icons/default/38.png",
+			"48": "icons/default/48.png",
+			"64": "icons/default/64.png",
+			"128": "icons/default/128.png",
+			"256": "icons/default/256.png"
 		},
 		"default_title": "Stop Fingerprinting",
 		"default_popup": "action/open-options-in-tab.html"
