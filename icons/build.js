@@ -13,7 +13,7 @@ const convert = promisify(require('svgexport').render);
 const icons = {
 	default: {
 		layers: [ 'fingerprint', 'stopSign', ],
-		sizes: [ 16, 18, 38, 48, 64, 128, 256, ],
+		sizes: [ 16, 18, 32, 38, 48, 64, 128, 256, ],
 	},
 	error: {
 		layers: [ 'fingerprint', 'errorTriangle', ],
@@ -23,11 +23,14 @@ const icons = {
 		layers: [ 'fingerprint', 'infoCircle', ],
 		sizes: [ 256, ],
 	},
+	log: {
+		layers: [ 'fingerprint', ],
+		sizes: [ 256, ],
+	},
 };
 
 
 const imagemin = require('imagemin');
-const pngout = require('imagemin-pngout');
 const imageminPngquant = require('imagemin-pngquant');
 
 spawn(function*() {

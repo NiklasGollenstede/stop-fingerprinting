@@ -60,8 +60,8 @@ const context = (() => {
 		postMessage(message) {
 			window.dispatchEvent(new CustomEvent('getStopFingerprintingPostMessage$'+ token, { detail: message, }));
 		},
-		report(level, ...messages) {
-			this.postMessage({ name: 'report', args: [ level, ...messages, ], });
+		notify(level, ...messages) {
+			this.postMessage({ name: 'notify', args: [ level, ...messages, ], });
 		},
 
 		// Element.offsetWith/Height randomization
@@ -81,7 +81,7 @@ const context = (() => {
 
 		// <canvas> randomization
 		randomizeCanvas(canvas, originals) {
-			this.report('info', 'Randomized Canvas', 'Spoiled possible fingerprinting');
+			this.notify('info', 'Randomized Canvas', 'Spoiled possible fingerprinting');
 			const ctx = canvas.getContext('2d');
 			const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height); // TODO: don't use getters
 			const clone = originals.Node_p.cloneNode.call(canvas, true);

@@ -5,7 +5,7 @@
 ) {
 
 const icons = {
-	log: chrome.extension.getURL('icons/default/256.png'),
+	log: chrome.extension.getURL('icons/log/256.png'),
 	info: chrome.extension.getURL('icons/info/256.png'),
 	error: chrome.extension.getURL('icons/error/256.png'),
 };

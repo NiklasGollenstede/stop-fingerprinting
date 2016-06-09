@@ -1,6 +1,6 @@
 'use strict'; /* global chrome */
 
-const { Tabs, Messages, Notifications, } = require('web-ext-utils/chrome');
+const { Tabs, Messages, } = require('web-ext-utils/chrome');
 Messages.isExclusiveMessageHandler = true;
 
 const { notify, } = require('common/utils');
@@ -136,7 +136,7 @@ Messages.addHandler('getOptionsForUrl', function(url) {
 	return { options: JSON.stringify(profile), nonce: profile.nonce, };
 });
 
-Messages.addHandler('report', function(level, title, message) {
+Messages.addHandler('notify', function(level, title, message) {
 	const { id: tabId, url, title: tabTitle, } = this.tab;
 	notify(level, { title, message, url, tabId, tabTitle, });
 	console[level](this, title, message);
