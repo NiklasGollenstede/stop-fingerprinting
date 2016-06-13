@@ -10,17 +10,18 @@ const icons = {
 	error: chrome.extension.getURL('icons/error/256.png'),
 };
 
-function notify(level, { title, message = '', url, tabId, tabTitle, }) {
+function notify(level, { title, message = '', url, domain, tabId, tabTitle, }) {
 	Notifications.create({
 		type: 'list',
 		title,
 		message,
 		iconUrl: icons[level] || icons.log,
 		items: [
-			...(message +'').match(/[^\s](?:.{15,30}(?=\s|$)|.{1,30})/gm).map(message => ({ title: '', message, })),
-			tabId != null  && { title: 'Tab:  ', message: ''+ tabId, },
-			tabTitle       && { title: 'Title:', message: ''+ tabTitle, },
-			url            && { title: 'Url:  ', message: ''+ url, },
+			domain   != null && { title: 'Domain:', message: ''+ domain, },
+			url      != null && { title: 'Url:   ', message: ''+ url, },
+			tabId    != null && { title: 'Tab:   ', message: ''+ tabId, },
+			tabTitle != null && { title: 'Title: ', message: ''+ tabTitle, },
+			...(message +'').match(/[^\s](?:.{20,33}(?=\s|$)|.{20,33}[\/\\]|.{1,33})/gm).map(message => ({ title: '', message, })),
 		].filter(x => x),
 	});
 }

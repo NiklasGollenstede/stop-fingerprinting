@@ -1,5 +1,4 @@
 (function() { 'use strict'; /* global script */
-console.log('context/index on', location.href);
 
 let root = window, url; try { do {
 	url = root.location.href;
@@ -32,7 +31,7 @@ function inject(nonce, script, jsonArg) {
 	element.textContent =
 	(`(function () { try { const script = (${ script });
 		const arg = JSON.parse(\`${ jsonArg }\`);
-		const value = script.call(null, arg);
+		const value = script.call(window, arg, script);
 		this.dataset.done = true;
 		this.dataset.value = JSON.stringify(value) || 'null';
 	} catch (error) {

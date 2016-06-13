@@ -71,7 +71,7 @@ function self(...others) {
 	return (
 		config.origins
 		? config.origins.concat("'self'")
-		: [ "'self'", 'https://$$', 'http://$$', 'https://*.$$', 'http://*.$$', ].map(s => s.replace(/\$\$/, () => config.host))
+		: [ "'self'", /*'https://$$', 'http://$$', 'https://*.$$', 'http://*.$$',*/ ].map(s => s.replace(/\$\$/, () => config.host))
 	).concat(others);
 }
 

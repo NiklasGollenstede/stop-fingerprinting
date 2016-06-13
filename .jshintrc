@@ -23,7 +23,7 @@
 	"latedef": "nofunc",
 
 	"browser": true,
-	"devel": true,
+	"devel": true, // console, alert, ...
 
 	"globals": {
 		"chrome": false,

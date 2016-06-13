@@ -229,7 +229,7 @@ class DomainProfile {
 
 	get navigator() {
 		const navigator = this.stack.navGen.generate();
-		notify.log({ title: 'Generated UA', message: navigator.userAgent.replace(/^Mozilla\/5\.0 /, ''), url: this.domain +'...', tabId: this.tab.tabId, });
+		notify.log({ title: 'Generated UA', message: navigator.userAgent.replace(/^Mozilla\/5\.0 /, ''), domain: this.domain, tabId: this.tab.tabId, });
 		return navigator;
 	}
 

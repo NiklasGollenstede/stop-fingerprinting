@@ -39,6 +39,14 @@ const iframes = window.iframes = {
 
 };
 
+const _Worker = window._Worker = class _Worker extends Worker {
+	constructor(url, onMessage) {
+		super(url);
+		this.onmessage = onMessage;
+		this.postMessage('hi');
+	}
+};
+
 document.addEventListener('DOMContentLoaded', () => {
 
 	Array.prototype.forEach.call(document.querySelectorAll('iframe'), frame => {

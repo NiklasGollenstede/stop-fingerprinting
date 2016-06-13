@@ -13,7 +13,7 @@ const Profiles = require('background/profiles')(options);
 // modify CSPs to allow script injection
 chrome.webRequest.onHeadersReceived.addListener(modifyResponseHeaders, { urls: [ '*://*/*', ], }, [ 'blocking', 'responseHeaders', ]);
 function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }) {
-	const domain = ((/^[^:\/\\]+:\/\/([^\/\\]+)/).exec(url) || [ , '<invalid domain>', ])[1];
+	const domain = getDomain(url);
 	const profile = Profiles.get({ requestId, tabId, url, }).getDomain(domain);
 
 	let changed = false;
@@ -26,46 +26,44 @@ function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }
 	return changed ? { responseHeaders, } : { };
 
 	function injectCSP(header) {
-		let defaultSrc = [ ], scriptSrc = [ ], others = [ ];
-		header.value.trim().split(/\s*;\s*/g).forEach(directive => {
-			if ((/^default-src\s+/i).test(directive)) { return defaultSrc.push(directive.split(/\s+/g).slice(1)); }
-			if ((/^script-src\s+/i).test(directive)) { return scriptSrc.push(directive.split(/\s+/g).slice(1)); }
+		let defaultSrc = [ ], scriptSrc, childSrc, others = [ ];
+		header.value.trim().split(/\s*;\s*/g).forEach(directive => { // TODO: check case sensitivity
+			if ((/^default-src\s+/i).test(directive)) { return (defaultSrc = directive.split(/\s+/g).slice(1)); }
+			if ((/^script-src\s+/i).test(directive)) { return (scriptSrc = directive.split(/\s+/g).slice(1)); }
+			if ((/^child-src\s+/i).test(directive)) { return (scriptSrc = directive.split(/\s+/g).slice(1)); }
 			others.push(directive);
 		});
-		const isOk = defaultSrc.every(sources => !sources.includes("'none'") && sources.includes("'unsafe-inline'") && sources.includes("'unsafe-eval'"));
-		if (isOk && !scriptSrc.length) { return; }
-		if (scriptSrc.length) {
-			scriptSrc = scriptSrc.map(sources => {
-				if (sources.includes("'none'")) {
-					changed = true; profile.misc.disableEval = true;
-					return [ `'nonce-${ profile.nonce }'`, `'unsafe-eval'`, ];
-				}
-				if (!sources.includes("'unsafe-eval'")) {
-					changed = true; profile.misc.disableEval = true;
-					sources.unshift(`'unsafe-eval'`);
-				}
-				if (!sources.includes("'unsafe-inline'")) {
-					changed = true;
-					sources.unshift(`'nonce-${ profile.nonce }'`);
-				}
-				return sources;
-			});
-		} else {
-			changed = true; profile.misc.disableEval = true;
-			scriptSrc = [ [ `'nonce-${ profile.nonce }'`, `'unsafe-eval'`, ].concat(defaultSrc[0] || [ ]), ];
+		!scriptSrc && (scriptSrc = defaultSrc.slice());
+		!childSrc && (childSrc = defaultSrc.slice());
+
+		function inject(primary, secondary, token, test = $=>$ === token) {
+			if (primary.includes("'none'")) {
+				primary.splice(0, Infinity, token);
+				return (changed = true);
+			}
+			if (!primary.some(test) && !secondary.some(test)) {
+				primary.unshift(token);
+				return (changed = true);
+			}
 		}
+
+		inject(scriptSrc, defaultSrc, "'unsafe-eval'") && (profile.misc.disableEval = true);
+		inject(scriptSrc, defaultSrc, `'nonce-${ profile.nonce }'`, $=>$ === "'unsafe-inline'");
+		inject(childSrc, defaultSrc, 'blob:') && (profile.misc.disableChildBlobUrl = true);
+
 		if (!changed) { return; }
 		header.value
-		= defaultSrc.map(sources => 'default-src '+ sources.join(' ') +'; ')
-		+ scriptSrc.map(sources => 'script-src '+ sources.join(' ') +'; ')
+		= (defaultSrc.length ? 'default-src '+ defaultSrc.join(' ') +'; ' : '')
+		+ (scriptSrc.length ? 'script-src '+ scriptSrc.join(' ') +'; ' : '')
+		+ (childSrc.length ? 'child-src '+ childSrc.join(' ') +'; ' : '')
 		+ others.join('; ');
-		console.log('build CSP\n', header.value, '\nfrom', defaultSrc, scriptSrc, others);
+		console.log('build CSP\n', header.value);
 	}
 
 	function removeHSTS(header) {
 		changed = true;
 		header.value = header.value.replace(/max-age=\d+/gi, () => 'max-age=0');
-		console.log('hsts header removed', domain, header);
+		console.log('HSTS header removed', domain, header);
 	}
 }
 
@@ -143,7 +141,13 @@ Messages.addHandler('notify', function(level, title, message) {
 });
 
 function getDomain(url) {
-	return ((/^[^:\/\\]+:\/\/([^\/\\]+)/).exec(url) || [ , '<invalid domain>', ])[1];
+	try {
+		const location = new URL(url);
+		return location.protocol +'//'+ location.host;
+	} catch (error) {
+		alert('could not extract domain from url "'+ url +'"!'); debugger;
+		return '<invalid domain>';
+	}
 }
 
 });

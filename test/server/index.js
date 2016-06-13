@@ -38,7 +38,7 @@ const app = Express();
 app.all('/*', (r, x, n) => (console.log(r.method, r.hostname + (r.originalUrl = r.url), r.xhr ? 'xhr' : '', r.headers), n()));
 
 // serve favicon
-app.use(require('serve-favicon')(__dirname + './../../icons/default/38.png'));
+app.use(require('serve-favicon')(__dirname + './../../icons/default/32.png'));
 
 // employ CSP
 CSP(app);

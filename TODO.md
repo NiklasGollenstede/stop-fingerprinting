@@ -5,3 +5,4 @@
 - Add option to enable DNT (default: unchanged)
 - Add option to set HTTP_ACCEPT (default: unchanged)
 - do image sets with variable resolution or css media queries leak the true devicePixelRatio?
+- do something about console.memory in chrome
