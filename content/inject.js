@@ -1,4 +1,5 @@
-const script = window.script = function(options, script)  { 'use strict';
+// one line of padding
+const script = window.script = function(options, script, workerOptions)  { 'use strict';
 
 const self = this;
 const window = self.constructor.name === 'Window' ? self : null;
@@ -37,6 +38,7 @@ const {
 		iterator,
 		toStringTag, },
 	Reflect, Reflect: {
+		construct,
 		apply, },
 	Blob,
 	URL, URL: {
@@ -50,6 +52,7 @@ const _call          =            Function .prototype.call;
 const call           = _call.bind(Function .prototype.call);
 const bind           = _call.bind(Function .prototype.bind);
 const forEach        = _call.bind(Array    .prototype.forEach);
+const map            = _call.bind(Array    .prototype.map);
 const reduce         = _call.bind(Array    .prototype.reduce);
 const join           = _call.bind(Array    .prototype.join);
 const split          = _call.bind(String   .prototype.split);
@@ -95,11 +98,11 @@ const context = (() => {
 
 	// create context
 	context = {
-		values: options, options, script, top: self,
+		values: options, options, script, workerOptions, top: self, worker,
 
 		// all 'globals' from above here too
-		Math, clz32, random, round, min, max, CustomEvent, dispatchEvent, Object, keys, create, assign, getOwnPropertyDescriptor, defineProperty, defineProperties, getPrototypeOf, Array, Function, ArrayBuffer, Uint8Array, Promise, String, raw, Symbol, iterator, toStringTag, Reflect, apply, Blob, URL, createObjectURL, revokeObjectURL, JSON, stringify,
-		call, bind, forEach, reduce, join, split, replace, test, weakMapSet, weakMapGet, weakMapHas, hasOwnProperty,
+		Math, clz32, random, round, min, max, CustomEvent, dispatchEvent, Object, keys, create, assign, getOwnPropertyDescriptor, defineProperty, defineProperties, getPrototypeOf, Array, Function, ArrayBuffer, Uint8Array, Promise, String, raw, Symbol, iterator, toStringTag, Reflect, construct, apply, Blob, URL, createObjectURL, revokeObjectURL, JSON, stringify,
+		call, bind, forEach, map, reduce, join, split, replace, test, weakMapSet, weakMapGet, weakMapHas, hasOwnProperty,
 		console,
 		getRandomValues, typedArrayGetLength, imageDataGetData, canvasGetWidth, canvasGetHeight, customEventGetDetail,
 
@@ -148,7 +151,16 @@ const context = (() => {
 			},
 			setTimeout, setInterval, setImmediate: self.setImmediate,
 			Worker_p: {
-				constructor: typeof Worker !== 'undefined' ? Worker : null, // TODO: no Worker within workers in chrome?
+				constructor: typeof Worker !== 'undefined' ? Worker : null, // no Worker within workers in chrome
+			},
+			SharedWorker_p: {
+				constructor: typeof SharedWorker !== 'undefined' ? SharedWorker : null, // no SharedWorker within workers in chrome
+			},
+			WorkerGlobalScope_p: {
+				importScripts: worker && WorkerGlobalScope.prototype.importScripts,
+			},
+			XMLHttpRequest_p: {
+				open: XMLHttpRequest.prototype.open,
 			},
 		},
 
@@ -327,10 +339,8 @@ function createAPIs() {
 
 	// navigator string values
 	const navigator = { };
-	keys(values.navigator)
-	.forEach(prop => navigator[prop] = { get: hideCode(function() { return values.navigator[prop]; }), enumerable: true, configurable: true, add: true, });
-	keys(values.navigator.undefinedValues)
-	.forEach(prop => navigator[prop] = { delete: true, });
+	forEach(keys(values.navigator), prop => navigator[prop] = { get: hideCode(function() { return values.navigator[prop]; }), enumerable: true, configurable: true, add: true, });
+	forEach(keys(values.navigator.undefinedValues), prop => navigator[prop] = { delete: true, });
 	delete navigator.undefinedValues;
 	define('Navigator.prototype', navigator);
 	define('WorkerNavigator.prototype', navigator);
@@ -401,41 +411,86 @@ function createAPIs() {
 		}), },
 	});
 
+	// BroadcastChannel (firefox only)
+	define('BroadcastChannel.prototype', { // TODO: make it optional
+		postMessage: { value: hideCode(function postMessage(a) {
+			// TODO: arguments/this error handling
+		}), },
+	});
+
 	// workers
-	if (Worker_p.constructor) {
-		const Original = Worker_p.constructor;
-		const Worker = hideCode(function Worker(url) {
-			if (!new.target) { throw new TypeError(`Constructor Worker requires 'new'`); }
-			if (!arguments.length) { throw new TypeError(`Not enough arguments to Worker.`); }
+	if (Worker_p.constructor) { forEach([ '', 'Shared', ], shared => {
+		const ctorName = shared +'Worker';
+		const Original = originals[ctorName +'_p'].constructor;
+		const Worker = hideCode(ctorName, function(url) {
+			if (!new.target) { throw new TypeError(`Constructor ${ ctorName } requires 'new'`); }
+			if (!arguments.length) { throw new TypeError(`Not enough arguments to ${ ctorName }.`); }
 			if (options.misc.disableChildBlobUrl && test((/^blob:/), url)) {
-				throw new DOMException (`Failed to construct 'Worker': Access to the script at '${ url }' is denied by the document's Content Security Policy.`);
+				throw new DOMException (`Failed to construct '${ ctorName }': Access to the script at '${ url }' is denied by the document's Content Security Policy.`);
 			}
 
 			console.log('caught worker construction');
-			const blob = new Blob([ `(() => { const script = (${ getScriptSource() }); (`+ ((options, url) => {
-				// worker specific
-				Object.defineProperty(WorkerGlobalScope.prototype, 'location', { value: new URL(url), });
-				// TODO: wrap importScripts, XHR.open, onerror.filename etc.
+			const blob = new Blob([ `(() => {
+				const script = (${ getScriptSource() });
+				(`+ ((options, workerOptions) => {
+					script.call(self, options, script, workerOptions);
 
-				// general
-				script.call(self, options, script);
-
-				// call original script
-				try {
-					self.importScripts(url);
-				} catch (error) { throw new (typeof NetworkError !== 'undefined' ? NetworkError : DOMException)(`Failed to load worker script at "${ url }"`); }
-			}) +`)(JSON.parse(\`${ stringify(options) }\`), ("${ new URL(url, location) }")); })()`, ]);
+					try {
+						self.importScripts(workerOptions.entryUrl); // chrome ignores the CSP here
+					} catch (error) {
+						throw new (typeof NetworkError !== 'undefined' ? NetworkError : DOMException)(`Failed to load worker script at "${ url }"`);
+					}
+				}) +`)(
+					JSON.parse(\`${ stringify(options) }\`),
+					{
+						entryUrl: "${ new URL(url, location) }",
+						name: decodeURI("${ encodeURI(shared && arguments[1] || '') }"),
+					}
+				);
+			})()`, ]);
 
 			const blobUrl = createObjectURL(blob);
 			setTimeout(() => revokeObjectURL(blobUrl), 10);
 
-			return new Original(blobUrl);
+			return construct(Original, [ blobUrl, ], new.target);
 		});
 		defineProperty(Worker, 'prototype', { value: Original.prototype, });
 
 		define('self', {
-			Worker: { value: Worker, },
+			[ctorName]: { value: Worker, },
 		});
+	}); }
+
+	// in a Worker
+	if (worker) {
+		const locationString = workerOptions.entryUrl;
+		define('WorkerLocation.prototype', location => {
+			const _location = new URL(locationString);
+			forEach(keys(WorkerLocation.prototype), prop => {
+				const value = _location[prop];
+				location[prop] = { get: hideCode('get '+ prop, function() { return value; }), };
+			});
+			location.toString = { value: hideCode(function toString() { return locationString; }), };
+		});
+		define('WorkerGlobalScope.prototype', {
+			importScripts: { value: hideCode(function importScripts() {
+				return apply(WorkerGlobalScope_p.importScripts, this, map(arguments, url => new URL(url, locationString)));
+			}), },
+		});
+		define('XMLHttpRequest.prototype', {
+			open: { value: hideCode(function open(a, b) {
+				if (arguments.length >= 2) { arguments[1] = new URL(arguments[1], locationString); }
+				return apply(XMLHttpRequest_p.open, this, arguments);
+			}), },
+		});
+		// TODO: onerror.filename
+
+		// in a SharedWorker
+		if (test((/^Shared/), worker.constructor.name)) {
+			define('self', {
+				name: { value: workerOptions.name, },
+			});
+		}
 	}
 
 	return apis;

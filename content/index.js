@@ -29,7 +29,8 @@ function inject(nonce, script, jsonArg) {
 	element.id = 'injector';
 	element.setAttribute('nonce', nonce);
 	element.textContent =
-	(`(function () { try { const script = (${ script });
+	(`(function () { try {
+		const script = (${ script });
 		const arg = JSON.parse(\`${ jsonArg }\`);
 		const value = script.call(window, arg, script);
 		this.dataset.done = true;

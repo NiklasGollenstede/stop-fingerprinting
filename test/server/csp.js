@@ -22,7 +22,7 @@ const CSP = module.exports = function CSP(app) {
 			defaultSrc: self(),
 
 			// baseUri: self(),
-			childSrc: [ "'none'", ],
+			childSrc: self(),
 			// connectSrc: self(),
 			// fontSrc: self(),
 			// formAction: [ ],

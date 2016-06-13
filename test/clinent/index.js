@@ -61,6 +61,21 @@ const _Worker = window._Worker = class _Worker extends Worker {
 	}
 };
 
+const Broadcast = window.Broadcast = class Broadcast extends SharedWorker {
+	constructor(name) {
+		super('broadcast.js', 'broadcast-channel-shim+'+ name);
+	}
+	get onmessage() {
+		return this.port.onmessage;
+	}
+	set onmessage(value) {
+		this.port.onmessage = value;
+	}
+	postMessage(message) {
+		this.port.postMessage(message);
+	}
+};
+
 document.addEventListener('DOMContentLoaded', () => {
 
 	Array.prototype.forEach.call(document.querySelectorAll('iframe'), frame => {
