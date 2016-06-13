@@ -18,7 +18,7 @@ function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }
 
 	let changed = false;
 	(type === 'main_frame' || type === 'sub_frame') && responseHeaders.forEach(header => {
-		if ((/^(?:(?:X-)?Content-Security-Policy|X-WebKit-CSP)$/i).test(header.name) && header.value) { return injectCSP(header); }
+		if ((/^(?:Content-Security-Policy)$/i).test(header.name) && header.value) { return injectCSP(header); }
 	});
 	profile.get('hstsDisabled') && responseHeaders.forEach(header => {
 		if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return removeHSTS(header); }
@@ -26,36 +26,41 @@ function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }
 	return changed ? { responseHeaders, } : { };
 
 	function injectCSP(header) {
-		let defaultSrc = [ ], scriptSrc, childSrc, others = [ ];
+		// reference: https://www.w3.org/TR/CSP/
+		// even though frame-src is deprecated, it will probably not be removed for a long time, and it provides a convenient way to allow 'blob:' only in workers
+		let defaultSrc = [ '*', ], scriptSrc, childSrc, frameSrc, others = [ ];
 		header.value.trim().split(/\s*;\s*/g).forEach(directive => { // TODO: check case sensitivity
 			if ((/^default-src\s+/i).test(directive)) { return (defaultSrc = directive.split(/\s+/g).slice(1)); }
 			if ((/^script-src\s+/i).test(directive)) { return (scriptSrc = directive.split(/\s+/g).slice(1)); }
-			if ((/^child-src\s+/i).test(directive)) { return (scriptSrc = directive.split(/\s+/g).slice(1)); }
+			if ((/^child-src\s+/i).test(directive)) { return (childSrc = directive.split(/\s+/g).slice(1)); }
+			if ((/^frame-src\s+/i).test(directive)) { return (frameSrc = directive.split(/\s+/g).slice(1)); }
 			others.push(directive);
 		});
 		!scriptSrc && (scriptSrc = defaultSrc.slice());
 		!childSrc && (childSrc = defaultSrc.slice());
+		!frameSrc && (frameSrc = childSrc.slice());
 
-		function inject(primary, secondary, token, test = $=>$ === token) {
-			if (primary.includes("'none'")) {
-				primary.splice(0, Infinity, token);
+		function inject(tokens, token, test = $=>$ === token) {
+			if (tokens.includes("'none'")) {
+				tokens.splice(0, Infinity, token);
 				return (changed = true);
 			}
-			if (!primary.some(test) && !secondary.some(test)) {
-				primary.unshift(token);
+			if (!tokens.some(test)) {
+				tokens.unshift(token);
 				return (changed = true);
 			}
 		}
 
-		inject(scriptSrc, defaultSrc, "'unsafe-eval'") && (profile.misc.disableEval = true);
-		inject(scriptSrc, defaultSrc, `'nonce-${ profile.nonce }'`, $=>$ === "'unsafe-inline'");
-		inject(childSrc, defaultSrc, 'blob:') && (profile.misc.disableChildBlobUrl = true);
+		inject(scriptSrc, "'unsafe-eval'") && (profile.misc.disableEval = true);
+		inject(scriptSrc, `'nonce-${ profile.nonce }'`, $=>$ === "'unsafe-inline'");
+		inject(childSrc, 'blob:') && (profile.misc.disableChildBlobUrl = true);
 
 		if (!changed) { return; }
 		header.value
-		= (defaultSrc.length ? 'default-src '+ defaultSrc.join(' ') +'; ' : '')
-		+ (scriptSrc.length ? 'script-src '+ scriptSrc.join(' ') +'; ' : '')
-		+ (childSrc.length ? 'child-src '+ childSrc.join(' ') +'; ' : '')
+		= 'default-src '+ defaultSrc.join(' ') +'; '
+		+ 'script-src '+ scriptSrc.join(' ') +'; '
+		+ 'child-src '+ childSrc.join(' ') +'; '
+		+ 'frame-src '+ frameSrc.join(' ') +'; '
 		+ others.join('; ');
 		console.log('build CSP\n', header.value);
 	}

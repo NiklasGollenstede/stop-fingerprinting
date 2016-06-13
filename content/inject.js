@@ -10,7 +10,12 @@ const {
 		random,
 		round,
 		min,
-		max, },
+		max,
+		ceil,
+		log2,
+		pow, },
+	Number, Number: {
+		MAX_SAFE_INTEGER, },
 	CustomEvent,
 	dispatchEvent,
 	Object, Object: {
@@ -26,6 +31,8 @@ const {
 	ArrayBuffer,
 	Uint8Array,
 	Promise,
+	String, String: {
+		raw, },
 	Symbol, Symbol: {
 		iterator,
 		toStringTag, },
@@ -35,6 +42,8 @@ const {
 	URL, URL: {
 		createObjectURL,
 		revokeObjectURL, },
+	JSON, JSON: {
+		stringify, },
 } = self;
 
 const _call          =            Function .prototype.call;
@@ -45,10 +54,14 @@ const reduce         = _call.bind(Array    .prototype.reduce);
 const join           = _call.bind(Array    .prototype.join);
 const split          = _call.bind(String   .prototype.split);
 const replace        = _call.bind(String   .prototype.replace);
+const test           = _call.bind(RegExp   .prototype.test);
 const weakMapSet     = _call.bind(WeakMap  .prototype.set);
 const weakMapGet     = _call.bind(WeakMap  .prototype.get);
 const weakMapHas     = _call.bind(WeakMap  .prototype.has);
 const hasOwnProperty = _call.bind(Object   .prototype.hasOwnProperty);
+const querySelector     = window && _call.bind(Element          .prototype.querySelector);
+const querySelectorAll  = window && _call.bind(Element          .prototype.querySelectorAll);
+const observe           = window && _call.bind(MutationObserver .prototype.observe);
 
 const console = (console => {
 	const clone = { };
@@ -62,6 +75,8 @@ const imageDataGetData     =           _call.bind(getGetter(ImageData          .
 const canvasGetWidth       = window && _call.bind(getGetter(HTMLCanvasElement  .prototype, 'width'));
 const canvasGetHeight      = window && _call.bind(getGetter(HTMLCanvasElement  .prototype, 'height'));
 const customEventGetDetail =           _call.bind(getGetter(CustomEvent        .prototype, 'detail'));
+const nodeGetTagName       = window && _call.bind(getGetter(Element            .prototype, 'tagName'));
+const getContentWindow     = window && _call.bind(getGetter(HTMLIFrameElement  .prototype, 'contentWindow'));
 
 const context = (() => {
 	const token = options.nonce;
@@ -83,8 +98,9 @@ const context = (() => {
 		values: options, options, script, top: self,
 
 		// all 'globals' from above here too
-		Math, clz32, random, round, min, max, CustomEvent, dispatchEvent, Object, keys, create, assign, getOwnPropertyDescriptor, defineProperty, defineProperties, getPrototypeOf, Array, Function, ArrayBuffer, Uint8Array, Promise, Symbol, iterator, toStringTag, Reflect, apply, Blob, URL, createObjectURL, revokeObjectURL,
-		call, bind, forEach, reduce, join, split, replace, weakMapSet, weakMapGet, weakMapHas, hasOwnProperty, 		console,
+		Math, clz32, random, round, min, max, CustomEvent, dispatchEvent, Object, keys, create, assign, getOwnPropertyDescriptor, defineProperty, defineProperties, getPrototypeOf, Array, Function, ArrayBuffer, Uint8Array, Promise, String, raw, Symbol, iterator, toStringTag, Reflect, apply, Blob, URL, createObjectURL, revokeObjectURL, JSON, stringify,
+		call, bind, forEach, reduce, join, split, replace, test, weakMapSet, weakMapGet, weakMapHas, hasOwnProperty,
+		console,
 		getRandomValues, typedArrayGetLength, imageDataGetData, canvasGetWidth, canvasGetHeight, customEventGetDetail,
 
  		getScriptSource() { return script +''; },
@@ -212,7 +228,7 @@ const context = (() => {
 // executed in the target global context itself with 'context' and 'context.originals' expanded in the surrounding scope (s.o.)
 function createAPIs() {
 	const {
-		TypeError,
+		TypeError, DOMException,
 		Promise, Promise: { resolve: Resolve, },
 		Symbol, Symbol: { iterator, toStringTag, },
 	} = self;
@@ -243,14 +259,20 @@ function createAPIs() {
 		forEach(keys(object), key => typeof object[key] === 'function' && hideCode(object[key]));
 		return object;
 	}
-	define('Function.prototype', {
-		toString: { value: hideCode(function toString() {
+	{
+		const nativeFunctionBody = options.misc.browser === 'firefox' ? '() {\n    [native code]\n}' : '() { [native code] }';
+		const toString = hideCode(function toString() {
 			if (weakMapHas(hiddenFunctions, this)) {
-				return 'function '+ weakMapGet(hiddenFunctions, this) +'() { [native code] }';
+				return 'function '+ weakMapGet(hiddenFunctions, this) + nativeFunctionBody;
 			}
 			return Function_p.toString.call(this);
-		}), },
-	});
+		});
+		define('Function.prototype', {
+			toString: { value: toString, },
+			toSource: { value: toString, },
+		});
+
+	}
 	// TODO: hide stack traces
 	// TODO: wrap mutation observer and mutation events to hide script injection
 
@@ -263,9 +285,9 @@ function createAPIs() {
 		define('self', {
 			Function: { value: Function, },
 			eval: { value: hideCode('eval', function(x) { throw new Error('call to eval() blocked by CSP'); }), },
-			setTimeout: { value: hideCode(function setTimeout(x) { return typeof x === 'function' ? apply(setTimeout, this, arguments) : 0; }), },
-			setInterval: { value: hideCode(function setInterval(x) { return typeof x === 'function' ? apply(setInterval, this, arguments) : 0; }), },
-			setImmediate: { value: hideCode(function setImmediate(x) { return typeof x === 'function' ? apply(setImmediate, this, arguments) : 0; }), },
+			setTimeout: { value: hideCode('setTimeout', function(x) { return typeof x === 'function' ? apply(setTimeout, this, arguments) : 0; }), },
+			setInterval: { value: hideCode('setInterval', function(x) { return typeof x === 'function' ? apply(setInterval, this, arguments) : 0; }), },
+			setImmediate: { value: hideCode('setImmediate', function(x) { return typeof x === 'function' ? apply(setImmediate, this, arguments) : 0; }), },
 		}); // TODO: any more?
 	}
 
@@ -383,21 +405,29 @@ function createAPIs() {
 	if (Worker_p.constructor) {
 		const Original = Worker_p.constructor;
 		const Worker = hideCode(function Worker(url) {
-			// TODO: this/new/argument error handling
+			if (!new.target) { throw new TypeError(`Constructor Worker requires 'new'`); }
+			if (!arguments.length) { throw new TypeError(`Not enough arguments to Worker.`); }
+			if (options.misc.disableChildBlobUrl && test((/^blob:/), url)) {
+				throw new DOMException (`Failed to construct 'Worker': Access to the script at '${ url }' is denied by the document's Content Security Policy.`);
+			}
+
 			console.log('caught worker construction');
 			const blob = new Blob([ `(() => { const script = (${ getScriptSource() }); (`+ ((options, url) => {
 				// worker specific
 				Object.defineProperty(WorkerGlobalScope.prototype, 'location', { value: new URL(url), });
+				// TODO: wrap importScripts, XHR.open, onerror.filename etc.
 
 				// general
 				script.call(self, options, script);
 
 				// call original script
-				self.importScripts(url); // sync (?)
-			}) +`)(JSON.parse(\`${ JSON.stringify(options) }\`), ("${ new URL(url, location) }")); })()`, ]);
+				try {
+					self.importScripts(url);
+				} catch (error) { throw new (typeof NetworkError !== 'undefined' ? NetworkError : DOMException)(`Failed to load worker script at "${ url }"`); }
+			}) +`)(JSON.parse(\`${ stringify(options) }\`), ("${ new URL(url, location) }")); })()`, ]);
 
 			const blobUrl = createObjectURL(blob);
-			setTimeout(() => revokeObjectURL(blobUrl));
+			setTimeout(() => revokeObjectURL(blobUrl), 10);
 
 			return new Original(blobUrl);
 		});
@@ -449,14 +479,6 @@ function setProps(object, props) {
 
 function fakeAPIs(global) {
 	const host = global.frameElement;
-	if (host && (/^data:/).test(host.src)) {
-		console.log('Redirecting frame with "data:" src to about:blank', host);
-		const { parentNode, nextSibling, } = host;
-		host.remove();
-		host.src = 'about:blank';
-		parentNode.insertBefore(host, nextSibling);
-		return;
-	}
 
 	let fake = weakMapGet(context.fakes, global);
 	if (!fake) {
@@ -470,18 +492,20 @@ function fakeAPIs(global) {
 
 function attachObserver() {
 	if (typeof MutationObserver === 'undefined') { return; } // worker
-	const observer = new MutationObserver(mutations => mutations.forEach(({ addedNodes, }) => Array.prototype.forEach.call(addedNodes, element => {
-		if (element.tagName === 'IFRAME') {
+	// TODO: is it save to forEach over NodeLists ?
+	const observer = new MutationObserver(mutations => forEach(mutations, ({ addedNodes, }) => forEach(addedNodes, element => {
+		let tag; try { tag = nodeGetTagName(element); } catch (e) { }
+		if (tag === 'IFRAME') {
 			// console.log('direct: attaching to iframe', element);
-			fakeAPIs(element.contentWindow, element);
-		} else if(element.querySelector && element.querySelector('iframe')) {
-			Array.prototype.forEach.call(element.querySelectorAll('iframe'), element => { try {
+			fakeAPIs(getContentWindow(element), element);
+		} else if(tag && querySelector(element, 'iframe')) {
+			forEach(querySelectorAll(element, 'iframe'), element => { try {
 				// console.log('loop: attaching to iframe', element);
-				fakeAPIs(element.contentWindow, element);
+				fakeAPIs(getContentWindow(element), element);
 			} catch(error) { console.error(error); } });
 		}
 	})));
-	observer.observe(document, { subtree: true, childList: true, });
+	observe(observer, document, { subtree: true, childList: true, });
 }
 
 /**
@@ -489,15 +513,15 @@ function attachObserver() {
  * @param {number}  n  Exclusive upper bound of the randoms. (0 <= random < n)
  */
 function Random(n) { // TODO: test
-	const shift = Math.ceil(Math.log2(n));
-	const factor = n / Math.pow(2, shift);
+	const shift = ceil(log2(n));
+	const factor = n / pow(2, shift);
 	const mask = (1 << shift) - 1;
 
 	let index = Infinity, buffer = [ ];
 
 	function get() {
 		index = 0;
-		let random = Math.random() * Number.MAX_SAFE_INTEGER << 0;
+		let random = random() * MAX_SAFE_INTEGER << 0;
 		for (let i = shift, j = 0; i < 32; i += shift, ++j) {
 			buffer[j] = ((random & mask) * factor) << 0;
 			random = random >> shift;

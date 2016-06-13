@@ -22,12 +22,12 @@ const CSP = module.exports = function CSP(app) {
 			defaultSrc: self(),
 
 			// baseUri: self(),
-			// childSrc: self(),
+			childSrc: [ "'none'", ],
 			// connectSrc: self(),
 			// fontSrc: self(),
 			// formAction: [ ],
 			// frameAncestors: self(),
-			frameSrc: '*',
+			frameSrc: [ '*', 'data:', 'blob:', ],
 			imgSrc: self('data:'),
 			// manifestSrc: [ ],
 			// mediaSrc: [ ],
@@ -48,7 +48,7 @@ const CSP = module.exports = function CSP(app) {
 		 * Settings
 		 */
 		reportOnly: false,
-		setAllHeaders: true,
+		setAllHeaders: false,
 		// Set to true if you want to disable CSP on Android.
 		disableAndroid: false,
 		// Set to true if you want to force buggy CSP in Safari 5.1 and below.

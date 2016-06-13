@@ -36,6 +36,19 @@ const iframes = window.iframes = {
 		document.body.appendChild(iframe);
 		return (window.last = window.frames[window.frames.length - 1]);
 	},
+	blobUrl() {
+		const iframe = document.createElement('iframe');
+		const blob = new Blob([ `
+			console.log('blob content', window.devicePixelRatio, window.frameElement);
+		`, ]);
+		const blobUrl = URL.createObjectURL(blob);
+		setTimeout(() => URL.revokeObjectURL(blobUrl), 10);
+		iframe.src = blobUrl;
+		iframe.onload = () => console.log('loaded', iframe);
+		iframe.onerror = error => console.error('iframe', error);
+		document.body.appendChild(iframe);
+		return (window.last = iframe.contentWindow);
+	}
 
 };
 
@@ -43,6 +56,7 @@ const _Worker = window._Worker = class _Worker extends Worker {
 	constructor(url, onMessage) {
 		super(url);
 		this.onmessage = onMessage;
+		this.onerror = error => console.error(error);
 		this.postMessage('hi');
 	}
 };

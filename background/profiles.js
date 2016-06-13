@@ -248,7 +248,9 @@ class DomainProfile {
 	}
 
 	get misc() {
-		return { };
+		return {
+			browser: applications.current,
+		};
 	}
 
 	get debug() {
