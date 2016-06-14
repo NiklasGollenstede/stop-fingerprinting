@@ -7,7 +7,7 @@ let root = window, url; try { do {
 getOptions(({ options, nonce, }) => {
 	if (options === 'false') { return console.log('Spoofing is disabled for ', url, window); }
 
-	window.addEventListener('getStopFingerprintingPostMessage$'+ nonce, event => {
+	window.addEventListener('stopFingerprintingPostMessage$'+ nonce, event => {
 		chrome.runtime.sendMessage(Object.assign(event.detail, { post: true, }));
 	});
 

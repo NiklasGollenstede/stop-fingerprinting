@@ -58,11 +58,11 @@ Examples:
 				restrict: {
 					match: {
 						exp: RegExpX`^(?:
-							( \* | http | https | file | ftp ) # <scheme>
+							(?: \* | http | https | file | ftp ) # <scheme>
 							:\/\/
-							( \* | (?:\*\.)? [^\/\*]+ | ) # <host>
+							(?: \* | (?:\*\.)? [^\/\*]+ | ) # <host>
 							\/
-							( .* ) # <path>
+							(?: .* ) # <path>
 						)$`,
 						message: 'Each pattern must be of the form <scheme>://<host>/<path>',
 					},
@@ -85,7 +85,7 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 	}, {
 		name: 'rules',
 		title: 'Rules',
-		description: 'Decide to with sites this set of rules should apply.',
+		description: 'Set the rules that should apply to all matching sites, any rules that are not set will be filled in by matching profiles with lower priorities or the extensions default values',
 		type: 'label',
 		children: [
 			optional({
@@ -97,7 +97,15 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 			}), optional({
 				name: 'hstsDisabled',
 				title: 'Disable HSTS',
-				description: 'Completely disable <a href="https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security">HTTP Strict Transport Security</a> for all matching sites', // TODO: write better description (need to clear all browsing data), and it doesn't work in firefox
+				description: `<pre>
+Completely disable <a href="https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security">HTTP Strict Transport Security</a> (HSTS) for all matching sites.
+HSTS is a security feature that makes the browser remember that a specific URL should only be used over https.
+If an attacker tires to redirect the connection over insecure http, the browser will then reject the connection.
+Unfortunately this stored information can be read out and used as a <a href="http://www.radicalresearch.co.uk/lab/hstssupercookies">super cookie</a>.
+If you disable HSTS you should be even more careful to always look for the (green) lock symbol next or the URL-bar on any security relevant sites.
+Enabling this will only prevent the creation of new HSTS super cookies, any existing ones need to be deleted via the browsers 'clear browsing data' functions.
+THIS DOES NOT WORK IN FIREFOX (yet?)!
+</pre>`,
 				addDefault: true,
 				type: 'bool',
 			}), {
@@ -201,8 +209,36 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 						type: 'string',
 					}),
 				],
+			}, {
+				name: 'plugins',
+				title: 'Plugins',
+				description: `By default scripts can enumerate the plugins installed on your OS / in your browser`,
+				type: 'label',
+				children: [
+					optional({
+						name: 'hideAll',
+						title: 'Hide all',
+						description: `Makes the browser report that there are no plugins installed. If a website decides to load a plugin anyway, that plugin will still work. It is not disabled, just hidden from enumeration`,
+						addDefault: true,
+						type: 'bool',
+					}),
+				]
+			}, {
+				name: 'devices',
+				title: 'Media Devices',
+				description: `By default scripts can detect the audio/video input hardware of your computer`,
+				type: 'label',
+				children: [
+					optional({
+						name: 'hideAll',
+						title: 'Hide all',
+						description: `Makes the browser report that there are no media devices available`,
+						addDefault: true,
+						type: 'bool',
+					}),
+				]
 			}, optional({
-				name: 'windowName',
+				name: 'keepWindowName', // TODO: implement
 				title: 'Allow window.name',
 				description: `Unless checked, the window.name property gets reset at every load`,
 				addDefault: true,
@@ -294,6 +330,12 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 				type: 'label',
 				children: [
 					optional({
+						name: 'disabled',
+						title: 'Disable',
+						description: `Don't use any technique to hide the set of installed fonts`,
+						addDefault: true,
+						type: 'bool',
+					}), optional({
 						name: 'dispersion',
 						title: 'JavaScript randomness',
 						description: `To prevent JavaScript from detecting fonts, this adds some randomness to the size of text elements.
@@ -302,6 +344,31 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 						addDefault: 25,
 						restrict: { from: 0, to: 75, },
 						type: 'number',
+					}),
+				],
+			}, {
+				name: 'canvas',
+				title: 'Canvas',
+				description: `<pre>
+Websites are able to draw custom images on special &lt;canvas&gt; elements.
+Since different browsers on different operation systems on different hardware draw a little different on different screens, reading these images allows for browser fingerprinting
+</pre>`,
+				type: 'label',
+				children: [
+					optional({
+						name: 'disabled',
+						title: 'Disable',
+						description: `Don't use any technique manipulate canvas fingerprints`,
+						addDefault: true,
+						type: 'bool',
+					}), ({
+						name: 'randomize',
+						title: 'Randomize',
+						description: `<pre>
+Currently the only technique to disable canvas fingerprinting is to add random noise to &lt;canvas&gt; images when they are read.
+You can't configure anything about that yet
+</pre>`,
+						type: 'label',
 					}),
 				],
 			},

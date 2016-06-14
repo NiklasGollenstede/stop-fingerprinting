@@ -98,7 +98,7 @@ const context = (() => {
 
 	// create context
 	context = {
-		values: options, options, script, workerOptions, top: self, worker,
+		values: options, options, script, workerOptions, top: self, worker, window,
 
 		// all 'globals' from above here too
 		Math, clz32, random, round, min, max, CustomEvent, dispatchEvent, Object, keys, create, assign, getOwnPropertyDescriptor, defineProperty, defineProperties, getPrototypeOf, Array, Function, ArrayBuffer, Uint8Array, Promise, String, raw, Symbol, iterator, toStringTag, Reflect, construct, apply, Blob, URL, createObjectURL, revokeObjectURL, JSON, stringify,
@@ -151,10 +151,10 @@ const context = (() => {
 			},
 			setTimeout, setInterval, setImmediate: self.setImmediate,
 			Worker_p: {
-				constructor: typeof Worker !== 'undefined' ? Worker : null, // no Worker within workers in chrome
+				constructor: self.Worker && self.Worker, // no Worker within workers in chrome
 			},
 			SharedWorker_p: {
-				constructor: typeof SharedWorker !== 'undefined' ? SharedWorker : null, // no SharedWorker within workers in chrome
+				constructor: self.SharedWorker && self.SharedWorker, // no SharedWorker within workers
 			},
 			WorkerGlobalScope_p: {
 				importScripts: worker && WorkerGlobalScope.prototype.importScripts,
@@ -162,14 +162,17 @@ const context = (() => {
 			XMLHttpRequest_p: {
 				open: XMLHttpRequest.prototype.open,
 			},
+			MediaStreamTrack: {
+				getSources: self.MediaStreamTrack && self.MediaStreamTrack.getSources,
+			},
 		},
 
 		postMessage(message) {
-			call(dispatchEvent, window, new CustomEvent('getStopFingerprintingPostMessage$'+ token, { detail: message, }));
+			call(dispatchEvent, window, new CustomEvent('stopFingerprintingPostMessage$'+ token, { detail: message, }));
 		},
-		notify(level, ...messages) {
+		notify(...args) {
 			if (!window) { console.log('notify', level, ...messages); return; } // TODO: worker
-			this.postMessage({ name: 'notify', args: [ level, ...messages, ], });
+			this.postMessage({ name: 'notify', args, });
 		},
 
 		// Element.offsetWith/Height randomization
@@ -180,6 +183,7 @@ const context = (() => {
 			return correct === correct << 0 ? round(correct * factor) : correct * factor;
 		},
 		randomFontFactor: (() => {
+			if (!options.fonts) { return null; }
 			const dispersion = options.fonts.dispersion / 100;
 			const offset = 1 - dispersion;
 			const factor = 2 * dispersion / (256 * 256);
@@ -190,7 +194,6 @@ const context = (() => {
 		// <canvas> randomization
 		randomizeCanvas(canvas) {
 			const { getImageData, putImageData } = this.originals.CanvasRenderingContext2D_p;
-			this.notify('info', 'Randomized Canvas', 'Spoiled possible fingerprinting');
 			const ctx = call(this.originals.HTMLCanvasElement_p.getContext, canvas, '2d');
 			const imageData = call(getImageData, ctx, 0, 0, canvasGetWidth(canvas), canvasGetHeight(canvas));
 			this.randomizeUInt8Array(imageDataGetData(imageData));
@@ -206,6 +209,7 @@ const context = (() => {
 			return new Uint8Array(buffer);
 		},
 		randomizeUInt8Array(data) {
+			this.notify('info', { title: 'Randomized Canvas', message: 'Spoiled possible fingerprinting', logLevel: 1, topic: 'canvas', });
 			const rnd = this.getRandomBytes(data.length);
 			let w = 0, mask = 0;
 			for (let i = 0, l = typedArrayGetLength(data); i < l; ++i) {
@@ -255,13 +259,11 @@ function createAPIs() {
 
 	// fake function+'' => [native code]
 	function hideCode(name, func) {
-		if (typeof name === 'object') {
-			const prop = getOwnPropertyDescriptor(name, keys(name)[0]);
-			func = prop.get || prop.set;
-			name = func.name;
-		} else if (!func) {
+		if (!func) {
 			func = name;
 			name = func.name;
+		} else {
+			defineProperty(func, 'name', { value: name, });
 		}
 		weakMapSet(hiddenFunctions, func, name || '');
 		options.debug && (func.isFaked = true);
@@ -291,9 +293,8 @@ function createAPIs() {
 	// disable CSPs 'unsafe-eval' if it was inserted by the background scripts
 	if (values.misc.disableEval) {
 		const Function = hideCode(function Function(x) { throw new Error('call to Function() blocked by CSP'); });
-		define('Function.prototype', {
-			constructor: { value: Function, },
-		});
+		Function.prototype = getPrototypeOf(x => x);
+		Function.prototype.constructor = Function;
 		define('self', {
 			Function: { value: Function, },
 			eval: { value: hideCode('eval', function(x) { throw new Error('call to eval() blocked by CSP'); }), },
@@ -304,7 +305,7 @@ function createAPIs() {
 	}
 
 	// catch all calls that retrieve an window object from an iframe and make sure that iframe is wrapped
-	define('HTMLIFrameElement.prototype', {
+	define('HTMLIFrameElement.prototype', { // TODO: check in these (expensive) handlers are necessary
 		contentWindow: { get: hideCode(function() {
 			const window = call(HTMLIFrameElement_p.get_contentWindow, this);
 			if (window) { try {
@@ -322,94 +323,123 @@ function createAPIs() {
 	});
 	// TODO: window.frames
 
+	// remove window.name
+	if (window && !options.keepWindowName) {
+		define('self', {
+			name: { value: '', },
+		});
+	}
+
 	// screen
-	define('Screen.prototype', screen => keys(values.screen).forEach(
-		prop => screen[prop] = { get: hideCode(function() { return values.screen[prop]; }), }
-	));
-	define('self', {
-		devicePixelRatio: {
-			get: hideCode({ get devicePixelRatio() { return values.screen.devicePixelRatio; }, }),
-			set: hideCode({ set devicePixelRatio(v) { }, }),
-		},
-	});
+	if (options.screen) {
+		define('Screen.prototype', screen => keys(values.screen).forEach(
+			prop => screen[prop] = { get: hideCode(function() { return values.screen[prop]; }), }
+		));
+		define('self', {
+			devicePixelRatio: {
+				get: hideCode('get devicePixelRatio', function() { return values.screen.devicePixelRatio; }),
+				set: hideCode('set devicePixelRatio', function(v) { }), // TODO: let it be set but (optionally ?) overwrite it when the tabs zoom changes
+			},
+		});
+	}
 
-	define('MediaDevices.prototype', {
-		enumerateDevices: { value: hideCode(function enumerateDevices() { return Resolve([ ]); }), },
-	});
+	// navigator.mediaDevices.enumerateDevices
+	if (options.devices.hideAll) {
+		define('MediaDevices.prototype', {
+			enumerateDevices: { value: hideCode(function enumerateDevices() { return Resolve([ ]); }), },
+		});
+		define('MediaStreamTrack', {
+			getSources: { value: hideCode(function getSources(cb) { MediaStreamTrack.getSources(function() { call(cb, this, [ ]); }); }), },
+		});
+	}
 
-	// navigator string values
-	const navigator = { };
-	forEach(keys(values.navigator), prop => navigator[prop] = { get: hideCode(function() { return values.navigator[prop]; }), enumerable: true, configurable: true, add: true, });
-	forEach(keys(values.navigator.undefinedValues), prop => navigator[prop] = { delete: true, });
-	delete navigator.undefinedValues;
-	define('Navigator.prototype', navigator);
-	define('WorkerNavigator.prototype', navigator);
+	{ // everything that is changes the navigator object
+		const navigator = { };
 
-	// navigator.plugins
-	const PluginArray = apis.PluginArray = hideCode(function PluginArray() { throw new TypeError('Illegal constructor'); });
-	assign(PluginArray.prototype, hideAllCode({
-		item() { return null; },
-		namedItem() { return null; },
-		refresh() { return; },
-	}));
-	defineProperties(PluginArray.prototype, {
-		length: { get: hideCode(function() { return 0; }), enumerable: true, configurable: true, },
-		[iterator]: { value: hideCode(function values() { return [][iterator](); }), writable: true, enumerable: false, configurable: true, },
-		[toStringTag]: { value: 'PluginArray', writable: false, enumerable: false, configurable: true, },
-	});
-	const pluginArrayInstance = create(PluginArray.prototype);
-	navigator.plugins = { get: hideCode({ get plugins() { return pluginArrayInstance; }, }), };
+		// navigator string values
+		if (options.navigator) {
+			forEach(keys(values.navigator), prop => navigator[prop] = { get: hideCode(function() { return values.navigator[prop]; }), enumerable: true, configurable: true, add: true, });
+			forEach(keys(values.navigator.undefinedValues), prop => navigator[prop] = { delete: true, });
+			delete navigator.undefinedValues;
+		}
 
-	// navigator.mimeTypes
-	const MimeTypeArray = apis.MimeTypeArray = hideCode(function MimeTypeArray() { throw new TypeError('Illegal constructor'); });
-	assign(MimeTypeArray.prototype, hideAllCode({
-		item() { return null; },
-		namedItem() { return null; },
-	}));
-	defineProperties(MimeTypeArray.prototype, {
-		length: { get: hideCode(function() { return 0; }), enumerable: true, configurable: true, },
-		[iterator]: { value: hideCode(function values() { return [][iterator](); }), writable: true, enumerable: false, configurable: true, },
-		[toStringTag]: { value: 'MimeTypeArray', writable: false, enumerable: false, configurable: true, },
-	});
-	const mimeTypeArrayInstance = create(MimeTypeArray.prototype);
-	navigator.mimeTypes = { get: hideCode({ get mimeTypes() { return mimeTypeArrayInstance; }, }), };
+		// navigator.plugins
+		if (options.plugins.hideAll) {
+			const PluginArray = hideCode(function PluginArray() { throw new TypeError('Illegal constructor'); });
+			assign(PluginArray.prototype, hideAllCode({
+				item() { return null; },
+				namedItem() { return null; },
+				refresh() { return; },
+			}));
+			defineProperties(PluginArray.prototype, {
+				length: { get: hideCode(function() { return 0; }), enumerable: true, configurable: true, },
+				[iterator]: { value: hideCode(function values() { return [][iterator](); }), writable: true, enumerable: false, configurable: true, },
+				[toStringTag]: { value: 'PluginArray', writable: false, enumerable: false, configurable: true, },
+			});
+			const pluginArrayInstance = create(PluginArray.prototype);
+			navigator.plugins = { get: hideCode('get plugins', function() { return pluginArrayInstance; }), };
+			define('self', { PluginArray: { value: PluginArray, }, });
 
-	// navigator.sendBeacon
-	navigator.sendBeacon = { value: hideCode(function sendBeacon(arg) {
-		if (!arguments.length) { throw new TypeError('Not enough arguments to Navigator.sendBeacon.'); }
-		return true;
-	}), };
+			// navigator.mimeTypes
+			const MimeTypeArray = hideCode(function MimeTypeArray() { throw new TypeError('Illegal constructor'); });
+			assign(MimeTypeArray.prototype, hideAllCode({
+				item() { return null; },
+				namedItem() { return null; },
+			}));
+			defineProperties(MimeTypeArray.prototype, {
+				length: { get: hideCode(function() { return 0; }), enumerable: true, configurable: true, },
+				[iterator]: { value: hideCode(function values() { return [][iterator](); }), writable: true, enumerable: false, configurable: true, },
+				[toStringTag]: { value: 'MimeTypeArray', writable: false, enumerable: false, configurable: true, },
+			});
+			const mimeTypeArrayInstance = create(MimeTypeArray.prototype);
+			navigator.mimeTypes = { get: hideCode('get mimeTypes', function() { return mimeTypeArrayInstance; }), };
+			define('self', { MimeTypeArray: { value: MimeTypeArray, }, });
+		}
+
+		// navigator.sendBeacon
+		navigator.sendBeacon = { value: hideCode(function sendBeacon(arg) {
+			if (!arguments.length) { throw new TypeError('Not enough arguments to Navigator.sendBeacon.'); }
+			return true;
+		}), };
+
+		define('Navigator.prototype', navigator);
+		define('WorkerNavigator.prototype', navigator);
+	}
 
 	// HTMLElement.offsetWidth/Height
-	define('HTMLElement.prototype', {
-		offsetWidth: { get: hideCode({ get offsetWidth() {
-			return getOffsetSize(Element_p.get_clientWidth, HTMLElement_p.get_offsetWidth, this);
-		}, }), },
-		offsetHeight: { get: hideCode({ get offsetHeight() {
-			return getOffsetSize(Element_p.get_clientHeight, HTMLElement_p.get_offsetHeight, this);
-		}, }), },
-	});
+	if (options.fonts) {
+		define('HTMLElement.prototype', {
+			offsetWidth: { get: hideCode('get offsetWidth', function() {
+				return getOffsetSize(Element_p.get_clientWidth, HTMLElement_p.get_offsetWidth, this);
+			}), },
+			offsetHeight: { get: hideCode('get offsetHeight', function() {
+				return getOffsetSize(Element_p.get_clientHeight, HTMLElement_p.get_offsetHeight, this);
+			}), },
+		});
+	}
 
 	// HTMLCanvasElement
-	const canvas = define('HTMLCanvasElement.prototype', { });
-	[ 'toDataURL', 'toBlob', 'mozGetAsFile', ]
-	.forEach(prop => canvas[prop] = { value: hideCode(prop, function() {
-		log('HTMLCanvasElement.prototype.', prop);
-		return apply(HTMLCanvasElement_p[prop], randomizeCanvas(this), arguments);
-	}), });
-	define('CanvasRenderingContext2D.prototype', {
-		getImageData: { value: hideCode(function getImageData(a, b, c, d) {
-			const data = apply(CanvasRenderingContext2D_p.getImageData, this, arguments);
-			randomizeUInt8Array(data.data);
-			return data;
-		}), },
-	});
-	define('WebGLRenderingContext.prototype', {
-		readPixels: { value: hideCode(function readPixels(a, b, c, d, e, f, data) {
-			apply(WebGLRenderingContext_p.readPixels, this, arguments);
-			randomizeTypedArray(data);
-		}), },
-	});
+	if (options.canvas) {
+		const canvas = define('HTMLCanvasElement.prototype', { });
+		[ 'toDataURL', 'toBlob', 'mozGetAsFile', ]
+		.forEach(prop => canvas[prop] = { value: hideCode(prop, function() {
+			log('HTMLCanvasElement.prototype.', prop);
+			return apply(HTMLCanvasElement_p[prop], randomizeCanvas(this), arguments);
+		}), });
+		define('CanvasRenderingContext2D.prototype', {
+			getImageData: { value: hideCode(function getImageData(a, b, c, d) {
+				const data = apply(CanvasRenderingContext2D_p.getImageData, this, arguments);
+				randomizeUInt8Array(data.data);
+				return data;
+			}), },
+		});
+		define('WebGLRenderingContext.prototype', {
+			readPixels: { value: hideCode(function readPixels(a, b, c, d, e, f, data) {
+				apply(WebGLRenderingContext_p.readPixels, this, arguments);
+				randomizeTypedArray(data);
+			}), },
+		});
+	}
 
 	// BroadcastChannel (firefox only)
 	define('BroadcastChannel.prototype', { // TODO: make it optional
@@ -418,10 +448,17 @@ function createAPIs() {
 		}), },
 	});
 
+	// performance.navigation
+	define('PerformanceNavigation.prototype', { // TODO: make it optional
+		type: { get: hideCode('get type', function() { return 0; }), },
+		toJSON: { value: hideCode(function toJSON() { return { type: 0, redirectCount: this.redirectCount, }; }), },
+	});
+
 	// workers
-	if (Worker_p.constructor) { forEach([ '', 'Shared', ], shared => {
+	forEach([ '', 'Shared', ], shared => {
 		const ctorName = shared +'Worker';
 		const Original = originals[ctorName +'_p'].constructor;
+		if (!Original) { return; }
 		const Worker = hideCode(ctorName, function(url) {
 			if (!new.target) { throw new TypeError(`Constructor ${ ctorName } requires 'new'`); }
 			if (!arguments.length) { throw new TypeError(`Not enough arguments to ${ ctorName }.`); }
@@ -459,7 +496,7 @@ function createAPIs() {
 		define('self', {
 			[ctorName]: { value: Worker, },
 		});
-	}); }
+	});
 
 	// in a Worker
 	if (worker) {
@@ -576,10 +613,10 @@ function Random(n) { // TODO: test
 
 	function get() {
 		index = 0;
-		let random = random() * MAX_SAFE_INTEGER << 0;
+		let rnd = random() * MAX_SAFE_INTEGER << 0;
 		for (let i = shift, j = 0; i < 32; i += shift, ++j) {
-			buffer[j] = ((random & mask) * factor) << 0;
-			random = random >> shift;
+			buffer[j] = ((rnd & mask) * factor) << 0;
+			rnd = rnd >> shift;
 		}
 	}
 

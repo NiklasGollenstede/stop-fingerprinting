@@ -3,7 +3,7 @@
 const { Tabs, Messages, } = require('web-ext-utils/chrome');
 Messages.isExclusiveMessageHandler = true;
 
-const { notify, } = require('common/utils');
+const { notify, domainFromUrl, } = require('common/utils');
 
 require('common/options').then(options => {
 window.options = options;
@@ -13,14 +13,15 @@ const Profiles = require('background/profiles')(options);
 // modify CSPs to allow script injection
 chrome.webRequest.onHeadersReceived.addListener(modifyResponseHeaders, { urls: [ '*://*/*', ], }, [ 'blocking', 'responseHeaders', ]);
 function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }) {
-	const domain = getDomain(url);
+	const domain = domainFromUrl(url);
 	const profile = Profiles.get({ requestId, tabId, url, }).getDomain(domain);
+	if (profile.disabled) { return; }
 
 	let changed = false;
 	(type === 'main_frame' || type === 'sub_frame') && responseHeaders.forEach(header => {
 		if ((/^(?:Content-Security-Policy)$/i).test(header.name) && header.value) { return injectCSP(header); }
 	});
-	profile.get('hstsDisabled') && responseHeaders.forEach(header => {
+	profile.hstsDisabled && responseHeaders.forEach(header => {
 		if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return removeHSTS(header); }
 	});
 	return changed ? { responseHeaders, } : { };
@@ -90,14 +91,15 @@ function discardProfile({ requestId, url, tabId, }) {
 chrome.webRequest.onBeforeSendHeaders.addListener(modifyRequestHeaders, { urls: [ '<all_urls>', ], }, [ 'blocking', 'requestHeaders', ]);
 
 function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) {
-	const domain = getDomain(url);
+	const domain = domainFromUrl(url);
 	const profile = (type === 'main_frame' ? Profiles.create({ requestId, url, }) : Profiles.get({ tabId, url, })).getDomain(domain);
+	if (profile.disabled) { return; }
 
 	let changed = false;
-	requestHeaders.forEach(header => {
+	profile.navigator && requestHeaders.forEach(header => {
 		if ((/^User-Agent$/i).test(header.name) && header.value) { return replaceUA(header); }
 	});
-	setDNT();
+	profile.navigator && setDNT();
 	return changed ? { requestHeaders, } : { };
 
 	function replaceUA(header) {
@@ -133,26 +135,20 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 
 Messages.addHandler('getOptionsForUrl', function(url) {
 	const tabId = this.tab.id;
-	const domain = getDomain(url);
+	const domain = domainFromUrl(url);
 	const profile = Profiles.get({ tabId, url, }).getDomain(domain);
 	console.log('getOptionsForUrl', url, domain, profile);
 	return { options: JSON.stringify(profile), nonce: profile.nonce, };
 });
 
-Messages.addHandler('notify', function(level, title, message) {
+Messages.addHandler('notify', function(method, { title, message, logLevel, topic, }) {
 	const { id: tabId, url, title: tabTitle, } = this.tab;
-	notify(level, { title, message, url, tabId, tabTitle, });
-	console[level](this, title, message);
-});
-
-function getDomain(url) {
-	try {
-		const location = new URL(url);
-		return location.protocol +'//'+ location.host;
-	} catch (error) {
-		alert('could not extract domain from url "'+ url +'"!'); debugger;
-		return '<invalid domain>';
+	let domain, profile;
+	if (!logLevel && topic) {
+		domain = domainFromUrl(url);
+		profile = Profiles.get({ tabId, url, }).getDomain(domain);
 	}
-}
+	notify(method, { title, message, url, domain, tabId, tabTitle, logLevel, topic, profile, });
+});
 
 });

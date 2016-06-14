@@ -31,6 +31,8 @@ const profileInStack    = new MultiMap;       // Profile(id)       ==>  ProfileS
 let   sortedProfiles    = [ ];                // [Profile(id)] sorted by .priority
 const uncommittetTabs   = new Map;            // requestId         ==>  TabProfile
 
+window.profiles = profiles;
+
 const addProfile = async(function*(id) {
 	const profile = (yield Profile(id));
 	profiles.set(id, profile);
@@ -71,6 +73,8 @@ options.children.profiles.whenChange((_, { current: ids, }) => {
 const defaults = {
 	'hstsDisabled': true,
 	'navigator.browser': applications.current,
+	'plugins.hideAll': true,
+	'devices.hideAll': true,
 	'screen.width':  { from: screen.width * 0.8, to: 3840, },
 	'screen.height':  { from: screen.height * 0.8, to: 2160, },
 	'screen.devicePixelRatio': { from: 1, to: window.devicePixelRatio * 1.25, },
@@ -118,6 +122,11 @@ class ProfileStack {
 		return value;
 	}
 
+	getNavigator() {
+		if (this.get('navigator.disabled')) { return null; }
+		return this.navGen.generate();
+	}
+
 	get screenGen() {
 		const value = this.get('screen.disabled')
 		? { generate() { return realScreen; }, }
@@ -134,6 +143,11 @@ class ProfileStack {
 		console.log('created screenGen', value);
 		Object.defineProperty(this, 'screenGen', { value, configurable: true, });
 		return value;
+	}
+
+	getScreen() {
+		if (this.get('screen.disabled')) { return null; }
+		return this.screenGen.generate();
 	}
 
 	clearCache(key) {
@@ -227,24 +241,51 @@ class DomainProfile {
 		return Array.prototype.map.call(window.crypto.getRandomValues(new Uint32Array(6)), r => r.toString(36)).join('');
 	}
 
+	get disabled() {
+		return this.get('disabled');
+	}
+
+	get hstsDisabled() {
+		return this.get('hstsDisabled');
+	}
+
 	get navigator() {
-		const navigator = this.stack.navGen.generate();
-		notify.log({ title: 'Generated UA', message: navigator.userAgent.replace(/^Mozilla\/5\.0 /, ''), domain: this.domain, tabId: this.tab.tabId, });
+		const navigator = this.stack.getNavigator();
+		const logLevel = 0; // navigator.logLevel = this.get('navigator.logLevel');
+		navigator && notify.log({ title: 'Generated UA', message: navigator.userAgent.replace(/^Mozilla\/5\.0 /, ''), domain: this.domain, tabId: this.tab.tabId, logLevel, });
 		return navigator;
 	}
 
-	get screen() {
-		return this.stack.screenGen.generate();
+	get plugins() {
+		return {
+			hideAll: this.get('plugins.hideAll'),
+		};
 	}
 
-	get windowName() {
-		return this.stack.get('windowName');
+	get devices() {
+		return {
+			hideAll: this.get('devices.hideAll'),
+		};
+	}
+
+	get keepWindowName() {
+		return this.get('keepWindowName');
+	}
+
+	get screen() {
+		return this.stack.getScreen();
 	}
 
 	get fonts() {
+		if (this.get('fonts.disabled')) { return null; }
 		return {
-			dispersion: this.stack.get('fonts.dispersion'),
+			dispersion: this.get('fonts.dispersion'),
 		};
+	}
+
+	get canvas() {
+		if (this.get('canvas.disabled')) { return null; }
+		return { };
 	}
 
 	get misc() {
@@ -259,7 +300,7 @@ class DomainProfile {
 
 	toJSON() {
 		if (this.json) { return this.json; }
-		if (this.stack.get('disabled')) { return false; }
+		if (this.disabled) { return false; }
 		const json = { };
 		DomainProfile.keys.forEach(key => json[key] = this[key]);
 		return (this.json = json);
