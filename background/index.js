@@ -133,6 +133,34 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 	}
 }
 
+let clearCacheWhat = null, clearCacheWhere = null;
+const clearCache = (() => {
+	const interval = 3000; let queued = false, last = 0;
+	const clearCache = () => chrome.browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat, () => {
+		console.log('cleared cache', clearCacheWhere, clearCacheWhat);
+		queued = false; last = Date.now();
+	});
+
+	return function() {
+		if (queued) { return; } queued = true;
+		setTimeout(clearCache, last + interval - Date.now());
+	};
+})();
+options.children.clearCache.children.what.whenChange(value => clearCacheWhat = ({
+	passive:  { appcache: true, cache: true, pluginData: true, },
+	active:   { appcache: true, cache: true, pluginData: true, serviceWorkers: true, cookies: true, serverBoundCertificates: true, indexedDB: true, localStorage: true, webSQL: true, fileSystems: true, },
+	all:      { appcache: true, cache: true, pluginData: true, serviceWorkers: true, cookies: true, serverBoundCertificates: true, indexedDB: true, localStorage: true, webSQL: true, fileSystems: true, downloads: true, formData: true, history: true, passwords: true, },
+})[value]);
+options.children.clearCache.children.where.whenChange(value => clearCacheWhere = ({
+	unprotectedWeb:  { unprotectedWeb: true, },
+	protectedWeb:    { unprotectedWeb: true, protectedWeb: true, },
+	extension:       { unprotectedWeb: true, protectedWeb: true, extension: true, },
+})[value]);
+options.children.clearCache.children.where.when({
+	false: () => chrome.webRequest.onHeadersReceived.removeListener(clearCache),
+	true: () => chrome.webRequest.onHeadersReceived.addListener(clearCache, { urls: [ '*://*/*', ], }, [ ]),
+});
+
 Messages.addHandler('getOptionsForUrl', function(url) {
 	const tabId = this.tab.id;
 	const domain = domainFromUrl(url);

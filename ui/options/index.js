@@ -76,7 +76,7 @@ const tabs = new Tabs({
 	tabs: [
 		{
 			id: 'options',
-			title: 'Options',
+			title: 'General',
 			icon: chrome.extension.getURL('ui/options/icon.png'),
 			data: { branch: options, },
 		},
