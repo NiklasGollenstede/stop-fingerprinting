@@ -63,7 +63,7 @@
 			"256": "icons/default/256.png"
 		},
 		"default_title": "Stop Fingerprinting",
-		"default_popup": "action/open-options-in-tab.html"
+		"default_popup": "ui/panel/index.html"
 	},
 	"web_accessible_resources": [
 	],

@@ -8,7 +8,7 @@ const { notify, domainFromUrl, } = require('common/utils');
 require('common/options').then(options => {
 window.options = options;
 
-const Profiles = require('background/profiles')(options);
+const Profiles = window.Profiles = require('background/profiles')(options);
 
 chrome.webRequest.onHeadersReceived.addListener(modifyResponseHeaders, { urls: [ '*://*/*', ], }, [ 'blocking', 'responseHeaders', ]);
 function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }) {
@@ -93,7 +93,7 @@ chrome.webRequest.onBeforeSendHeaders.addListener(modifyRequestHeaders, { urls: 
 
 function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) {
 	const domain = domainFromUrl(url);
-	const profile = (type === 'main_frame' ? Profiles.create({ requestId, url, }) : Profiles.get({ tabId, url, })).getDomain(domain);
+	const profile = (type === 'main_frame' ? Profiles.create({ requestId, url, tabId, }) : Profiles.get({ tabId, url, })).getDomain(domain);
 	if (profile.disabled || !profile.navigator) { return; }
 
 	const { navigator, navigator: { headerOrder: order, }, } = profile;

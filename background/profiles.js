@@ -24,12 +24,13 @@ const missing = Symbol('missing argument');
 
 return function(options) {
 
-const profiles          = new Map;            // id                ==>  Profile(id)
+const profiles          = new Map;            // profileId         ==>  Profile
 const profileIncludes   = new WeakMap;        // Profile(id)       ==>  { all: [RegExp], }
 const profileStacks     = new Map;            // [id].join($)      ==>  ProfileStack
 const profileInStack    = new MultiMap;       // Profile(id)       ==>  ProfileStack
 let   sortedProfiles    = [ ];                // [Profile(id)] sorted by .priority
 const uncommittetTabs   = new Map;            // requestId         ==>  TabProfile
+const tabTemps          = new Map;            // tabId             ==>  Profile
 
 window.profiles = profiles;
 
@@ -54,6 +55,7 @@ function removeProfile(id) {
 	profileInStack.get(profile).forEach(stack => stack.destroy());
 	profileIncludes.delete(profile);
 	sortProfiles();
+	tabTemps.forEach((prof, tabId) => prof === profile && tabTemps.delete(tabId));
 
 	console.log('removed profile', profiles, profile);
 }
@@ -183,13 +185,15 @@ class ProfileStack {
 		this.profiles.forEach(s => profileInStack.delete(s, this));
 	}
 
-	static find(url) {
+	static find(url, tabId) {
+		const tabTemp = tabTemps.get(tabId);
 		const matching = sortedProfiles.filter(profile => {
-			return profileIncludes.get(profile).all.find(exp => {
+			return profile !== tabTemp && profileIncludes.get(profile).all.some(exp => {
 				const match = exp.exec(url);
 				return match && match[0] === url;
 			});
 		});
+		tabTemp && matching.unshift(tabTemp);
 
 		return new ProfileStack(matching);
 	}
@@ -320,17 +324,29 @@ DomainProfile.keys = Object.getOwnPropertyNames(DomainProfile.prototype).filter(
 
 
 return {
-	create({ requestId, url, }) {
-		const stack = ProfileStack.find(url);
+	create({ requestId, url, tabId, }) {
+		const stack = ProfileStack.find(url, tabId);
 		return new TabProfile(stack, requestId);
 	},
 	get({ requestId = missing, tabId = missing, url = missing, }) {
 		let tab = requestId !== missing && uncommittetTabs.get(requestId);
 		if (tab) { return tab; }
-		return url !== missing && tabId !== missing && ProfileStack.find(url).getTab(tabId);
+		return url !== missing && tabId !== missing && ProfileStack.find(url, tabId).getTab(tabId);
 	},
-	resetTab(tabId) {
-		profileStacks.forEach(stack => stack.resetTab(tabId));
+	get current() {
+		return profiles;
+	},
+	setTemp(tabId, profileId) {
+		if (profileId === '<none>') { return tabTemps.delete(tabId) * -1; }
+		const profile = profiles.get(profileId);
+		if (!profile) { throw new Error('No such Profile "'+ profileId +'"'); }
+		tabTemps.set(tabId, profile);
+		console.log('setTemp', tabId, profile);
+		return 1;
+	},
+	getTemp(tabId) {
+		const profile = tabTemps.get(tabId);
+		return profile && profile.children.id.value;
 	},
 };
 

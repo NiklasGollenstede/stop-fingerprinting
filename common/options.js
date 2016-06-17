@@ -44,11 +44,8 @@ const defaults = [
 	} : { // firefox
 		description: `This extension can't disable caching in Firefox. See the Firefox tab for more information`,
 		children: [
-			{
-				name: 'where',
-				type: 'hidden',
-				default: false,
-			},
+			{ name: 'where', type: 'hidden', default: false, },
+			{ name: 'what', type: 'hidden', default: false, },
 		],
 	}), {
 		name: 'debug',
