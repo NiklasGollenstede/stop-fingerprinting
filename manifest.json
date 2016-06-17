@@ -65,8 +65,14 @@
 		"default_title": "Stop Fingerprinting",
 		"default_popup": "action/open-options-in-tab.html"
 	},
-	"web_accessible_resources": [
-	],
 
-	"incognito": "spanning"
+	"incognito": "spanning",
+
+	"web_accessible_resources": [
+		"web/fonts/Bell_MT/bi.woff2",
+		"web/fonts/Bell_MT/bn.woff2",
+		"web/fonts/Bell_MT/include.css",
+		"web/fonts/Bell_MT/ni.woff2",
+		"web/fonts/Bell_MT/nn.woff2"
+	]
 }
