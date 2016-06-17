@@ -280,6 +280,50 @@ const cpuCores = [
 	{ parts:  1 / 2, physical: 8, virtual: 8 * 2, },
 ];
 
+const headerOrder = {
+	chrome: [
+		'Host',
+		'Connection',
+		'Cache-Control',
+		'If-None-Match',
+		'If-Modified-Since',
+		'User-Agent',
+		'Accept',
+		'DNT',
+		'Referer',
+		'Accept-Encoding',
+		'Accept-Language',
+	],
+	firefox: [
+		'Host',
+		'User-Agent',
+		'Accept',
+		'Accept-Language',
+		'Accept-Encoding',
+		'Referer',
+		'DNT',
+		'Connection',
+		'If-Modified-Since',
+		'If-None-Match',
+		'Cache-Control',
+	],
+	ie: [
+		'Accept',
+		'Referer',
+		'Accept-Language',
+		'User-Agent',
+		'Accept-Encoding',
+		'Host',
+		'If-Modified-Since',
+		'If-None-Match',
+		'DNT',
+		'Connection',
+		// TODO: Cache-Control not sent ?
+	],
+	opera: [ ], // TODO
+	safari: [ ], // TODO
+};
+
 const Generator = exports.Generator = class Generator {
 	constructor(config = { }) {
 		this.browser_os = browser_os.filter(({ browser, os, }) => (!config.browser || config.browser.includes(browser)) && (!config.os || config.os.includes(os)));
@@ -310,6 +354,7 @@ const Navigator = exports.Navigator = class Navigator {
 	constructor(config) {
 		const { os, browser, } = chooseWeightedRandom(config.browser_os);
 		this.os = os; this.browser = browser;
+		this.headerOrder = headerOrder[browser];
 		this.arch = chooseWeightedRandom(config.osArch).arch;
 		const osRelease = this.osRelease = Date.now() - randInRange(config.osAge) * 31536000000/*1 year*/;
 		this.osVersion = (osVersion[this.os].find(({ date, }) => date < osRelease) || chooseRandom(osVersion[this.os])).version;

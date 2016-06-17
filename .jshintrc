@@ -16,6 +16,7 @@
 	"validthis": true,
 	"elision": true,
 	"varstmt": true, // enforce 'let' or 'const' instead of 'var'
+	"sub": true, // allow headers['DNT'] instead of headers.DNT
 
 	"esversion": 6,
 	"strict": true,

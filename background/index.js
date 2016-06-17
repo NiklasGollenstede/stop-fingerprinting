@@ -93,51 +93,36 @@ chrome.webRequest.onBeforeSendHeaders.addListener(modifyRequestHeaders, { urls: 
 function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) {
 	const domain = domainFromUrl(url);
 	const profile = (type === 'main_frame' ? Profiles.create({ requestId, url, }) : Profiles.get({ tabId, url, })).getDomain(domain);
-	if (profile.disabled) { return; }
+	if (profile.disabled || !profile.navigator) { return; }
+	const { navigator, } = profile;
+	const headers = { }; requestHeaders.forEach(header => headers[header.name] = header);
 
-	let changed = false;
-	profile.navigator && requestHeaders.forEach(header => {
-		if ((/^User-Agent$/i).test(header.name) && header.value) { return replaceUA(header); }
-	});
-	profile.navigator && setDNT();
-	return changed ? { requestHeaders, } : { };
+	// replace User-Agent
+	headers['User-Agent'].value = navigator.userAgent;
 
-	function replaceUA(header) {
-		const ua = profile.navigator.userAgent;
-		if (header.value === ua) { return; }
-		changed = true;
-		header.value = ua;
-	}
+	// insert DNT
+	const DNT = navigator.doNotTrack;
+	if (DNT === '1' || DNT === '0') { headers['DNT'] = { name: 'DNT', value: DNT, }; }
+	else { delete headers.DNT; }
 
-	function setDNT() {
-		const index = requestHeaders.findIndex(({ name, }) => (/^DNT$/i).test(name));
-		if (index !== -1) {
-			switch (profile.navigator.doNotTrack) {
-				case '0': {
-					if (requestHeaders[index].value === '0') { return; }
-					requestHeaders[index].value = '0';
-				} break;
-				case '1': {
-					if (requestHeaders[index].value === '1') { return; }
-					requestHeaders[index].value = '1';
-				} break;
-				default: {
-					requestHeaders.splice(index, 1);
-				} break;
-			}
-		} else {
-			if (![ '0', '1', ].includes(profile.navigator.doNotTrack)) { return; }
-			requestHeaders.splice(Infinity, 0, { name: 'DNT', value: profile.navigator.doNotTrack, }); // TODO: use correct index
-		}
-		changed = true;
-	}
+	headers['Cache-Control'] = { name: 'Cache-Control', value: 'max-age=0', };
+	headers['Connection'] = { name: 'Connection', value: 'keep-alive', };
+
+	// ordered output
+	requestHeaders.splice(0, Infinity);
+	navigator.headerOrder.forEach(name => headers[name] && requestHeaders.push(headers[name]));
+	// NOTE: chrome ignores the order, 'Cache-Control' and 'Connection', firefox follows it and appends any additional headers at the end
+
+	console.log('ordered requestHeaders', requestHeaders);
+
+	return { requestHeaders, };
 }
 
 let clearCacheWhat = null, clearCacheWhere = null;
 const clearCache = (() => {
 	const interval = 3000; let queued = false, last = 0;
 	const clearCache = () => chrome.browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat, () => {
-		console.log('cleared cache', clearCacheWhere, clearCacheWhat);
+		// console.log('cleared cache', clearCacheWhere, clearCacheWhat);
 		queued = false; last = Date.now();
 	});
 

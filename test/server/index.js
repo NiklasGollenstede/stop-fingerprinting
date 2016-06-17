@@ -35,7 +35,7 @@ const https = config.https && {
 const app = Express();
 
 // log
-app.all('/*', (r, x, n) => (console.log(r.method, r.hostname + (r.originalUrl = r.url), r.xhr ? 'xhr' : '', r.headers), n()));
+app.all('/*', (r, x, n) => (console.log(r.method, r.hostname + r.url, r.xhr ? 'xhr' : '', joinHeaders(r.rawHeaders)), n()));
 
 // serve favicon
 app.use(require('serve-favicon')(__dirname + './../../icons/default/32.png'));
@@ -79,3 +79,7 @@ console.log('http://'+ config.host +':'+ config.httpPort +'/');
 https && console.log('https://'+ config.host +':'+ config.httpsPort +'/');
 
 }).catch(error => (console.error('Uncaught error', error), process.exit(-1)));
+
+function joinHeaders(raw) {
+	return '\n'+ raw.map((s, i) => (i % 2 ? '' : '\t') + s + (i % 2 ? '\n' : '=')).join('');
+}
