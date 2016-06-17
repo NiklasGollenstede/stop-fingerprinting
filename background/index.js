@@ -10,7 +10,6 @@ window.options = options;
 
 const Profiles = require('background/profiles')(options);
 
-// modify CSPs to allow script injection
 chrome.webRequest.onHeadersReceived.addListener(modifyResponseHeaders, { urls: [ '*://*/*', ], }, [ 'blocking', 'responseHeaders', ]);
 function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }) {
 	const domain = domainFromUrl(url);
@@ -27,6 +26,7 @@ function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }
 	return changed ? { responseHeaders, } : { };
 
 	function injectCSP(header) {
+		// modify CSPs to allow script injection
 		// reference: https://www.w3.org/TR/CSP/
 		// even though frame-src is deprecated, it will probably not be removed for a long time, and it provides a convenient way to allow 'blob:' only in workers
 		let defaultSrc = [ '*', ], scriptSrc, childSrc, frameSrc, others = [ ];
@@ -75,7 +75,7 @@ function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }
 
 const allMainFrames = { urls: [ '<all_urls>', ], types: [ 'main_frame', ], };
 chrome.webRequest.onHeadersReceived  .addListener(commitProfile,  allMainFrames); // this may be to early, but onResponseStarted is to late
-chrome.webRequest.onAuthRequired
+chrome.webRequest.onAuthRequired // only chrome
 && chrome.webRequest.onAuthRequired  .addListener(discardProfile, allMainFrames);
 chrome.webRequest.onBeforeRedirect   .addListener(discardProfile, allMainFrames);
 chrome.webRequest.onErrorOccurred    .addListener(discardProfile, allMainFrames);
@@ -88,6 +88,7 @@ function discardProfile({ requestId, url, tabId, }) {
 	profile && profile.destroy();
 }
 
+// TODO: (only?) firefox: this is not called for the favicon
 chrome.webRequest.onBeforeSendHeaders.addListener(modifyRequestHeaders, { urls: [ '<all_urls>', ], }, [ 'blocking', 'requestHeaders', ]);
 
 function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) {
@@ -104,6 +105,9 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 
 	// replace User-Agent
 	headers['User-Agent'].value = navigator.userAgent;
+	navigator.accept[type] && (headers['Accept'] = { name: 'Accept', value: navigator.accept[type], });
+	navigator.acceptLanguage['en-US'] && (headers['Accept-Language'] = { name: 'Accept-Language', value: navigator.acceptLanguage['en-US'], });
+	navigator.acceptEncoding && (headers['Accept-Encoding'] = { name: 'Accept-Encoding', value: navigator.acceptEncoding, });
 
 	// set DNT
 	const DNT = navigator.doNotTrack;
@@ -116,8 +120,10 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 	// ordered output
 	const ordered = [ ];
 	order.forEach(name => headers[name] && ordered.push(headers[name]));
-	ordered.push(...requestHeaders.filter(x => x)); // append any custom headers
+	ordered.push(...requestHeaders.filter(x => x && x.name !== 'X-Client-Data')); // append any custom headers
 	// NOTE: chrome ignores the order, 'Cache-Control' and 'Connection', firefox follows it and appends any additional headers (e.g.'If-...') at the end
+
+	console.log('request', type, url, ordered);
 
 	return { requestHeaders: ordered, };
 }

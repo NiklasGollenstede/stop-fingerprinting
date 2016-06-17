@@ -281,12 +281,13 @@ const cpuCores = [
 ];
 
 const headerOrder = {
-	chrome: [
+	chrome: Object.freeze([
 		'Host',
 		'Connection',
 		'Cache-Control',
 		'If-None-Match',
 		'If-Modified-Since',
+		'Upgrade-Insecure-Requests', // (maybe above 'If-...')
 		'User-Agent',
 		'Accept',
 		'DNT',
@@ -294,8 +295,8 @@ const headerOrder = {
 		'Accept-Encoding',
 		'Accept-Language',
 		'Origin', // TODO: find correct position
-	],
-	firefox: [
+	]),
+	firefox: Object.freeze([
 		'Host',
 		'User-Agent',
 		'Accept',
@@ -305,11 +306,12 @@ const headerOrder = {
 		'DNT',
 		'Origin',
 		'Connection',
+		'Upgrade-Insecure-Requests',
 		'If-Modified-Since',
 		'If-None-Match',
 		'Cache-Control',
-	],
-	ie: [
+	]),
+	ie: Object.freeze([
 		'Accept',
 		'Referer',
 		'Accept-Language',
@@ -320,11 +322,60 @@ const headerOrder = {
 		'If-None-Match',
 		'DNT',
 		'Connection',
+		'Upgrade-Insecure-Requests', // TODO: find correct position
 		'Origin', // TODO: find correct position
 		// TODO: Cache-Control not sent ?
-	],
-	opera: [ ], // TODO
-	safari: [ ], // TODO
+	]),
+	opera: Object.freeze([ ]), // TODO
+	safari: Object.freeze([ ]), // TODO
+};
+
+const accept = { // TODO: for 'other': implement some kind of translation between the browsers
+	chrome: Object.freeze({
+		main_frame: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+		sub_frame: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+		image: '*/*',
+		script: '*/*',
+		style: 'text/css,*/*;q=0.1',
+		object: '*/*',
+		other: '',
+	}),
+	firefox: Object.freeze({
+		main_frame: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+		sub_frame: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+		image: '*/*',
+		script: '*/*',
+		style: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8', // ?
+		object: '',
+		other: '',
+	}),
+	ie: Object.freeze({
+		main_frame: 'text/html, application/xhtml+xml, image/jxr, */*',
+		sub_frame: 'text/html, application/xhtml+xml, image/jxr, */*',
+		image: 'image/png, image/svg+xml, image/jxr, image/*;q=0.8, */*;q=0.5',
+		script: 'application/javascript, */*;q=0.8',
+		style: 'text/css, */*',
+		object: '',
+		other: '',
+	}),
+};
+
+const acceptLanguage = {
+	chrome: Object.freeze({
+		'en-US': 'en-US,en;q=0.8',
+	}),
+	firefox: Object.freeze({
+		'en-US': 'en-US,en;q=0.5',
+	}),
+	ie: Object.freeze({
+		'en-US': 'en-US,en;q=0.5',
+	}),
+};
+
+const acceptEncoding = {
+	chrome: 'gzip, deflate, sdch, br',
+	firefox: 'gzip, deflate, br',
+	ie: 'gzip, deflate',
 };
 
 const Generator = exports.Generator = class Generator {
@@ -358,6 +409,9 @@ const Navigator = exports.Navigator = class Navigator {
 		const { os, browser, } = chooseWeightedRandom(config.browser_os);
 		this.os = os; this.browser = browser;
 		this.headerOrder = headerOrder[browser];
+		this.accept = accept[browser];
+		this.acceptLanguage = acceptLanguage[browser];
+		this.acceptEncoding = acceptEncoding[browser];
 		this.arch = chooseWeightedRandom(config.osArch).arch;
 		const osRelease = this.osRelease = Date.now() - randInRange(config.osAge) * 31536000000/*1 year*/;
 		this.osVersion = (osVersion[this.os].find(({ date, }) => date < osRelease) || chooseRandom(osVersion[this.os])).version;
@@ -508,17 +562,6 @@ const Navigator = exports.Navigator = class Navigator {
 		}
 		return null;
 	}
-	/*
-	get acceptEncoding() {
-		return ''; // TODO
-	}
-	get acceptDefault() {
-		return ''; // TODO
-	}
-	get acceptLang() {
-		return ''; // TODO
-	}
-	*/
 
 	toJSON() {
 		if (this.json) { return this.json; }
