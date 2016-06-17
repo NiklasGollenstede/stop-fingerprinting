@@ -293,6 +293,7 @@ const headerOrder = {
 		'Referer',
 		'Accept-Encoding',
 		'Accept-Language',
+		'Origin', // TODO: find correct position
 	],
 	firefox: [
 		'Host',
@@ -302,6 +303,7 @@ const headerOrder = {
 		'Accept-Encoding',
 		'Referer',
 		'DNT',
+		'Origin',
 		'Connection',
 		'If-Modified-Since',
 		'If-None-Match',
@@ -318,6 +320,7 @@ const headerOrder = {
 		'If-None-Match',
 		'DNT',
 		'Connection',
+		'Origin', // TODO: find correct position
 		// TODO: Cache-Control not sent ?
 	],
 	opera: [ ], // TODO

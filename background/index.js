@@ -94,13 +94,18 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 	const domain = domainFromUrl(url);
 	const profile = (type === 'main_frame' ? Profiles.create({ requestId, url, }) : Profiles.get({ tabId, url, })).getDomain(domain);
 	if (profile.disabled || !profile.navigator) { return; }
-	const { navigator, } = profile;
-	const headers = { }; requestHeaders.forEach(header => headers[header.name] = header);
+
+	const { navigator, navigator: { headerOrder: order, }, } = profile;
+	const headers = { }; requestHeaders.forEach((header, index) => {
+		if (!order.includes(header.name)) { return; }
+		headers[header.name] = header; // may overwrite existing
+		delete requestHeaders[index];
+	});
 
 	// replace User-Agent
 	headers['User-Agent'].value = navigator.userAgent;
 
-	// insert DNT
+	// set DNT
 	const DNT = navigator.doNotTrack;
 	if (DNT === '1' || DNT === '0') { headers['DNT'] = { name: 'DNT', value: DNT, }; }
 	else { delete headers.DNT; }
@@ -109,13 +114,12 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 	headers['Connection'] = { name: 'Connection', value: 'keep-alive', };
 
 	// ordered output
-	requestHeaders.splice(0, Infinity);
-	navigator.headerOrder.forEach(name => headers[name] && requestHeaders.push(headers[name]));
-	// NOTE: chrome ignores the order, 'Cache-Control' and 'Connection', firefox follows it and appends any additional headers at the end
+	const ordered = [ ];
+	order.forEach(name => headers[name] && ordered.push(headers[name]));
+	ordered.push(...requestHeaders.filter(x => x)); // append any custom headers
+	// NOTE: chrome ignores the order, 'Cache-Control' and 'Connection', firefox follows it and appends any additional headers (e.g.'If-...') at the end
 
-	console.log('ordered requestHeaders', requestHeaders);
-
-	return { requestHeaders, };
+	return { requestHeaders: ordered, };
 }
 
 let clearCacheWhat = null, clearCacheWhere = null;
