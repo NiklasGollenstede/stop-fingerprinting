@@ -1,3 +1,4 @@
 *.xpi
 node_modules
 icons/*/*.png
+npm-debug.log

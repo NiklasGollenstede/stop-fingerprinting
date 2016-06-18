@@ -46,6 +46,8 @@ const {
 		revokeObjectURL, },
 	JSON, JSON: {
 		stringify, },
+	ImageData, WebGLRenderingContext: { prototype: {
+		RGBA, UNSIGNED_BYTE, }, },
 } = self;
 
 const _call          =            Function .prototype.call;
@@ -174,6 +176,10 @@ const context = (() => {
 			if (!window) { console.log('notify', level, ...messages); return; } // TODO: worker
 			this.postMessage({ name: 'notify', args, });
 		},
+		error(error) {
+			alert('Unexpected exception: '+ (error && error.message || error));
+			throw error;
+		},
 
 		// Element.offsetWith/Height randomization
 		getOffsetSize(client, offset, element) {
@@ -194,9 +200,28 @@ const context = (() => {
 		// <canvas> randomization
 		randomizeCanvas(canvas) {
 			const { getImageData, putImageData } = this.originals.CanvasRenderingContext2D_p;
-			const ctx = call(this.originals.HTMLCanvasElement_p.getContext, canvas, '2d');
-			const imageData = call(getImageData, ctx, 0, 0, canvasGetWidth(canvas), canvasGetHeight(canvas));
-			this.randomizeUInt8Array(imageDataGetData(imageData));
+			const { getContext, } = this.originals.HTMLCanvasElement_p;
+			const width = canvasGetWidth(canvas), height = canvasGetHeight(canvas);
+			let imageData, data, ctx = call(getContext, canvas, '2d');
+			if (ctx) {
+				imageData = call(getImageData, ctx, 0, 0, canvasGetWidth(canvas), canvasGetHeight(canvas));
+				data = imageDataGetData(imageData);
+			} else {
+				ctx
+				=  call(getContext, canvas, 'webgl') || call(getContext, canvas, 'experimental-webgl')
+				|| call(getContext, canvas, 'webgl2') || call(getContext, canvas, 'experimental-webgl2');
+				if (!ctx) { return this.error(new Error('Could not get drawing context from canvas')); }
+				imageData = new ImageData(width, height);
+				data = new Uint8Array(typedArrayGetLength(imageDataGetData(imageData)));
+				call(
+					this.originals.WebGLRenderingContext_p.readPixels,
+					ctx,
+					0, 0, width, height,
+					RGBA, UNSIGNED_BYTE,
+					data
+				);
+			}
+			this.randomizeUInt8Array(data, imageDataGetData(imageData));
 			const clone = call(this.originals.Node_p.cloneNode, canvas, true);
 			call(putImageData, call(this.originals.HTMLCanvasElement_p.getContext, clone, '2d'), imageData, 0, 0);
 			return clone;
@@ -208,16 +233,16 @@ const context = (() => {
 			}
 			return new Uint8Array(buffer);
 		},
-		randomizeUInt8Array(data) {
+		randomizeUInt8Array(source, target = source) {
 			this.notify('info', { title: 'Randomized Canvas', message: 'Spoiled possible fingerprinting', logLevel: 1, topic: 'canvas', });
-			const rnd = this.getRandomBytes(data.length);
+			const l = typedArrayGetLength(source), rnd = this.getRandomBytes(l);
 			let w = 0, mask = 0;
-			for (let i = 0, l = typedArrayGetLength(data); i < l; ++i) {
-				w = data[i];
+			for (let i = 0; i < l; ++i) {
+				w = source[i];
 				mask = (1 << (32 - clz32(w))) - 1 >>> 2; // TODO: this leaves deterministic bits
-				data[i] = w ^ (mask & rnd[i]);
+				target[i] = w ^ (mask & rnd[i]);
 			}
-			return data;
+			return target;
 		},
 		randomizeTypedArray(array) {
 			console.trace('not implemented');

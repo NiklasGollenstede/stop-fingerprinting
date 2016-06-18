@@ -47,6 +47,7 @@ app.post('/csp', CSP.onerror);
 
 // serve files
 app.use(Express.static(__dirname +'./../clinent/'));
+app.use('/fingerprintjs2.js', Express.static(__dirname +'./../../node_modules/fingerprintjs2/fingerprint2.js'));
 
 
 

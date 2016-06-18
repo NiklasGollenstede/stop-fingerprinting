@@ -17,6 +17,25 @@ function test(window, message) {
 	}
 }
 
+function testCanvas(window) {
+	const { document, } = window;
+	const canvas = document.createElement('canvas');
+	// document.body.appendChild(canvas);
+	canvas.setAttribute('width', 220);
+	canvas.setAttribute('height', 23);
+	const ctx = canvas.getContext('2d');
+	ctx.font = '14px Arial';
+	ctx.fillStyle = '#f60';
+	ctx.fillRect(127, 1, 62, 20);
+	ctx.fillStyle = '#069';
+	ctx.fillText('Stop Fingerprinting <canvas> test', 2, 15);
+	ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+	ctx.fillText('Stop Fingerprinting <canvas> test', 4, 17);
+
+	const url = canvas.toDataURL(); // ('image/jpeg');
+	return { url, canvas, };
+}
+
 const iframes = window.iframes = {
 	contentWindow(url) {
 		const iframe = document.createElement('iframe');
@@ -76,7 +95,13 @@ const Broadcast = window.Broadcast = class Broadcast extends SharedWorker {
 	}
 };
 
+const { url: canvasImg, canvas, } = testCanvas(window);
+
+
 document.addEventListener('DOMContentLoaded', () => {
+
+	document.body.appendChild(canvas);
+	document.body.appendChild(document.createElement('img')).src = canvasImg;
 
 	Array.prototype.forEach.call(document.querySelectorAll('iframe'), frame => {
 		const cw = frame.contentWindow;
@@ -90,6 +115,11 @@ document.addEventListener('DOMContentLoaded', () => {
 	// test(iframes.contentDocument(), 'loose contentDocument');
 	// test(iframes.windowFrames(), 'loose windowFrames');
 
-	testCanvas(window);
+});
 
+new Fingerprint2().get(function(result, components){
+	// this will use all available fingerprinting sources
+	console.log(result);
+	// components is an array of all fingerprinting components used
+	console.log(components);
 });
