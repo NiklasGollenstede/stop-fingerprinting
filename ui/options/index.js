@@ -1,4 +1,4 @@
-'use strict';
+'use strict'; // license: MPL-2.0
 
 const {
 	concurrent: { async, },
@@ -77,7 +77,7 @@ const tabs = new Tabs({
 		{
 			id: 'options',
 			title: 'General',
-			icon: chrome.extension.getURL('ui/options/icon.png'),
+			icon: chrome.extension.getURL('icons/options/96.png'),
 			data: { branch: options, },
 		},
 	],

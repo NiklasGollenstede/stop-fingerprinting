@@ -1,7 +1,8 @@
 {
 	"author": "Niklas Gollenstede",
-	"description": "Disables / modifies some browser APIs that would otherwise allow browser fingerprinting",
+	"description": "Disables / modifies browser APIs to prevent browser fingerprinting",
 	"name": "stop-fingerprinting",
+	"license": "MPL-2.0",
 	"repository" : {
 		"type" : "git",
 		"url" : "git@github.com:NiklasGollenstede/stop-fingerprinting.git"

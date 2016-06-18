@@ -1,4 +1,4 @@
-'use strict';
+'use strict'; // license: MPL-2.0
 const { Profiles, } = chrome.extension.getBackgroundPage();
 
 const tab = new Promise((resolve, reject) => chrome.tabs.query({

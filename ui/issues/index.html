@@ -1,0 +1,34 @@
+<!DOCTYPE html> <!-- license: MPL-2.0 -->
+<html>
+	<head>
+		<title>Issues</title>
+		<link href="/node_modules/web-ext-utils/options/editor-layout.css" rel="stylesheet">
+		<link href="/node_modules/web-ext-utils/options/editor-dark.css" rel="stylesheet">
+		<link href="./../index.css" rel="stylesheet">
+	</head>
+	<body>
+		<div>
+			<h1>Bug Reports</h1>
+			<h3>If you find any bugs / issues / missing features that are not listed below, please open an <a href="https://github.com/NiklasGollenstede/stop-fingerprinting/issues">issue on GitHub</a>.</h3>
+			<h3>Before you open new issues please make sure there isn't an existing one describing the same or a very similar topic.</p>
+		</div>
+		<div>
+			<h1>Known bugs</h1>
+			<ul>
+				<li>If the browsers language is set to anything other than en-US, then navigator.language mismatches the HTTP Accept-Language header</li>
+				<li>... and may more to come</li>
+			</ul>
+		</div>
+		<div>
+			<h1>Missing features</h1>
+			<ul>
+				<li>Service workers are not yet handled and may provide a communication channel between tabs</li>
+				<li><a href="https://audiofingerprint.openwpm.com/">AudioContext</a> is not handled</li>
+				<li><a href="https://www.browserleaks.com/webgl">WebGL properties</a> is not handled (except for canvas fingerprinting)</li>
+				<li><a href="https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/">WebRTC local IP detection</a> should be avoidable on a per tab basis</li>
+				<li>Canvas fingerprint spoofing should do something smarter than to add random noise</li>
+			</ul>
+			<span>For minor TODOs and more detailed descriptions read the <a href="https://github.com/NiklasGollenstede/stop-fingerprinting/blob/master/TODO.md">TODO.md</a> and the <a href="https://github.com/NiklasGollenstede/stop-fingerprinting/issues">issues on GitHub</a>.</span>
+		</div>
+	</body>
+</html>

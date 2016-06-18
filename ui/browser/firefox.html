@@ -1,0 +1,22 @@
+<!DOCTYPE html> <!-- license: MPL-2.0 -->
+<html>
+	<head>
+		<title>Firefox</title>
+		<link href="/node_modules/web-ext-utils/options/editor-layout.css" rel="stylesheet">
+		<link href="/node_modules/web-ext-utils/options/editor-dark.css" rel="stylesheet">
+		<link href="./../index.css" rel="stylesheet">
+	</head>
+	<body>
+		<pre>
+
+- to disable Firefox Resources Reader (https://www.browserleaks.com/firefox) install No Resource URI Leak (https://addons.mozilla.org/firefox/addon/no-resource-uri-leak/)
+
+- to disable WebRTC Local IP Detection set 'media.peerconnection.ice.default_address_only' to true in 'about:config' (see https://wiki.mozilla.org/Media/WebRTC/Privacy)
+
+- to prevent HSTS Super Cookies: not possible atm, but can be deleted with the browsing history
+
+- to disable caching set 'browser.cache.disk.enable' and 'browser.cache.memory.enable' to false in 'about:config' (see: http://kb.mozillazine.org/Browser.cache.disk.enable and http://kb.mozillazine.org/Browser.cache.memory.enable)
+
+		</pre>
+	</body>
+</html>

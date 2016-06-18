@@ -4,6 +4,7 @@
 	"short_name": "Stop Fingerprinting",
 	"version": "0.2.0",
 	"author": "Niklas Gollenstede",
+	"license": "MPL-2.0",
 
 	"description": "Disables / modifies some browser APIs that would otherwise allow browser fingerprinting",
 	"icons": {

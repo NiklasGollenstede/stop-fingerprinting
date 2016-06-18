@@ -1,5 +1,6 @@
-'use strict';
+'use strict'; // license: MPL-2.0
 
+const browser = chrome.extension.getURL('.').startsWith('moz') ? 'firefox' : 'chrome';
 
 document.addEventListener('DOMContentLoaded', () => {
 	const tabs = new (require('web-ext-utils/tabview'))({
@@ -11,8 +12,23 @@ document.addEventListener('DOMContentLoaded', () => {
 			{
 				id: 'options',
 				title: 'Options',
-				icon: chrome.extension.getURL('ui/options/icon.png'),
+				icon: chrome.extension.getURL('icons/options/96.png'),
 				data: { url: chrome.extension.getURL('ui/options/index.html'), },
+			}, {
+				id: 'browser',
+				title: 'Browser',
+				icon: chrome.extension.getURL(`icons/${ browser }/96.png`),
+				data: { url: chrome.extension.getURL(`ui/browser/${ browser }.html`), },
+			}, {
+				id: 'issues',
+				title: 'Issues',
+				icon: chrome.extension.getURL('icons/issues/96.png'),
+				data: { url: chrome.extension.getURL('ui/issues/index.html'), },
+			}, {
+				id: 'about',
+				title: 'About',
+				icon: chrome.extension.getURL('icons/about/96.png'),
+				data: { url: chrome.extension.getURL('ui/about/index.html'), },
 			},
 		],
 		onSelect({ id, data, }) {
