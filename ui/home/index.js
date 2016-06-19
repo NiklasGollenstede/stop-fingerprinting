@@ -20,6 +20,11 @@ document.addEventListener('DOMContentLoaded', () => {
 				icon: chrome.extension.getURL(`icons/${ browser }/96.png`),
 				data: { url: chrome.extension.getURL(`ui/browser/${ browser }.html`), },
 			}, {
+				id: 'state',
+				title: 'State',
+				icon: chrome.extension.getURL('icons/state/96.png'),
+				data: { url: chrome.extension.getURL('ui/state/index.html'), },
+			}, {
 				id: 'issues',
 				title: 'Issues',
 				icon: chrome.extension.getURL('icons/issues/96.png'),

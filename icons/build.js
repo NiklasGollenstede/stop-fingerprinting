@@ -31,12 +31,20 @@ const icons = {
 		layers: { background: '', fingerprint: '', },
 		sizes: [ 256, ],
 	},
+	options: {
+		layers: { gearIcon: 'fill: #7A7DB9', },
+		sizes: [ 96, ],
+	},
+	state: {
+		layers: { cardiogram: 'fill: #5AE25A', },
+		sizes: [ 96, ],
+	},
 	issues: {
 		layers: { bugIcon: 'fill: #F07451', },
 		sizes: [ 96, ],
 	},
-	options: {
-		layers: { gearIcon: 'fill: #7A7DB9', },
+	about: {
+		layers: { infoCircle: 'fill: hsla(212, 68%, 51%, 1)', },
 		sizes: [ 96, ],
 	},
 	chrome: {
@@ -45,10 +53,6 @@ const icons = {
 	},
 	firefox: {
 		layers: { firefoxIcon: '', },
-		sizes: [ 96, ],
-	},
-	about: {
-		layers: { infoCircle: 'fill: hsla(212, 68%, 51%, 1)', },
 		sizes: [ 96, ],
 	},
 };

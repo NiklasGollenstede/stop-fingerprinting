@@ -50,7 +50,7 @@ const defaults = [
 	}), {
 		name: 'debug',
 		title: 'Enable debugging',
-		description: `Enable some stuff that will definitely compromise your privacy but is helpful when debugging`,
+		description: `Enable some stuff that can definitely be used to compromise your privacy and security but is helpful when debugging`,
 		type: 'bool',
 		default: false,
 	}, {
