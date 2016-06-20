@@ -1,4 +1,4 @@
-'use strict'; define('background/profiles', [
+'use strict'; define('background/profiles', [ // license: MPL-2.0
 	'background/ua',
 	'background/screen',
 	'common/profile',
@@ -73,15 +73,16 @@ options.children.profiles.whenChange((_, { current: ids, }) => {
 });
 
 const defaults = {
-	'hstsDisabled': true,
-	'navigator.browser': applications.current,
-	'plugins.hideAll': true,
-	'devices.hideAll': true,
-	'screen.width':  { from: screen.width * 0.8, to: 3840, },
-	'screen.height':  { from: screen.height * 0.8, to: 2160, },
-	'screen.devicePixelRatio': { from: 1, to: window.devicePixelRatio * 1.25, },
-	'screen.offset.bottom': { from: 30, to: 50, },
-	'fonts.dispersion': 25,
+	'logLevel': [ 3, ],
+	'hstsDisabled': [ true, ],
+	'navigator.browser': [ applications.current, ],
+	'plugins.hideAll': [ true, ],
+	'devices.hideAll': [ true, ],
+	'screen.width': [  { from: screen.width * 0.8, to: 3840, }, ],
+	'screen.height': [  { from: screen.height * 0.8, to: 2160, }, ],
+	'screen.devicePixelRatio': [ { from: 1, to: window.devicePixelRatio * 1.25, }, ],
+	'screen.offset.bottom': [ { from: 30, to: 50, }, ],
+	'fonts.dispersion': [ 25, ],
 };
 
 const realNavigator = NavToJSON.call(window.navigator);
@@ -109,9 +110,9 @@ class ProfileStack {
 		const value = this.get('navigator.disabled')
 		? { generate() { return realNavigator; }, }
 		: new NavGen({
-			browser: this.get('navigator.browser'),
-			os: this.get('navigator.os'),
-			osArch: this.get('navigator.osArch'),
+			browser: this.getAll('navigator.browser'),
+			os: this.getAll('navigator.os'),
+			osArch: this.getAll('navigator.osArch'),
 			cpuCores: this.get('navigator.cpuCores'),
 			osAge: this.get('navigator.osAge'),
 			browserAge: this.get('navigator.browserAge'),
@@ -161,15 +162,20 @@ class ProfileStack {
 	}
 
 	get(key) {
+		const values = this.getAll(key);
+		return values && values[0];
+	}
+
+	getAll(key) {
 		if (this.cache.has(key)) { return this.cache.get(key); }
 		const keys = key.split('.');
-		let value = defaults[key];
+		let values = defaults[key];
 		for (let prefs of this.rules) {
 			const pref = keys.reduce((prefs, key) => prefs[key].children, prefs).parent;
-			if (pref.values.current.length) { value = pref.value; break; }
+			if (pref.values.current.length) { values = pref.values.current; break; }
 		}
-		this.cache.set(key, value);
-		return value;
+		this.cache.set(key, values);
+		return values;
 	}
 
 	getTab(id) {
@@ -186,8 +192,8 @@ class ProfileStack {
 		this.profiles.forEach(s => profileInStack.delete(s, this));
 	}
 
-	static find(url, tabId) {
-		const tabTemp = tabTemps.get(tabId);
+	static find(url, tabId = -1) {
+		const tabTemp = tabId <= 0 && tabTemps.get(tabId);
 		const matching = sortedProfiles.filter(profile => {
 			return profile !== tabTemp && profileIncludes.get(profile).all.some(exp => {
 				const match = exp.exec(url);
@@ -256,7 +262,7 @@ class DomainProfile {
 
 	get navigator() {
 		const navigator = this.stack.getNavigator();
-		const logLevel = 0; // navigator.logLevel = this.get('navigator.logLevel');
+		const logLevel = this.get('logLevel');
 		navigator && notify.log({ title: 'Generated UA', message: navigator.userAgent.replace(/^Mozilla\/5\.0 /, ''), domain: this.domain, tabId: this.tab.tabId, logLevel, });
 		return navigator;
 	}
@@ -333,6 +339,9 @@ return {
 		let tab = requestId !== missing && uncommittetTabs.get(requestId);
 		if (tab) { return tab; }
 		return url !== missing && tabId !== missing && ProfileStack.find(url, tabId).getTab(tabId);
+	},
+	findStack(url) {
+		return ProfileStack.find(url);
 	},
 	get current() {
 		return profiles;

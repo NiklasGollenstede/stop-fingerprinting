@@ -1,4 +1,4 @@
-'use strict'; /* global chrome */
+'use strict'; // license: MPL-2.0
 
 const { Tabs, Messages, } = require('web-ext-utils/chrome');
 Messages.isExclusiveMessageHandler = true;
@@ -164,14 +164,10 @@ Messages.addHandler('getOptionsForUrl', function(url) {
 	return { options: JSON.stringify(profile), nonce: profile.nonce, };
 });
 
-Messages.addHandler('notify', function(method, { title, message, logLevel, topic, }) {
-	const { id: tabId, url, title: tabTitle, } = this.tab;
-	let domain, profile;
-	if (!logLevel && topic) {
-		domain = domainFromUrl(url);
-		profile = Profiles.get({ tabId, url, }).getDomain(domain);
-	}
-	notify(method, { title, message, url, domain, tabId, tabTitle, logLevel, topic, profile, });
+Messages.addHandler('notify', function(method, { title, message, url, }) {
+	const { id: tabId, title: tabTitle, } = this.tab;
+	const logLevel = Profiles.findStack(url).get('logLevel');
+	notify(method, { title, message, url, tabId, tabTitle, logLevel, });
 });
 
 });

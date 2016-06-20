@@ -1,24 +1,25 @@
-(function() { 'use strict'; /* global script */
+(function() { 'use strict'; /* global script */ // license: MPL-2.0
 
 let root = window, url; try { do {
 	url = root.location.href;
 } while (root.parent !== root && root.parent.location.href && (root = root.parent)); } catch (e) { }
 
-getOptions(({ options, nonce, }) => {
-	if (options === 'false') { return console.log('Spoofing is disabled for ', url, window); }
+getOptions(({ options: json, nonce, }) => {
+	if (json === 'false') { return console.log('Spoofing is disabled for ', url, window); }
 
-	window.addEventListener('stopFingerprintingPostMessage$'+ nonce, event => {
-		chrome.runtime.sendMessage(Object.assign(event.detail, { post: true, }));
+	window.addEventListener('stopFingerprintingPostMessage$'+ nonce, ({ detail: message, }) => {
+		message.post = true;
+		chrome.runtime.sendMessage(message);
 	});
 
-	inject(nonce, script, options);
+	inject(nonce, script, json);
 });
 
 function getOptions(callback) {
 	if (root.options) { return void callback(root.options); }
 
 	chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, arg => {
-		if ('error' in arg) { throw parseError(arg.error); }
+		if ('error' in arg) { reportError(parseError(arg.error)); }
 		callback(root.options = arg.value);
 	});
 }
@@ -46,9 +47,9 @@ function inject(nonce, script, jsonArg) {
 	if (element.dataset.error) {
 		const error = JSON.parse(element.dataset.error);
 		const constructor = window[error && error.name] || Error;
-		throw Object.assign(new constructor, error);
+		reportError(Object.assign(new constructor, error));
 	}
-	if (!element.dataset.done) { throw new Error('Script was not executed at all'); }
+	if (!element.dataset.done) { reportError(new Error('Script was not executed at all'), 'debug'); }
 	return JSON.parse(element.dataset.value);
 }
 
@@ -60,6 +61,19 @@ function parseError(string) {
 		const constructor = object.name ? window[object.name] || Error : Error;
 		return Object.assign(new constructor, object);
 	});
+}
+
+function reportError(error, level = 'error') {
+	chrome.runtime.sendMessage({
+		post: true,
+		name: 'notify',
+		args: [ level, {
+			title: 'Unexpected exception',
+			message: error && error.message || error,
+			url,
+		}, ],
+	});
+	throw error;
 }
 
 })();

@@ -19,6 +19,7 @@ function test(window, message) {
 
 function testCanvas(window) {
 	const { document, } = window;
+	const proto = CanvasRenderingContext2D.prototype;
 	const canvas = document.createElement('canvas');
 	// document.body.appendChild(canvas);
 	canvas.setAttribute('width', 220);
@@ -26,14 +27,19 @@ function testCanvas(window) {
 	const ctx = canvas.getContext('2d');
 	ctx.font = '14px Arial';
 	ctx.fillStyle = '#f60';
-	ctx.fillRect(127, 1, 62, 20);
+	proto.fillRect.call(ctx, 127, 1, 62, 20);
 	ctx.fillStyle = '#069';
-	ctx.fillText('Stop Fingerprinting <canvas> test', 2, 15);
+	proto.fillText.call(ctx, 'Stop Fingerprinting <canvas> test', 2, 15);
 	ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-	ctx.fillText('Stop Fingerprinting <canvas> test', 4, 17);
+	proto.fillText.call(ctx, 'Stop Fingerprinting <canvas> test', 4, 17);
 
 	const url = canvas.toDataURL(); // ('image/jpeg');
 	return { url, canvas, };
+}
+
+function sha256(string) {
+	return window.crypto.subtle.digest('SHA-256', new TextEncoder('utf-8').encode(string))
+	.then(hash => Array.prototype.map.call(new Uint32Array(hash), r => r.toString(36)).join(''));
 }
 
 const iframes = window.iframes = {
@@ -96,6 +102,7 @@ const Broadcast = window.Broadcast = class Broadcast extends SharedWorker {
 };
 
 const { url: canvasImg, canvas, } = testCanvas(window);
+sha256(canvasImg).then(hash => console.log('canvas hash', hash));
 
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -117,9 +124,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 
+
 new Fingerprint2().get(function(result, components){
-	// this will use all available fingerprinting sources
-	console.log(result);
-	// components is an array of all fingerprinting components used
-	console.log(components);
+	console.log('Fingerprint2 hash', result);
+	console.log('Fingerprint2 components', components);
 });

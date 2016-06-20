@@ -1,4 +1,4 @@
-'use strict'; define('common/profile', [
+'use strict'; define('common/profile', [ // license: MPL-2.0
 	'web-ext-utils/options',
 	'web-ext-utils/chrome',
 	'es6lib',
@@ -94,6 +94,18 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 				description: 'Completely disable this extension for all matching sites',
 				addDefault: true,
 				type: 'bool',
+			}), optional({
+				name: 'logLevel',
+				title: 'Logging',
+				description: 'Decide what priority of notifications you want to see',
+				addDefault: 3,
+				type: 'menulist',
+				options: [
+					{ value: 1, label: `Include debugging`, },
+					{ value: 2, label: `Log everything`, },
+					{ value: 3, label: `Important only`, },
+					{ value: 4, label: `Errors only`, },
+				],
 			}), optional({
 				name: 'hstsDisabled',
 				title: 'Disable HSTS',

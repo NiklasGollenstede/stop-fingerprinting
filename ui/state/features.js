@@ -32,7 +32,7 @@ window.features = {
 				title: `Notifications`,
 				description: `Optionally show notifications for all relevant events`,
 				state: {
-					all: { missing: `There are notifications for a few things, but they can't be disabled`, },
+					all: { partial: `There are only notifications for a few things, they can me suppressed according to their priority`, },
 				},
 			},
 		},

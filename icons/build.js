@@ -31,6 +31,10 @@ const icons = {
 		layers: { background: '', fingerprint: '', },
 		sizes: [ 256, ],
 	},
+	debug: {
+		layers: { background: '', fingerprint: 'opacity: 0.6', bugIcon: 'fill: #e21', },
+		sizes: [ 256, ],
+	},
 	options: {
 		layers: { gearIcon: 'fill: #7A7DB9', },
 		sizes: [ 96, ],

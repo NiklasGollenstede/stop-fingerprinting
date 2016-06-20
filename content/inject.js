@@ -1,5 +1,5 @@
 // one line of padding
-const script = window.script = function(options, script, workerOptions)  { 'use strict';
+const script = window.script = function(options, script, workerOptions)  { 'use strict'; // license: MPL-2.0
 
 const self = this;
 const window = self.constructor.name === 'Window' ? self : null;
@@ -100,7 +100,7 @@ const context = (() => {
 
 	// create context
 	context = {
-		values: options, options, script, workerOptions, top: self, worker, window,
+		values: options, options, script, workerOptions, top: self, worker, window, topUrl: location.href,
 
 		// all 'globals' from above here too
 		Math, clz32, random, round, min, max, CustomEvent, dispatchEvent, Object, keys, create, assign, getOwnPropertyDescriptor, defineProperty, defineProperties, getPrototypeOf, Array, Function, ArrayBuffer, Uint8Array, Promise, String, raw, Symbol, iterator, toStringTag, Reflect, construct, apply, Blob, URL, createObjectURL, revokeObjectURL, JSON, stringify,
@@ -172,9 +172,10 @@ const context = (() => {
 		postMessage(message) {
 			call(dispatchEvent, window, new CustomEvent('stopFingerprintingPostMessage$'+ token, { detail: message, }));
 		},
-		notify(...args) {
-			if (!window) { console.log('notify', level, ...messages); return; } // TODO: worker
-			this.postMessage({ name: 'notify', args, });
+		notify(level, what = { }) {
+			what.url = this.topUrl;
+			if (!window) { console.log('notify', level, what); return; } // TODO: worker
+			this.postMessage({ name: 'notify', args: [ level, what, ], });
 		},
 		error(error) {
 			alert('Unexpected exception: '+ (error && error.message || error));
@@ -234,7 +235,7 @@ const context = (() => {
 			return new Uint8Array(buffer);
 		},
 		randomizeUInt8Array(source, target = source) {
-			this.notify('info', { title: 'Randomized Canvas', message: 'Spoiled possible fingerprinting', logLevel: 1, topic: 'canvas', });
+			this.notify('info', { title: 'Randomized Canvas', message: 'Spoiled possible fingerprinting', });
 			const l = typedArrayGetLength(source), rnd = this.getRandomBytes(l);
 			let w = 0, mask = 0;
 			for (let i = 0; i < l; ++i) {
