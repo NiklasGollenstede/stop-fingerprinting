@@ -366,6 +366,7 @@ function createAPIs() {
 				set: hideCode('set devicePixelRatio', function(v) { }), // TODO: let it be set but (optionally ?) overwrite it when the tabs zoom changes
 			},
 		});
+		// TODO: make window.outerWidth/height match .inner...
 	}
 
 	// navigator.mediaDevices.enumerateDevices

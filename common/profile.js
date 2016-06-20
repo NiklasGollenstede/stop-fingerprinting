@@ -180,7 +180,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						title: 'Operating Systems Age',
 						description: 'The age of the operating system version',
 						unit: 'years',
-						restrict: { from: 0, to: 10, type: 'number', },
+						restrict: { from: 0, to: 11, type: 'number', },
 						addDefault: { from: 0, to: 3, },
 						type: 'interval',
 					}), optional({

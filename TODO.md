@@ -7,6 +7,7 @@
 - prevent AudioContext fingerprinting (see https://audiofingerprint.openwpm.com/)
 - mess with WebGL (https://www.browserleaks.com/webgl)
 - try different methods to change the canvas (sharpening, moving, blurring, ...)
+- change time zone and add small random offsets to Dates and change toLocaleString
 - disable WebRTC local IP detection on a per-tab basis, make sure media device enumeration is diabled
 - do something about console.memory in chrome (?)
 - do image sets with variable resolution or css media queries leak the true devicePixelRatio?

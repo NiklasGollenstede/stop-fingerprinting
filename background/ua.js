@@ -28,12 +28,12 @@ const osArch = [
 
 const osVersion = {
 	win: [
-		{ date: +new Date('2015-07'), version: [ 10,  0], }, // win 10 (XXX: also 6.4?)
-		{ date: +new Date('2013-09'), version: [  6,  3], }, // win 8.1
-		{ date: +new Date('2012-09'), version: [  6,  2], }, // win 8
-		{ date: +new Date('2009-09'), version: [  6,  1], }, // win 7
-		{ date: +new Date('2007-06'), version: [  6,  1], }, // win vista
-		{ date: +new Date('2001-09'), version: [  5,  1], }, // win XP
+		{ date: +new Date('2015-07'), version: [ 10,  0, 0, ], }, // win 10 (XXX: also 6.4?)
+		{ date: +new Date('2013-09'), version: [  6,  3, 0, ], }, // win 8.1
+		{ date: +new Date('2012-09'), version: [  6,  2, 0, ], }, // win 8
+		{ date: +new Date('2009-09'), version: [  6,  1, 0, ], }, // win 7
+		{ date: +new Date('2007-06'), version: [  6,  1, 0, ], }, // win vista
+		{ date: +new Date('2001-09'), version: [  5,  1, 0, ], }, // win XP
 	],
 	mac: [
 		{ date: +new Date('2016-05-16'), version: [ 10, 11,  5, ], },
@@ -97,7 +97,7 @@ const osVersion = {
 		{ date: +new Date('2005-04-29'), version: [ 10,  4,  0, ], },
 	],
 	lin: [
-		{ date: 0, version: 'all', },
+		{ date: 0, version: [ 0, 0, 0, ], },
 	],
 };
 
@@ -247,6 +247,10 @@ const cromeBuild = {
 	'50.0': { a: { from: 2650, to: 2690 - 1, }, b: { from: 0, to: 120, }, }, // estimated / guessed
 	'51.0': { a: { from: 2690, to: 2730 - 1, }, b: { from: 0, to: 120, }, }, // estimated / guessed
 	'52.0': { a: { from: 2730, to: 2770 - 1, }, b: { from: 0, to: 120, }, }, // estimated / guessed
+	'53.0': { a: { from: 2770, to: 2810 - 1, }, b: { from: 0, to: 120, }, }, // estimated / guessed
+	'54.0': { a: { from: 2810, to: 2840 - 1, }, b: { from: 0, to: 120, }, }, // estimated / guessed
+	'55.0': { a: { from: 2840, to: 2890 - 1, }, b: { from: 0, to: 120, }, }, // estimated / guessed
+	'56.0': { a: { from: 2890, to: 2930 - 1, }, b: { from: 0, to: 120, }, }, // estimated / guessed
 };
 
 const ieFeature = [
@@ -387,12 +391,19 @@ const Generator = exports.Generator = class Generator {
 		this.osAge = parseRange(config.osAge, { from: 0, to: 3, });
 		this.browserAge = parseRange(config.browserAge, { from: -1, to: 12, });
 		this.ieFeatureCount = parseRange(config.ieFeatureCount, { from: 0, to: 3, });
-		this.ieFeature = config.ieFeature_exclude ? ieFeature.filter(f => !f.match(config.ieFeatureExclude)) : ieFeature;
+		this.ieFeature = config.ieFeatureExclude ? ieFeature.filter(({ feature, }) => !feature.match(config.ieFeatureExclude)) : ieFeature;
 		this.dntChance = parseRange(config.dntChance, { from: 1, to: 30, });
-		this.validate();
+		config.noThrow ? this.makeValid() : this.validate();
+	}
+	makeValid() {
+		if (!this.browser_os.length) { this.browser_os = browser_os; }
+		if (!this.cpuCores.length) { this.cpuCores = cpuCores; }
+		if (!this.osArch.length) { this.osArch = osArch; }
+		if (this.ieFeatureCount.to && !this.ieFeature.length) { this.ieFeature = ieFeature; }
 	}
 	validate() {
 		if (!this.browser_os.length) { throw new Error('No possible combinations of operating system and browser type'); }
+		if (!this.cpuCores.length) { throw new Error('No CPU code count allowed'); }
 		if (!this.osArch.length) { throw new Error('No operating system architecture allowed'); }
 		if (this.ieFeatureCount.to && !this.ieFeature.length) { throw new Error('All Internet Explorer features are excluded'); }
 	}
@@ -421,7 +432,6 @@ const Navigator = exports.Navigator = class Navigator {
 		const randA = Math.random();
 		this.dntValue = randA < config.dntChance.from / 100 ? '0' : randA < config.dntChance.to / 100 ? '1' : null;
 		this.cpuCores = chooseWeightedRandom(config.cpuCores).virtual;
-		this.random = rand();
 		this.json = null;
 	}
 	get appName() {
@@ -666,6 +676,7 @@ function chooseWeightedRandom(array) {
 
 function chooseSomeRandom(array, range) {
 	let size = randInRange(range);
+	if (size >= array.length) { return array; }
 	let result = new Set;
 	while (result.size < size) { result.add(chooseWeightedRandom(array)); }
 	return Array.from(result);

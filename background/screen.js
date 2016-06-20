@@ -130,11 +130,21 @@ const Generator = exports.Generator = class Generator {
 			const range = parseRange(config[offset], offset === 'bottom' ? { from: 30, to: 50, } : { from: 0, to: 0, });
 			this[offset] = offsets.filter(({ value, }) => isIn(value, range));
 		});
-		this.validate();
+		config.noThrow ? this.makeValid() : this.validate();
+	}
+	makeValid() {
+		if (!this.resolutions.length) { this.resolutions = resolutions; }
+		if (!this.devicePixelRatios.length) { this.devicePixelRatios = devicePixelRatios; }
+		[ 'top', 'right', 'bottom', 'left' ].forEach(offset => {
+			if (!this[offset]) { this[offset] = offsets[0]; }
+		});
 	}
 	validate() {
 		if (!this.resolutions.length) { throw new Error('The filters don\'t allow any resolutions'); }
 		if (!this.devicePixelRatios.length) { throw new Error('The devicePixelRatio range is invalid'); }
+		[ 'top', 'right', 'bottom', 'left' ].forEach(offset => {
+			if (!this[offset]) { throw new Error('The '+ offset +' offset range is invalid'); }
+		});
 	}
 	screen() {
 		const { width, height, } = chooseWeightedRandom(this.resolutions);
