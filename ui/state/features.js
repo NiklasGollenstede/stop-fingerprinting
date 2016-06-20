@@ -1,13 +1,13 @@
 'use strict'; // license: MPL-2.0
 
 window.featureStates = {
-	stable: `Implemented and seems to work`,
-	implemented: `Implemented and not known to not work`,
-	almost: `Implemented and seems to work, but there is room for improvement`,
-	partial: `Smoe parts of this feature have been implemented`,
-	experimental: `At least partially implemented, but not sufficiently tested at all`,
-	noApi: `This browser doesn't support the API to implement this feature`,
-	missing: `Not implemented at all, but should be added in the future`,
+	stable:        { color: 100, /*hsl(100, 100%, 25%)*/ title: `stable`,       description: `Implemented and seems to work`, },
+	implemented:   { color: 212, /*hsl(212, 100%, 25%)*/ title: `implemented`,  description: `Implemented and not known to not work`, },
+	almost:        { color: 200, /*hsl(195, 100%, 25%)*/ title: `almost`,       description: `Implemented and seems to work, but there is room for improvement`, },
+	partial:       { color:  60, /*hsl( 60, 100%, 25%)*/ title: `partial`,      description: `Smoe parts of this feature have been implemented`, },
+	experimental:  { color:  39, /*hsl( 39, 100%, 25%)*/ title: `experimental`, description: `At least partially implemented, but not sufficiently tested at all`, },
+	noApi:         { color: 270, /*hsl(270, 100%, 25%)*/ title: `API missing`,  description: `This browser doesn't support the API to implement this feature`, },
+	missing:       { color:  10, /*hsl( 10, 100%, 25%)*/ title: `missing`,      description: `Not implemented at all, but should be added in the future`, },
 };
 
 window.features = {
@@ -60,8 +60,8 @@ window.features = {
 				title: `HTTP headers`,
 				description: `Generate and order <i>all</i> HTTP headers according to the current User Agent`,
 				state: {
-					chrome: { partial: `Chrome ignores the order of the header fields`, },
-					firefox: { stable: ``, },
+					chrome: { partial: `Chrome ignores the order of the header fields. Only en-US is supported as Accept.Language`, },
+					firefox: { stable: `Only en-US is supported as Accept.Language`, },
 				},
 			},
 		},
@@ -101,14 +101,14 @@ window.features = {
 				title: `User Agent / window.navigator`,
 				description: `Generate random but realistic User Agents and corresponding window.navigator properties`,
 				state: {
-					all: { almost: `Misconfiguration can lead to bugs without warnings. navigator.language is not implemented`, },
+					all: { almost: `navigator.language is not implemented`, },
 				},
 			},
 			screen: {
 				title: `Screen`,
 				description: `Generate random but realistic window.screen values (which represent the monitor hardware)`,
 				state: {
-					all: { stable: `Misconfiguration can lead to bugs without warnings`, },
+					all: { stable: `window.inner/outerWidth/Height still leak browser layout info`, },
 				},
 			},
 			plugins: {

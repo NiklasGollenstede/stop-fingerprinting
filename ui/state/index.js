@@ -16,10 +16,11 @@ function createRow({ title, description, state, }) {
 	const _note = row.appendChild(document.createElement('td'));
 
 	_description.innerHTML = sanatize(description.replace(new RegExp('('+ title +')|^(?!.*'+ title +')', 'i'), (_, _1) => title.bold() + (_1 ? '' : ': ')));
-	_state.textContent = stateKey;
-	_state.title = featureStates[stateKey];
+	_state.textContent = featureStates[stateKey].title;
+	_state.title = featureStates[stateKey].description;
 	_note.textContent = note;
-	row.className = 'state-'+ stateKey;
+	row.className = 'feature state-'+ stateKey;
+	row.style.backgroundColor = `hsl(${ featureStates[stateKey].color }, 100%, 25%)`;
 	return row;
 }
 
@@ -27,7 +28,7 @@ function createSection({ title, }) {
 	const row = document.createElement('tr');
 	const _title = row.appendChild(document.createElement('td'));
 	_title.textContent = title;
-	row.className = 'title-row';
+	row.className = 'section';
 	return row;
 }
 

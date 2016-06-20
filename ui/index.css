@@ -4,3 +4,29 @@ body {
 	font-size: 15px;
 	margin: 0px 15px;
 }
+
+table {
+	border-spacing: 4px;
+}
+
+tr {
+	height: 52px;
+}
+
+td {
+	padding: 5px 10px;
+}
+
+tr.feature td:not(:nth-child(2)) {
+	background-color: rgba(34, 34, 34, 0.85);
+}
+
+tr.feature td:nth-child(2) {
+	text-align: center;
+}
+
+tr.section td {
+	font-weight: bold;
+	padding: 20px 10px 10px;
+	font-size: 130%;
+}
