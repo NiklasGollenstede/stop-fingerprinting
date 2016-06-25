@@ -2,11 +2,11 @@
 
 const icons = {
 	default: {
-		layers: { background: '', fingerprint: '', stopSign: 'fill: rgba(255, 0, 0, 0.7)', },
+		layers: { background: '', fingerprint: '', stopSign: 'fill: rgba(255, 0, 0, 1)', fingerprintUpper: '', stopText: '', },
 		sizes: [ 16, 18, 32, 38, 48, 64, 128, 256, ],
 	},
 	changed: {
-		layers: { background: '', fingerprint: '', stopSign: 'fill: rgba(255, 80, 0, 0.85)', },
+		layers: { background: '', fingerprint: '', stopSign: 'fill: rgba(255, 80, 0, 1)', fingerprintUpper: '', stopText: '', },
 		sizes: [ 18, 38, 128, ],
 	},
 	error: {

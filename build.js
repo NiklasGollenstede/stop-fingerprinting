@@ -82,7 +82,7 @@ if (args.includes('-x')) {
 
 	(yield execute('node '+ resolve(...'/node_modules/web-ext/bin/web-ext'.split(/\//g)) +' build --source-dir ./tmp --artifacts-dir .'/*, { env: process.env, }*/));
 
-	// (yield remove('./tmp'));
+	(yield remove('./tmp'));
 }
 
 })
