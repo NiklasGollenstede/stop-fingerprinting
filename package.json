@@ -1,15 +1,23 @@
 {
-	"author": "Niklas Gollenstede",
-	"description": "Disables / modifies browser APIs to prevent browser fingerprinting",
 	"name": "stop-fingerprinting",
+	"title": "Stop Fingerprinting",
+	"description": "Disables / modifies browser APIs to prevent browser fingerprinting",
+	"version": "0.2.0",
 	"license": "MPL-2.0",
+	"author": "Niklas Gollenstede",
+
 	"repository" : {
 		"type" : "git",
 		"url" : "git@github.com:NiklasGollenstede/stop-fingerprinting.git"
 	},
-	"title": "Stop Fingerprinting",
+
 	"dependencies": {
+		"fs-extra": "^0.30.0",
 		"es6lib": "NiklasGollenstede/es6lib",
+		"imagemin": "^5.2.1",
+		"imagemin-pngquant": "^5.0.0",
+		"svgexport": "^0.3.2",
+		"web-ext": "1.0.1",
 		"web-ext-utils": "NiklasGollenstede/web-ext-utils"
 	},
 	"devDependencies": {
@@ -19,15 +27,14 @@
 		"express": "^4.13.4",
 		"fingerprintjs2": "^1.4.0",
 		"helmet": "^2.0.0",
-		"imagemin": "^5.2.1",
-		"imagemin-pngquant": "^5.0.0",
-		"serve-favicon": "^2.3.0",
-		"svgexport": "^0.3.2"
+		"serve-favicon": "^2.3.0"
 	},
+
 	"main": "test/server/debug.js",
 	"scripts": {
 		"start": "node test/server/debug.js",
 		"build-icons": "node icons/build",
-		"postinstall": "node icons/build"
+		"build": "node build",
+		"postinstall": "node build"
 	}
 }

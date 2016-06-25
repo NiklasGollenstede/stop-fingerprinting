@@ -1,14 +1,4 @@
-'use strict'; /* globals __dirname, process */ // license: MPL-2.0
-
-const {
-	concurrent: { async, promisify, spawn, },
-	fs: { FS, Path: { resolve, }, },
-	functional: { log, },
-} = require('es6lib');
-
-const relative = (...parts) => resolve(__dirname, ...parts);
-
-const convert = promisify(require('svgexport').render);
+'use strict'; /* globals __dirname, process, module */ // license: MPL-2.0
 
 const icons = {
 	default: {
@@ -61,17 +51,24 @@ const icons = {
 	},
 };
 
+const {
+	concurrent: { async, promisify, spawn, },
+	fs: { FS, Path: { resolve, }, },
+	functional: { log, },
+} = require('es6lib');
+
+const relative = (...parts) => resolve(__dirname, ...parts);
+
+const convert = promisify(require('svgexport').render);
 
 const imagemin = require('imagemin');
 const imageminPngquant = require('imagemin-pngquant');
 
-spawn(function*() {
-	const list = process.argv.length > 2 ? process.argv.slice(2) : Object.keys(icons);
+const build = module.exports = async(function*(names = Object.keys(icons)) {
 
 	const template = relative('template.svg');
-	(yield Promise.all(list.map(writeSvg)));
-
-	console.log('icons created: "'+ list.join('", "') +'"');
+	(yield Promise.all(names.map(writeSvg)));
+	return names;
 
 	function writeSvg(name) {
 		const icon = icons[name];
@@ -86,5 +83,10 @@ spawn(function*() {
 			{ use: [ imageminPngquant(), ], }
 		));
 	}
-}).catch(error => console.error(error));
+});
 
+if (log(process.argv[1]) === __dirname) {
+	build(process.argv.length > 2 ? process.argv.slice(2) : Object.keys(icons))
+	.then(names => console.log('icons created: "'+ names.join('", "') +'"'))
+	.catch(error => { console.error(error); process.exit(-1); });
+}

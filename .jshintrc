@@ -6,6 +6,7 @@
 	"-W054": false, // The Function constructor is a form of eval.
 	"-W058": false, // Missing '()' invoking a constructor.
 	"-W078": false, // Setter is defined without getter.
+	"-W082": false, // Function declarations should not be placed in blocks. (Not a problem in strict mode)
 
 	"curly": true,
 	"newcap": false,

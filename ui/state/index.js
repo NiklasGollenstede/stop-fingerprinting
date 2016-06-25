@@ -18,7 +18,7 @@ function createRow({ title, description, state, }) {
 	_description.innerHTML = sanatize(description.replace(new RegExp('('+ title +')|^(?!.*'+ title +')', 'i'), (_, _1) => title.bold() + (_1 ? '' : ': ')));
 	_state.textContent = featureStates[stateKey].title;
 	_state.title = featureStates[stateKey].description;
-	_note.textContent = note;
+	_note.innerHTML = sanatize(note);
 	row.className = 'feature state-'+ stateKey;
 	row.style.backgroundColor = `hsl(${ featureStates[stateKey].color }, 100%, 25%)`;
 	return row;

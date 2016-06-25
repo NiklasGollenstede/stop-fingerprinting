@@ -13,7 +13,7 @@ const defaults = [
 		name: 'clearCache',
 		title: 'Disable Caching',
 	}, chromium ? { // chrome
-		description: `In Chrome caching can't actually be disabled. The best that is possible (without an command line flag) is to clear the browsing data on every web request`,
+		description: `In Chrome caching can't actually be disabled. The best that is possible (without command line flags) is to clear the browsing data on every web request`,
 		type: 'label',
 		children: [
 			{
