@@ -16,7 +16,7 @@
 	{
 		concurrent: { async, },
 		functional: { log, },
-		object: { MultiMap, },
+		object: { MultiMap, deepFreeze, },
 	}
 ) {
 
@@ -72,18 +72,7 @@ options.children.profiles.whenChange((_, { current: ids, }) => {
 	.then(sortProfiles);
 });
 
-const defaults = {
-	'logLevel': [ 3, ],
-	'hstsDisabled': [ true, ],
-	'navigator.browser': [ applications.current, ],
-	'plugins.hideAll': [ true, ],
-	'devices.hideAll': [ true, ],
-	'screen.width': [  { from: screen.width * 0.8, to: 3840, }, ],
-	'screen.height': [  { from: screen.height * 0.8, to: 2160, }, ],
-	'screen.devicePixelRatio': [ { from: 1, to: window.devicePixelRatio * 1.25, }, ],
-	'screen.offset.bottom': [ { from: 30, to: 50, }, ],
-	'fonts.dispersion': [ 25, ],
-};
+const defaults = Profile.defaultRules;
 
 const realNavigator = NavToJSON.call(window.navigator);
 const realScreen = ScreenGen.keys.reduce((result, key) => ((result[key] = window.screen[key]), result), { });
@@ -330,7 +319,7 @@ DomainProfile.keys = Object.getOwnPropertyNames(DomainProfile.prototype).filter(
 });
 
 
-return {
+return Object.freeze({
 	create({ requestId, url, tabId, }) {
 		const stack = ProfileStack.find(url, tabId);
 		return new TabProfile(stack, requestId);
@@ -358,7 +347,7 @@ return {
 		const profile = tabTemps.get(tabId);
 		return profile && profile.children.id.value;
 	},
-};
+});
 
 };
 

@@ -66,6 +66,10 @@
 		"default_title": "Stop Fingerprinting",
 		"default_popup": "ui/panel/index.html"
 	},
+	"options_ui": {
+		"page": "ui/home/index.html#options",
+		"open_in_tab": true
+	},
 	"web_accessible_resources": [
 	],
 

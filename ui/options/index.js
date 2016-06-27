@@ -6,6 +6,7 @@ const {
 	format: { Guid },
 } = require('es6lib');
 
+const Options = require('web-ext-utils/options');
 const Editor = require('web-ext-utils/options/editor');
 const Tabs = require('web-ext-utils/tabview');
 const Profile = require('common/profile');
@@ -65,6 +66,7 @@ function onProfileCommand({ name, }, value) {
 }
 
 const editors = new Map;
+let defaultProfile;
 
 const tabs = new Tabs({
 	host: document.body,
@@ -92,10 +94,39 @@ const tabs = new Tabs({
 			host: createElement('div'),
 			onCommand,
 		});
+		if (branch === defaultProfile) {
+			editor = createElement('div', { }, [
+				createElement('h2', { innerHTML: (`
+This page lists the default values that are used unless they are overwritten by a profile.
+<br>Some of these values are browser dependant
+				`), }),
+				editor.querySelector('.pref-container:nth-child(4)'),
+			]);
+			Array.prototype.forEach.call(editor.querySelectorAll('.pref-container>h3, .remove-value-entry, .add-value-entry'), e => e.remove());
+			Array.prototype.forEach.call(editor.querySelectorAll('input, select, textarea'), i => i.disabled = true);
+		}
 		editors.set(branch, editor);
 		host.appendChild(editor);
 	},
 });
+
+new Options({
+	defaults: Profile.defaults,
+	prefix: 'default',
+	storage: { get() {
+		const _in = Profile.defaultRules, _out = { };
+		Object.keys(_in).forEach(key => _out['default.rules.'+ key] = _in[key]);
+		return Promise.resolve(_out); }, },
+}).then(_default => tabs.add({
+	id: 'default',
+	title: '<default>',
+	icon: createElement('span', { textContent: '\u2605'/* '★' */, style: {
+			color: `hsl(90, 100%, 70%)`, fontWeight: 'bold',
+			position: 'relative', top: '-7px',
+			transform: 'scale(2)', display: 'block',
+		}, }),
+	data:  { branch: (defaultProfile = _default), },
+}));
 
 options.children.profiles.values.current.forEach(addProfile);
 

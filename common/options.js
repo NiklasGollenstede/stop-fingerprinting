@@ -1,14 +1,17 @@
 'use strict'; define('common/options', [
 	'web-ext-utils/options',
 	'web-ext-utils/chrome',
-	'es6lib/format',
+	'es6lib',
 ], function(
 	Options,
 	{ storage: Storage, applications: { chromium, }, },
-	{ RegExpX, }
+	{
+		format: { RegExpX, },
+		object: { deepFreeze, },
+	}
 ) {
 
-const defaults = [
+const defaults = deepFreeze([
 	Object.assign({
 		name: 'clearCache',
 		title: 'Disable Caching',
@@ -64,11 +67,11 @@ const defaults = [
 		default: 'Add',
 		type: 'control',
 	},
-];
+]);
 
 const listerners = new WeakMap;
 
-return new Options({
+return Object.assign(new Options({
 	defaults,
 	prefix: 'options',
 	storage: Storage.sync || Storage.local,
@@ -82,7 +85,7 @@ return new Options({
 		listerners.delete(listener);
 		Storage.onChanged.removeListener(onChanged);
 	},
-});
+}), { defaults, });
 
 
 });

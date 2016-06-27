@@ -4,9 +4,10 @@
 	'es6lib',
 ], function(
 	Options,
-	{ storage: Storage, },
+	{ storage: Storage, applications, },
 	{
 		format: { RegExpX, },
+		object: { deepFreeze, },
 	}
 ) {
 
@@ -18,7 +19,7 @@ function optional(option) {
 	return Object.assign(option, optionalOption);
 }
 
-const defaults = [
+const defaults = deepFreeze([
 	{
 		name: 'title',
 		title: 'Profile name',
@@ -77,7 +78,7 @@ Sites whose urls entirely match any of the expressions below will be included.
 Regular expressions are quite error prone, so unless you know exactly what you are doing, you should probably use the match patterns.
 </pre>`,
 				maxLength: Infinity,
-				addDefault: String.raw`^(?:https?://www\.domain\.com/.*)$`,
+				addDefault: String.raw`^https?://(?:(?:www\.)?domain\.com)/.*$`,
 				restrict: { isRegExp: true, unique: '.', },
 				type: 'string',
 			},
@@ -391,11 +392,11 @@ You can't configure anything about that yet
 		default: [ 'delete', ],
 		type: 'control',
 	},
-];
+]);
 
 const listerners = new WeakMap;
 
-return id => new Options({
+return deepFreeze(Object.assign(id => new Options({
 	defaults: [ {
 		name: 'id',
 		default: id,
@@ -414,7 +415,39 @@ return id => new Options({
 		listerners.delete(listener);
 		Storage.onChanged.removeListener(onChanged);
 	},
-});
+}), { defaults, defaultRules: {
+	'disabled': [ false, ],
+	'logLevel': [ 3, ],
+	'hstsDisabled': [ true, ],
+	'navigator.disabled': [ false, ],
+	'navigator.browser': [ applications.current, ],
+	'navigator.browserAge': [ { from: -1, to: 12, }, ],
+	// 'navigator.os',
+	// 'navigator.osArch',
+	'navigator.cpuCores': [ { from: 1, to: 32, }, ],
+	'navigator.osAge': [ { from: 0, to: 3, }, ],
+	'navigator.dntChance': [ { from: 30, to: 1, }, ],
+	'navigator.ieFeatureCount': [ { from: 0, to: 3, }, ],
+	'navigator.ieFeatureExclude': [ ],
+	'plugins.hideAll': [ true, ],
+	'devices.hideAll': [ true, ],
+	'keepWindowName': [ false, ],
+	'screen.disabled': [ false, ],
+	'screen.devicePixelRatio': [ { from: 1, to: window.devicePixelRatio * 1.25, }, ],
+	'screen.width': [  { from: screen.width * 0.8, to: 3840, }, ],
+	'screen.height': [  { from: screen.height * 0.8, to: 2160, }, ],
+	'screen.ratio': [ { from: 0, to: 100, }, ],
+	'screen.offset.top': [ { from: 0, to: 0, }, ],
+	'screen.offset.right': [ { from: 0, to: 0, }, ],
+	'screen.offset.bottom': [ { from: 30, to: 50, }, ],
+	'screen.offset.left': [ { from: 0, to: 0, }, ],
+	'fonts.disabled': [ false, ],
+	'fonts.dispersion': [ 25, ],
+	'canvas.disabled': [ false, ],
+	'canvas.randomize': [ true, ],
+}, }));
+
+
 
 
 });

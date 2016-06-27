@@ -1,5 +1,5 @@
 'use strict'; // license: MPL-2.0
-const { Profiles, } = chrome.extension.getBackgroundPage();
+const { Profiles, } = chrome.extension.getBackgroundPage(); // TODO: Firefox private window: Error: Permission denied to access property "Profiles"
 
 const tab = new Promise((resolve, reject) => chrome.tabs.query({
 	currentWindow: true, active: true,
