@@ -56,6 +56,7 @@ const defaults = deepFreeze([
 		description: `Enable some stuff that can definitely be used to compromise your privacy and security but is helpful when debugging`,
 		type: 'bool',
 		default: false,
+		expanded: false,
 	}, {
 		name: 'profiles',
 		maxLength: Infinity,

@@ -27,11 +27,10 @@ const deleteProfile = async(function*(profile) {
 });
 
 const addProfile = async(function*(id) {
-	let created = false;
-	if (!id) {
+	const created = !id;
+	if (created) {
 		id = `{${ Guid() }}`;
 		(yield options.children.profiles.values.splice(Infinity, 0, id));
-		created = true;
 	}
 	const profile = (yield Profile(id));
 	tabs.add({
@@ -71,7 +70,7 @@ let defaultProfile;
 const tabs = new Tabs({
 	host: document.body,
 	content: createElement('div', {style: {
-		padding: '10px',
+		padding: '10px', overflowY: 'scroll',
 	}, }),
 	active: 'options',
 	style: 'horizontal firefox',
@@ -98,12 +97,12 @@ const tabs = new Tabs({
 			editor = createElement('div', { }, [
 				createElement('h2', { innerHTML: (`
 This page lists the default values that are used unless they are overwritten by a profile.
-<br>Some of these values are browser dependant
+<br>Some of these values are browser dependant and may change in future versions of this extension.
 				`), }),
-				editor.querySelector('.pref-container:nth-child(4)'),
+				editor.querySelector('.pref-container.pref-name-rules'),
 			]);
-			Array.prototype.forEach.call(editor.querySelectorAll('.pref-container>h3, .remove-value-entry, .add-value-entry'), e => e.remove());
-			Array.prototype.forEach.call(editor.querySelectorAll('input, select, textarea'), i => i.disabled = true);
+			Array.prototype.forEach.call(editor.querySelectorAll('.remove-value-entry, .add-value-entry'), e => e.remove());
+			Array.prototype.forEach.call(editor.querySelectorAll('input:not(.toggle-switch), select, textarea'), i => i.disabled = true);
 		}
 		editors.set(branch, editor);
 		host.appendChild(editor);

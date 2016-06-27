@@ -26,6 +26,13 @@ const defaults = deepFreeze([
 		default: 'New Profile',
 		type: 'string',
 	}, {
+		name: 'description',
+		title: 'Description',
+		type: 'text',
+		default: '',
+		placeholder: `You can save notes about this profile here`,
+		expanded: false,
+	}, {
 		name: 'priority',
 		title: 'Profile priority',
 		description: `<pre>
@@ -35,11 +42,13 @@ If a value is set in more than one profile, the value of the profile with the hi
 		default: 0,
 		restrict: { from: -Infinity, to: Infinity, },
 		type: 'number',
+		expanded: false,
 	}, {
 		name: 'include',
 		title: 'Include urls',
 		description: 'Decide to with sites this set of rules should apply.',
 		type: 'label',
+		expanded: false,
 		children: [
 			{
 				name: 'pattern',
@@ -121,12 +130,14 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 </pre>`,
 				addDefault: true,
 				type: 'bool',
+				expanded: false,
 			}), {
 				name: 'navigator',
 				title: 'Navigator and Requests',
 				description: `Decide which values the window.navigator and some HTTP-request header fields should have.
 				<br>These values are randomly generated according to the parameters below`,
 				type: 'label',
+				expanded: false,
 				children: [
 					optional({
 						name: 'disabled',
@@ -227,6 +238,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				title: 'Plugins',
 				description: `By default scripts can enumerate the plugins installed on your OS / in your browser`,
 				type: 'label',
+				expanded: false,
 				children: [
 					optional({
 						name: 'hideAll',
@@ -241,6 +253,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				title: 'Media Devices',
 				description: `By default scripts can detect the audio/video input hardware of your computer`,
 				type: 'label',
+				expanded: false,
 				children: [
 					optional({
 						name: 'hideAll',
@@ -256,12 +269,14 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				description: `Unless checked, the window.name property gets reset at every load`,
 				addDefault: true,
 				type: 'bool',
+				expanded: false,
 			}), {
 				name: 'screen',
 				title: 'Screen',
 				description: `Decide which values the window.screen and and window.devicePixelRatio should have.
 				<br>These values are randomly generated according to the parameters below`,
 				type: 'label',
+				expanded: false,
 				children: [
 					optional({
 						name: 'disabled',
@@ -341,6 +356,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				</ul>
 				`,
 				type: 'label',
+				expanded: false,
 				children: [
 					optional({
 						name: 'disabled',
@@ -367,6 +383,7 @@ Websites are able to draw custom images on special &lt;canvas&gt; elements.
 Since different browsers on different operation systems on different hardware draw a little different on different screens, reading these images allows for browser fingerprinting
 </pre>`,
 				type: 'label',
+				expanded: false,
 				children: [
 					optional({
 						name: 'disabled',
