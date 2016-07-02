@@ -7,8 +7,8 @@
 	"author": "Niklas Gollenstede",
 
 	"repository" : {
-		"type" : "git",
-		"url" : "git@github.com:NiklasGollenstede/stop-fingerprinting.git"
+		"type": "git",
+		"url": "git@github.com:NiklasGollenstede/stop-fingerprinting.git"
 	},
 
 	"dependencies": {
@@ -16,6 +16,7 @@
 		"es6lib": "NiklasGollenstede/es6lib",
 		"imagemin": "^5.2.1",
 		"imagemin-pngquant": "^5.0.0",
+		"request-promise": "^3.0.0",
 		"svgexport": "^0.3.2",
 		"web-ext": "1.0.1",
 		"web-ext-utils": "NiklasGollenstede/web-ext-utils"

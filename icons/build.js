@@ -1,4 +1,4 @@
-'use strict'; /* globals __dirname, process, module */ // license: MPL-2.0
+'use strict'; /* globals __dirname, __filename, process, module */ // license: MPL-2.0
 
 const icons = {
 	default: {
@@ -85,7 +85,7 @@ const build = module.exports = async(function*(names = Object.keys(icons)) {
 	}
 });
 
-if (log(process.argv[1]) === __dirname) {
+if (process.argv[1] === __filename) {
 	build(process.argv.length > 2 ? process.argv.slice(2) : Object.keys(icons))
 	.then(names => console.log('icons created: "'+ names.join('", "') +'"'))
 	.catch(error => { console.error(error); process.exit(-1); });

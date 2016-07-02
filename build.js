@@ -41,21 +41,31 @@ const include = {
 	},
 };
 
-const args = process.argv.length > 2 ? process.argv.slice(2) : [ '-x', '-i', ];
+const args = process.argv.length > 2 ? process.argv.slice(2) : [ '-x', '-z', '-i', '-t', ];
 
 const {
-	concurrent: { spawn, promisify, },
+	concurrent: { async, spawn, promisify, },
 	functional: { log, },
 	fs: { FS, },
 	process: { execute, },
 } = require('es6lib');
 
+const buildIcons = async(function*(...args) {
+	const iconNames = (yield require('./icons/build')(...args));
+	console.log('created icons: "'+ iconNames.join('", "') +'"');
+});
+
+const buildTldJS = async(function*(...args) {
+	(yield require('./background/tld/build.js')(...args));
+	console.log('background/tld/index.js created');
+});
+
 spawn(function*() {
 
-if (args.includes('-i')) { // build icons
-	const iconNames = (yield require('./icons/build')());
-	console.log('created icons: "'+ iconNames.join('", "') +'"');
-}
+(yield Promise.all([
+	args.includes('-i') && buildIcons(),
+	args.includes('-t') && buildTldJS(),
+]));
 
 const [ _package, _manifest, ] = (yield Promise.all([ FS.readFile('package.json', 'utf8'), FS.readFile('manifest.json', 'utf8'), ])).map(JSON.parse);
 [ 'title', 'version', 'author', ]

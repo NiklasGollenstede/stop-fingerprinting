@@ -2,3 +2,4 @@
 node_modules
 icons/*/*.png
 npm-debug.log
+background/tld/index.js
