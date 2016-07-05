@@ -18,7 +18,7 @@ const logLevels = {
 };
 
 function notify(method, { title, message = '', url, domain, tabId, tabTitle, logLevel, }) {
-	if (logLevel && logLevel > (logLevels[method] || 2)) { return console.log('skipping message', logLevel, method, arguments[1]); }
+	if (logLevel && logLevel > (logLevels[method] || 2)) { return /*console.log('skipping message', logLevel, method, arguments[1])*/; }
 
 	Notifications.create({
 		type: 'list',

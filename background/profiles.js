@@ -86,6 +86,7 @@ const DomainPattern = Object.assign(class DomainPattern {
 			title: `Invalid domain name`,
 			message: `The domain "${ original }"${ original !== escaped ? '('+ escaped +')' : '' } does not end with a valid TLD`,
 		});
+		// TODO: singl-word esearches from the url bar are also sent here
 	}
 }, {
 	Single: function(domain) {
@@ -358,7 +359,7 @@ DomainProfile.keys = Object.getOwnPropertyNames(DomainProfile.prototype).filter(
 	Object.defineProperty(DomainProfile.prototype, key, { get() {
 		const value = getter.call(this);
 		Object.defineProperty(this, key, { value, configurable: true, });
-		console.log('DomainProfile.'+ key, this.tab.tabId, this.tab.requestId, this.domain, value);
+		// console.log('DomainProfile.'+ key, this.tab.tabId, this.tab.requestId, this.domain, value);
 		return value;
 	}, });
 	return true;

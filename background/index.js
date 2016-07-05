@@ -5,28 +5,65 @@ Messages.isExclusiveMessageHandler = true;
 
 const { notify, domainFromUrl, } = require('common/utils');
 const { debounce, } = require('es6lib/functional');
+const RequestListener = require('background/request');
+const { ignore, reset, } = RequestListener;
 
 require('common/options').then(options => {
 window.options = options;
 
 const Profiles = window.Profiles = require('background/profiles')(options);
 
-chrome.webRequest.onHeadersReceived.addListener(modifyResponseHeaders, { urls: [ '*://*/*', ], }, [ 'blocking', 'responseHeaders', ]);
-function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }) {
-	const domain = domainFromUrl(url);
-	const profile = Profiles.get({ requestId, tabId, domain, }).getDomain(domain);
-	if (profile.disabled) { return; }
+new RequestListener(class {
+	constructor({ requestId, url, tabId, type, }) {
+		this.requestId = requestId; this.url = url; this.type = type, this.tabId = tabId;
+		const domain = this.domain = domainFromUrl(url);
+		const profile = this.profile = (type === 'main_frame' ? Profiles.create({ requestId, domain, tabId, }) : Profiles.get({ tabId, domain, })).getDomain(domain);
+		if (profile.disabled) { this.destroy(); throw ignore; }
+		console.log('request start', this.requestId);
+	}
+	destroy() {
+		console.log('request end', this.requestId);
+	}
 
-	let changed = false;
-	(type === 'main_frame' || type === 'sub_frame') && responseHeaders.forEach(header => {
-		if ((/^(?:Content-Security-Policy)$/i).test(header.name) && header.value) { return injectCSP(header); }
-	});
-	profile.hstsDisabled && responseHeaders.forEach(header => {
-		if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return removeHSTS(header); }
-	});
-	return changed ? { responseHeaders, } : { };
+	objectifyHeaders(headers, which) {
+		const out = { }; headers.forEach((header, index) => {
+			if (which && !which.includes(header.name)) { return; }
+			out[header.name] = header; // may overwrite existing
+			delete headers[index];
+		});
+		return out;
+	}
 
-	function injectCSP(header) {
+	orderHeaders(headers, remaining, order) {
+		const ordered = [ ];
+		order.forEach(name => headers[name] && ordered.push(headers[name]));
+		ordered.push(...remaining.filter(x => x && x.name !== 'X-Client-Data')); // append any custom headers
+		// NOTE: chrome ignores the order, 'Cache-Control' and 'Connection', firefox follows it and appends any additional headers (e.g.'If-...') at the end
+		return ordered;
+	}
+
+	setUserAgent(headers, type) {
+		const { navigator, } = this.profile;
+		headers['User-Agent'].value = navigator.userAgent;
+		navigator.accept[type] && (headers['Accept'] = { name: 'Accept', value: navigator.accept[type], });
+		navigator.acceptLanguage['en-US'] && (headers['Accept-Language'] = { name: 'Accept-Language', value: navigator.acceptLanguage['en-US'], });
+		navigator.acceptEncoding && (headers['Accept-Encoding'] = { name: 'Accept-Encoding', value: navigator.acceptEncoding, });
+	}
+
+	setDNT(headers) {
+		const { navigator, } = this.profile;
+		const DNT = navigator.doNotTrack;
+		if (DNT === '1' || DNT === '0') { headers['DNT'] = { name: 'DNT', value: DNT, }; }
+		else { delete headers.DNT; }
+	}
+
+	setCachControl(headers) {
+		headers['Cache-Control'] = { name: 'Cache-Control', value: 'max-age=0', };
+		headers['Connection'] = { name: 'Connection', value: 'keep-alive', };
+	}
+
+	injectCSP(header) {
+		let changed = false;
 		// modify CSPs to allow script injection
 		// reference: https://www.w3.org/TR/CSP/
 		// even though frame-src is deprecated, it will probably not be removed for a long time, and it provides a convenient way to allow 'blob:' only in workers
@@ -53,9 +90,9 @@ function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }
 			}
 		}
 
-		inject(scriptSrc, "'unsafe-eval'") && (profile.misc.disableEval = true);
-		inject(scriptSrc, `'nonce-${ profile.nonce }'`, $=>$ === "'unsafe-inline'");
-		inject(childSrc, 'blob:') && (profile.misc.disableChildBlobUrl = true);
+		inject(scriptSrc, "'unsafe-eval'") && (this.profile.misc.disableEval = true);
+		inject(scriptSrc, `'nonce-${ this.profile.nonce }'`, $=>$ === "'unsafe-inline'");
+		inject(childSrc, 'blob:') && (this.profile.misc.disableChildBlobUrl = true);
 
 		if (!changed) { return; }
 		header.value
@@ -65,70 +102,59 @@ function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }
 		+ 'frame-src '+ frameSrc.join(' ') +'; '
 		+ others.join('; ');
 		console.log('build CSP\n', header.value);
+		return true;
 	}
 
-	function removeHSTS(header) {
-		changed = true;
+	removeHSTS(header) {
 		header.value = header.value.replace(/max-age=\d+/gi, () => 'max-age=0');
-		console.log('HSTS header removed', domain, header);
+		console.log('HSTS header removed', this.domain, header);
+		return true;
 	}
-}
 
-const allMainFrames = { urls: [ '<all_urls>', ], types: [ 'main_frame', ], };
-chrome.webRequest.onHeadersReceived  .addListener(commitProfile,  allMainFrames); // this may be to early, but onResponseStarted is to late
-chrome.webRequest.onAuthRequired // only chrome
-&& chrome.webRequest.onAuthRequired  .addListener(discardProfile, allMainFrames);
-chrome.webRequest.onBeforeRedirect   .addListener(discardProfile, allMainFrames);
-chrome.webRequest.onErrorOccurred    .addListener(discardProfile, allMainFrames);
-function commitProfile({ requestId, url, tabId, }) {
-	const profile = Profiles.get({ requestId, });
-	const domain = domainFromUrl(url);
-	profile && profile.commit({ tabId, domain, });
-}
-function discardProfile({ requestId, url, tabId, }) {
-	const profile = Profiles.get({ requestId, });
-	profile && profile.destroy();
-}
+	// TODO: (only?) firefox: this is not called for the favicon
+	onBeforeSendHeaders({ requestId, url, tabId, type, requestHeaders, }) {
+		if (!this.profile.navigator) { return; }
 
-// TODO: (only?) firefox: this is not called for the favicon
-chrome.webRequest.onBeforeSendHeaders.addListener(modifyRequestHeaders, { urls: [ '<all_urls>', ], }, [ 'blocking', 'requestHeaders', ]);
-function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) {
-	const domain = domainFromUrl(url);
-	const profile = (type === 'main_frame' ? Profiles.create({ requestId, domain, tabId, }) : Profiles.get({ tabId, domain, })).getDomain(domain);
-	if (profile.disabled || !profile.navigator) { return; }
+		const order = this.profile.navigator.headerOrder;
+		const headers = this.objectifyHeaders(requestHeaders, order);
 
-	const { navigator, navigator: { headerOrder: order, }, } = profile;
-	const headers = { }; requestHeaders.forEach((header, index) => {
-		if (!order.includes(header.name)) { return; }
-		headers[header.name] = header; // may overwrite existing
-		delete requestHeaders[index];
-	});
+		this.setUserAgent(headers, type);
+		this.setDNT(headers);
+		this.setCachControl(headers);
 
-	// replace User-Agent
-	headers['User-Agent'].value = navigator.userAgent;
-	navigator.accept[type] && (headers['Accept'] = { name: 'Accept', value: navigator.accept[type], });
-	navigator.acceptLanguage['en-US'] && (headers['Accept-Language'] = { name: 'Accept-Language', value: navigator.acceptLanguage['en-US'], });
-	navigator.acceptEncoding && (headers['Accept-Encoding'] = { name: 'Accept-Encoding', value: navigator.acceptEncoding, });
+		// console.log('request', type, url, ordered);
+		return { requestHeaders: this.orderHeaders(headers, requestHeaders, order), };
+	}
 
-	// set DNT
-	const DNT = navigator.doNotTrack;
-	if (DNT === '1' || DNT === '0') { headers['DNT'] = { name: 'DNT', value: DNT, }; }
-	else { delete headers.DNT; }
+	onHeadersReceived({ requestId, url, tabId, type, responseHeaders, }) { // was only [ '*://*/*', ]
+		let changed = false;
+		changed |= (type === 'main_frame' || type === 'sub_frame') && responseHeaders.some(header => {
+			if ((/^(?:Content-Security-Policy)$/i).test(header.name) && header.value) { return this.injectCSP(header); }
+		});
+		changed |= this.profile.hstsDisabled && responseHeaders.some(header => {
+			if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return this.removeHSTS(header); }
+		});
 
-	headers['Cache-Control'] = { name: 'Cache-Control', value: 'max-age=0', };
-	headers['Connection'] = { name: 'Connection', value: 'keep-alive', };
+		type === 'main_frame' && this.profile.tab.commit({ tabId, domain: this.domain, });
 
-	// ordered output
-	const ordered = [ ];
-	order.forEach(name => headers[name] && ordered.push(headers[name]));
-	ordered.push(...requestHeaders.filter(x => x && x.name !== 'X-Client-Data')); // append any custom headers
-	// NOTE: chrome ignores the order, 'Cache-Control' and 'Connection', firefox follows it and appends any additional headers (e.g.'If-...') at the end
+		if (changed) { return { responseHeaders, }; }
+	}
 
-	// console.log('request', type, url, ordered);
+	onAuthRequired({ type, }) {
+		if (type === 'main_frame') { this.profile.tab.destroy(); throw reset; }
+	}
+	onBeforeRedirect({ type, }) {
+		if (type === 'main_frame') { this.profile.tab.destroy(); throw reset; }
+	}
+	onErrorOccurred({ type, }) {
+		if (type === 'main_frame') { this.profile.tab.destroy(); }
+	}
+}, { urls: [ '<all_urls>', ], }, {
+	onBeforeSendHeaders: [ 'blocking', 'requestHeaders', ],
+	onHeadersReceived: [ 'blocking', 'responseHeaders', ],
+});
 
-	return { requestHeaders: ordered, };
-}
-
+// clear cache on requests
 let clearCacheWhat = null, clearCacheWhere = null;
 const clearCache = (() => {
 	return debounce(() => { // works
