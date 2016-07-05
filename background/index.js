@@ -4,6 +4,7 @@ const { Tabs, Messages, } = require('web-ext-utils/chrome');
 Messages.isExclusiveMessageHandler = true;
 
 const { notify, domainFromUrl, } = require('common/utils');
+const { debounce, } = require('es6lib/functional');
 
 require('common/options').then(options => {
 window.options = options;
@@ -13,7 +14,7 @@ const Profiles = window.Profiles = require('background/profiles')(options);
 chrome.webRequest.onHeadersReceived.addListener(modifyResponseHeaders, { urls: [ '*://*/*', ], }, [ 'blocking', 'responseHeaders', ]);
 function modifyResponseHeaders({ requestId, url, tabId, type, responseHeaders, }) {
 	const domain = domainFromUrl(url);
-	const profile = Profiles.get({ requestId, tabId, url, }).getDomain(domain);
+	const profile = Profiles.get({ requestId, tabId, domain, }).getDomain(domain);
 	if (profile.disabled) { return; }
 
 	let changed = false;
@@ -81,7 +82,8 @@ chrome.webRequest.onBeforeRedirect   .addListener(discardProfile, allMainFrames)
 chrome.webRequest.onErrorOccurred    .addListener(discardProfile, allMainFrames);
 function commitProfile({ requestId, url, tabId, }) {
 	const profile = Profiles.get({ requestId, });
-	profile && profile.commit({ tabId, url, });
+	const domain = domainFromUrl(url);
+	profile && profile.commit({ tabId, domain, });
 }
 function discardProfile({ requestId, url, tabId, }) {
 	const profile = Profiles.get({ requestId, });
@@ -90,10 +92,9 @@ function discardProfile({ requestId, url, tabId, }) {
 
 // TODO: (only?) firefox: this is not called for the favicon
 chrome.webRequest.onBeforeSendHeaders.addListener(modifyRequestHeaders, { urls: [ '<all_urls>', ], }, [ 'blocking', 'requestHeaders', ]);
-
 function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) {
 	const domain = domainFromUrl(url);
-	const profile = (type === 'main_frame' ? Profiles.create({ requestId, url, tabId, }) : Profiles.get({ tabId, url, })).getDomain(domain);
+	const profile = (type === 'main_frame' ? Profiles.create({ requestId, domain, tabId, }) : Profiles.get({ tabId, domain, })).getDomain(domain);
 	if (profile.disabled || !profile.navigator) { return; }
 
 	const { navigator, navigator: { headerOrder: order, }, } = profile;
@@ -123,13 +124,17 @@ function modifyRequestHeaders({ requestId, url, tabId, type, requestHeaders, }) 
 	ordered.push(...requestHeaders.filter(x => x && x.name !== 'X-Client-Data')); // append any custom headers
 	// NOTE: chrome ignores the order, 'Cache-Control' and 'Connection', firefox follows it and appends any additional headers (e.g.'If-...') at the end
 
-	console.log('request', type, url, ordered);
+	// console.log('request', type, url, ordered);
 
 	return { requestHeaders: ordered, };
 }
 
 let clearCacheWhat = null, clearCacheWhere = null;
 const clearCache = (() => {
+	return debounce(() => { // works
+		chrome.browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat);
+	}, 3000);
+
 	const interval = 3000; let queued = false, last = 0;
 	const clearCache = () => chrome.browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat, () => {
 		// console.log('cleared cache', clearCacheWhere, clearCacheWhat);
@@ -137,7 +142,7 @@ const clearCache = (() => {
 	});
 
 	return function() {
-		if (queued) { return; } queued = true;
+		if (queued) { return; } queued = true; // for some reason 'queued' is true before this function was ever called
 		setTimeout(clearCache, last + interval - Date.now());
 	};
 })();
@@ -159,15 +164,23 @@ options.children.clearCache.children.where.when({
 Messages.addHandler('getOptionsForUrl', function(url) {
 	const tabId = this.tab.id;
 	const domain = domainFromUrl(url);
-	const profile = Profiles.get({ tabId, url, }).getDomain(domain);
+	const profile = Profiles.get({ tabId, domain, }).getDomain(domain);
 	console.log('getOptionsForUrl', url, domain, profile);
 	return { options: JSON.stringify(profile), nonce: profile.nonce, };
 });
 
 Messages.addHandler('notify', function(method, { title, message, url, }) {
 	const { id: tabId, title: tabTitle, } = this.tab;
-	const logLevel = Profiles.findStack(url).get('logLevel');
+	const domain = domainFromUrl(url);
+	const logLevel = Profiles.findStack(domain).get('logLevel');
 	notify(method, { title, message, url, tabId, tabTitle, logLevel, });
+});
+
+// set the correct browserAction icon
+chrome.tabs.onUpdated.addListener(function(tabId, info) {
+	if (!('status' in info)) { return; }
+	const path = chrome.extension.getURL('icons/'+ (Profiles.getTemp(tabId) == null ? 'default' : 'changed') +'/');
+	chrome.browserAction.setIcon({ tabId, path: { 19: path +'19.png', 38: path +'38.png', }});
 });
 
 });

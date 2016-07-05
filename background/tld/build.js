@@ -6,86 +6,38 @@ const {
 	functional: { log, },
 } = require('es6lib');
 const _ = String.raw;
-
-// uses a regular expression to find the TLD suffix
-const forward = (tree, name) => {
-	function stringify(node) {
-		const strings = [ ];
-		if (node.$glob) {
-			if (node.$glob.length) {
-				strings.push(_`(?:\.(?!`+ node.$glob.join(_`|`) +_`)[^.]+|)`);
-			} else {
-				strings.push(_`[^.]+`);
-			}
-		} else {
-			const keys = Object.keys(node);
-			if (keys.length > 1 || !node.$end) {
-				strings.push(_`(?:`+ keys.filter(key => key !== '$end').map(key => stringify(node[key]) +_`\.`+ key).join(_`|`) +(node.$end ? _`|` : _``) +_`)`);
-			}
-		}
-		return strings.join('');
-	}
-	const regExp = _`(`+ stringify(tree) +_`)$`;
-	// console.log('regExp', regExp);
-	return (_`// generated file
-define('${ name }', function() { 'use strict'; // license: MPL-2.0
-	const regExp = (/${ regExp }/);
-	return `+ function getTld(domain) {
-		const match = regExp.exec(domain);
-		return match && match[1];
-	} +`;
+const nameprep = string => new URL('http://'+ string).host;
+const clone = (_node => {
+	if (_node === 1) { return 1; }
+	const node = { $: _node.$, };
+	_node._ && (node._ = _node._.map(nameprep));
+	Object.keys(_node).forEach(key => key !== '$' && key !== '_' && (node[nameprep(key)] = clone(_node[key])));
+	return node;
 });
-`	);
-};
 
-// reverts the input, uses a regular expression to find the reverted prefix and reverts the result. Is ~ 10 times faster than the forward approach
-const reverse = (tree, name) => {
-	function reverse(string) { return Array.from(string).reverse().join(''); }
-	function stringify(node) {
-		const strings = [ ];
-		if (node.$glob) {
-			if (node.$glob.length) {
-				strings.push(_`(?:(?!`+ node.$glob.map(reverse).join(_`|`) +_`)[^.]+\.|)`);
-			} else {
-				strings.push(_`[^.]+`);
-			}
-		} else {
-			const keys = Object.keys(node);
-			if (keys.length > 1 || !node.$end) {
-				strings.push(_`(?:`+ keys.filter(key => key !== '$end').map(key => reverse(key) +_`\.`+ stringify(node[key])).join(_`|`) +(node.$end ? _`|` : _``) +_`)`);
-			}
-		}
-		return strings.join('');
-	}
-	const regExp = _`^(`+ stringify(tree) +_`)`;
-	// console.log('regExp', regExp);
-	return (_`// generated file
-define('${ name }', function() { 'use strict'; // license: MPL-2.0
-	const regExp = (/${ regExp }/);
-	const reverse = (${ reverse });
-	return `+ function getTld(domain) {
-		domain = reverse(domain);
-		const match = regExp.exec(domain);
-		return match && reverse(match[1]);
-	} +`;
-});
-`	);
-};
-
-// directly traverses the tree object. Is ~ 100 times faster than the forward RegExp approach
 const object = (tree, name) => (_`// generated file
 define('${ name }', function() { 'use strict'; // license: MPL-2.0
-	const tree = (${ JSON.stringify(tree).replace(/({|,)"([\$a-z]\w*)":/g, '$1$2:') });
+	const _tree = (`+
+		JSON.stringify(tree)
+		.replace(/({|,)"([\$a-z\_]\w*)":/g, '$1$2:') // remove quotes around simple keys
+		.replace(/\{\$\:1\}/g, 1) // replace leaf-objects with 1
+	+_`);
+	const nameprep = (${ nameprep });
+	const clone = (${ clone });
+	const tree = clone(_tree);
+	window.tldTree = tree; // TODO: remove
 	return `+ function getTld(domain) {
 		const parts = domain.split('.');
 		let node = tree, tld = '';
 		while (1) {
 			const part = parts.pop();
+			if (node === 1) { break; }
+			if (!parts.length && node.$) { break; } // leave the last part (e.g: 'com.de' is a valid domain under the TLD '.de', but also a TLD itself)
 			if (
 				node[part]
-				|| node.$glob && !node.$glob.includes(part)
+				|| node._ && !node._.includes(part)
 			) { tld = '.'+ part + tld; node = node[part]; continue; }
-			if (node.$end) { break; }
+			if (node.$) { break; }
 			return null;
 		}
 		return tld;
@@ -102,10 +54,10 @@ const build = module.exports = async(function*(moduleName = 'background/tld', fi
 		add(parts, tree);
 	});
 	function add(parts, node) {
-		if (!parts.length) { node.$end = true; return; }
+		if (!parts.length) { node.$ = 1; return; }
 		const key = parts.pop();
-		if (key === '*') { node.$glob || (node.$glob = [ ]); return; }
-		if ((/^!/).test(key)) { (node.$glob || (node.$glob = [ ])).push(key.slice(1)); return; }
+		if (key === '*') { node._ || (node._ = [ ]); return; }
+		if ((/^!/).test(key)) { (node._ || (node._ = [ ])).push(key.slice(1)); return; }
 		add(parts, node[key] || (node[key] = { }));
 	}
 	// console.log('tld tree', tree);

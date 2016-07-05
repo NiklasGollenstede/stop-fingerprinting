@@ -1,6 +1,7 @@
-'use strict'; define('background/profiles', [ // license: MPL-2.0
+define('background/profiles', [ // license: MPL-2.0
 	'background/ua',
 	'background/screen',
+	'background/tld',
 	'common/profile',
 	'common/utils',
 	'web-ext-utils/chrome',
@@ -9,8 +10,9 @@
 ], function(
 	{ Generator: NavGen, Navigator: { prototype: { toJSON: NavToJSON, }, }, },
 	{ Generator: ScreenGen, },
+	getTLD,
 	Profile,
-	{ notify, },
+	{ notify, nameprep, },
 	{ applications, Tabs, },
 	{ matchPatternToRegExp, },
 	{
@@ -24,13 +26,17 @@ const missing = Symbol('missing argument');
 
 return function(options) {
 
+const defaultValues     = Profile.defaultRules;
+const ruleStructure     = Profile.defaults.find(_=>_.name === 'rules').children;
 const profiles          = new Map;            // profileId         ==>  Profile
-const profileIncludes   = new WeakMap;        // Profile(id)       ==>  { all: [RegExp], }
+let   profileIncludes   = new WeakMap;        // Profile(id)       ==>  [DomainPattern]
 const profileStacks     = new Map;            // [id].join($)      ==>  ProfileStack
 const profileInStack    = new MultiMap;       // Profile(id)       ==>  ProfileStack
 let   sortedProfiles    = [ ];                // [Profile(id)] sorted by .priority
 const uncommittetTabs   = new Map;            // requestId         ==>  TabProfile
 const tabTemps          = new Map;            // tabId             ==>  Profile
+let   equivalentDomains = [ ];                // [DomainPattern] sorted by apperance
+const domainPartCache   = { };                // domain            ==>  { sub, host, tld, }
 
 window.profiles = profiles;
 
@@ -38,11 +44,7 @@ const addProfile = async(function*(id) {
 	const profile = (yield Profile(id));
 	profiles.set(id, profile);
 
-	const include = { pattern: [ ], regExp: [ ], all: [ ], };
-	profileIncludes.set(profile, include);
-	profile.children.include.children.regExp.whenChange((_, { current: values, }) => include.all = include.pattern.concat(include.regExp = values.map(s => new RegExp(s))));
-	profile.children.include.children.pattern.whenChange((_, { current: values, }) => include.all = include.regExp.concat(include.pattern = values.map(matchPatternToRegExp)));
-
+	profile.children.include.children.domain.onChange(() => profileIncludes.delete(profile));
 	profile.children.priority.onChange(sortProfiles);
 
 	console.log('added profile', profile);
@@ -62,21 +64,84 @@ function removeProfile(id) {
 
 function sortProfiles() {
 	sortedProfiles = Array.from(profiles.values()).sort((a, b) => a.children.priority.value - b.children.priority.value);
-
-	console.log('sorted profiles', sortedProfiles);
 }
 
-options.children.profiles.whenChange((_, { current: ids, }) => {
-	profiles.forEach((_, old) => !ids.includes(old) && removeProfile(old));
-	Promise.all(ids.map(id => !profiles.has(id) && addProfile(id)))
-	.then(sortProfiles);
+const DomainPattern = Object.assign(class DomainPattern {
+	constructor(pattern) {
+		this.pattern = pattern;
+		this.children = pattern.split(/\s*\|\s*/g).map(string => { switch (string.lastIndexOf('*')) {
+			case -1: return new DomainPattern.Single(string);
+			case  0: return new DomainPattern.AnySub(string);
+			default: return new DomainPattern.Pattern(string);
+		} });
+		return this.children.length === 1 ? this.children[0] : this;
+	}
+
+	includes(domain) {
+		return this.children.every(child => child.includes(domain));
+	}
+
+	static tldError(original, escaped = original) {
+		notify.error({
+			title: `Invalid domain name`,
+			message: `The domain "${ original }"${ original !== escaped ? '('+ escaped +')' : '' } does not end with a valid TLD`,
+		});
+	}
+}, {
+	Single: function(domain) {
+		this.pattern = domain;
+		domain = nameprep(domain);
+		this.includes = s => s === domain;
+	},
+	AnySub: function(domain) {
+		this.pattern = domain;
+		domain = nameprep(domain);
+		const suffix = domain.slice(2), length = suffix.length;
+		this.includes = s => s.length >= length && s.endsWith(suffix) && (s.length === length || s[s.length - length - 1] === '.');
+	},
+	Pattern: function(domain) {
+		this.pattern = domain;
+		domain = nameprep(domain);
+		const anyTld = (/\.\*$/).test(domain);
+		const tld = anyTld || getTLD(domain) || '';
+		if (!tld) { DomainPattern.tldError(this.pattern, domain); }
+		domain = domain.slice(0, anyTld ? -2 : -tld.length);
+		const host = (/[^.]*$/).exec(domain)[0];
+		const anyHost = host === '*';
+		const sub = domain.slice(0, -host.length);
+		const anySub = sub === '*.';
+		const any = anySub && anyHost && anyTld;
+
+		this.includes = any ? () => true : _domain => {
+			const obj = domainPartCache[_domain] || (domainPartCache[_domain] = (() => {
+				let domain = _domain;
+				const tld = getTLD(domain) || '';
+				if (!tld) { DomainPattern.tldError(domain); }
+				domain = domain.slice(0, -tld.length);
+				const host = (/[^.]*$/).exec(domain)[0];
+				const sub = domain.slice(0, -host.length);
+				return { sub, host, tld, };
+			})());
+			return (
+				(anyTld || tld === obj.tld)
+				&& (anyHost || host === obj.host)
+				&& (anySub || sub === obj.sub)
+			);
+		};
+		window.includes = this.includes; // XXX
+	},
 });
 
-const defaults = Profile.defaultRules;
-
-const realNavigator = NavToJSON.call(window.navigator);
-const realScreen = ScreenGen.keys.reduce((result, key) => ((result[key] = window.screen[key]), result), { });
-realScreen.devicePixelRatio = window.devicePixelRatio;
+function getIncludes(profile) {
+	let includes = profileIncludes.get(profile);
+	if (includes) { return includes; }
+	includes = profile.children.include.children.domain.values.current.map(domain => {
+		const preped = nameprep(domain);
+		return equivalentDomains.find(_=>_.includes(preped)) || new DomainPattern.Single(domain);
+	});
+	profileIncludes.set(profile, includes);
+	return includes;
+}
 
 class ProfileStack {
 	constructor(settings) {
@@ -86,7 +151,7 @@ class ProfileStack {
 		this.profiles = settings;
 		this.rules = settings.map(s => s.children.rules.children);
 		this.destroy = this.destroy.bind(this);
-		this.rules.forEach(rule => rule.parent.onAnyChange((value, { parent: { path, }, }) => this.clearCache(path.replace(/^\.?rules\./, ''))));
+		this.rules.forEach(rule => rule.parent.onAnyChange((value, { parent: { path, }, }) => this.clear(path.replace(/^\.?rules\./, ''))));
 		profileStacks.set(this.key, this);
 		settings.forEach(s => profileInStack.add(s, this));
 		this.cache = new Map;
@@ -96,75 +161,62 @@ class ProfileStack {
 	}
 
 	get navGen() {
-		const value = this.get('navigator.disabled')
-		? { generate() { return realNavigator; }, }
-		: new NavGen({
-			browser: this.getAll('navigator.browser'),
-			os: this.getAll('navigator.os'),
-			osArch: this.getAll('navigator.osArch'),
-			cpuCores: this.get('navigator.cpuCores'),
-			osAge: this.get('navigator.osAge'),
-			browserAge: this.get('navigator.browserAge'),
-			ieFeatureCount: this.get('navigator.ieFeatureCount'),
-			ieFeatureExclude: this.get('navigator.ieFeatureExclude'),
-			dntChance: this.get('navigator.dntChance'),
-			noThrow: true,
-		});
+		const options = this.get('navigator');
+		const value = !options
+		? { generate() { return null; }, }
+		: new NavGen(options);
 		console.log('created navGen', value);
 		Object.defineProperty(this, 'navGen', { value, configurable: true, });
 		return value;
 	}
 
 	getNavigator() {
-		if (this.get('navigator.disabled')) { return null; }
 		return this.navGen.generate();
 	}
 
 	get screenGen() {
-		const value = this.get('screen.disabled')
-		? { generate() { return realScreen; }, }
-		: new ScreenGen({
-			ratio: this.get('screen.ratio'),
-			width: this.get('screen.width'),
-			height: this.get('screen.height'),
-			devicePixelRatio: this.get('screen.devicePixelRatio'),
-			top: this.get('screen.offset.top'),
-			right: this.get('screen.offset.right'),
-			bottom: this.get('screen.offset.bottom'),
-			left: this.get('screen.offset.left'),
-		});
+		const options = this.get('screen');
+		const value = !options
+		? { generate() { return null; }, }
+		: new ScreenGen(options); // TODO: offsets are passed in as an extra object but are expected as inline properties
 		console.log('created screenGen', value);
 		Object.defineProperty(this, 'screenGen', { value, configurable: true, });
 		return value;
 	}
 
 	getScreen() {
-		if (this.get('screen.disabled')) { return null; }
 		return this.screenGen.generate();
 	}
 
-	clearCache(key) {
-		console.log('ProfileStack.clearCache', key);
+	clear(key) {
+		key = (/^[^\.]*/).exec(key)[0];
+		console.log('ProfileStack.clear', key);
 		key.startsWith('navigator') && (delete this.navGen);
 		key.startsWith('screen') && (delete this.screenGen);
 		this.cache.delete(key);
 	}
 
 	get(key) {
-		const values = this.getAll(key);
-		return values && values[0];
-	}
+		if ((/\./).test(key)) { debugger; } // XXX: remove
 
-	getAll(key) {
 		if (this.cache.has(key)) { return this.cache.get(key); }
-		const keys = key.split('.');
-		let values = defaults[key];
-		for (let prefs of this.rules) {
-			const pref = keys.reduce((prefs, key) => prefs[key].children, prefs).parent;
-			if (pref.values.current.length) { values = pref.values.current; break; }
+		function get(structure, rules, path) {
+			rules = rules.filter(_=>_.values.current.length);
+			const values = rules.length ? rules[0].values.current : defaultValues[path];
+			if (!values) { debugger; } // XXX: remove
+
+			if (structure.children && values.some(_=>_)) {
+				const object = { };
+				structure.children.forEach(child => object[child.name] = get(child, rules.map(_=>_.children[child.name]), path +'.' + child.name));
+				return object;
+			} else if (!structure.maxLength || structure.maxLength < 2) {
+				return values[0];
+			}
+			return values;
 		}
-		this.cache.set(key, values);
-		return values;
+		const value = get(ruleStructure.find(_=>_.name === key), this.rules.map(_=>_[key]), key);
+		this.cache.set(key, value);
+		return value;
 	}
 
 	getTab(id) {
@@ -181,13 +233,11 @@ class ProfileStack {
 		this.profiles.forEach(s => profileInStack.delete(s, this));
 	}
 
-	static find(url, tabId = -1) {
+	static find(domain, tabId = -1) {
 		const tabTemp = tabId <= 0 && tabTemps.get(tabId);
 		const matching = sortedProfiles.filter(profile => {
-			return profile !== tabTemp && profileIncludes.get(profile).all.some(exp => {
-				const match = exp.exec(url);
-				return match && match[0] === url;
-			});
+			const groups = getIncludes(profile);
+			return profile !== tabTemp && groups.some(_=>_.includes(domain));
 		});
 		tabTemp && matching.unshift(tabTemp);
 
@@ -204,7 +254,7 @@ class TabProfile {
 		this.domains = new Map;
 		console.log('TabProfile.created', this);
 	}
-	commit({ tabId, url, }) {
+	commit({ tabId, domain, }) {
 		uncommittetTabs.delete(this.requestId);
 		this.stack.tabs.set(tabId, this);
 		this.tabId = tabId;
@@ -245,6 +295,10 @@ class DomainProfile {
 		return this.get('disabled');
 	}
 
+	get logLevel() {
+		return this.get('logLevel');
+	}
+
 	get hstsDisabled() {
 		return this.get('hstsDisabled');
 	}
@@ -257,19 +311,15 @@ class DomainProfile {
 	}
 
 	get plugins() {
-		return {
-			hideAll: this.get('plugins.hideAll'),
-		};
+		return this.get('plugins');
 	}
 
 	get devices() {
-		return {
-			hideAll: this.get('devices.hideAll'),
-		};
+		return this.get('devices');
 	}
 
-	get keepWindowName() {
-		return this.get('keepWindowName');
+	get windowName() {
+		return this.get('windowName');
 	}
 
 	get screen() {
@@ -277,15 +327,11 @@ class DomainProfile {
 	}
 
 	get fonts() {
-		if (this.get('fonts.disabled')) { return null; }
-		return {
-			dispersion: this.get('fonts.dispersion'),
-		};
+		return this.get('fonts');
 	}
 
 	get canvas() {
-		if (this.get('canvas.disabled')) { return null; }
-		return { };
+		return this.get('canvas');
 	}
 
 	get misc() {
@@ -318,19 +364,29 @@ DomainProfile.keys = Object.getOwnPropertyNames(DomainProfile.prototype).filter(
 	return true;
 });
 
+options.children.profiles.whenChange((_, { current: ids, }) => {
+	profiles.forEach((_, old) => !ids.includes(old) && removeProfile(old));
+	Promise.all(ids.map(id => !profiles.has(id) && addProfile(id)))
+	.then(sortProfiles);
+});
+
+options.children.equivalentDomains.whenChange((_, { current: patterns, }) => {
+	equivalentDomains = patterns.map(p => equivalentDomains.find(g => g.pattern === p) || new DomainPattern(p));
+	profileIncludes = new WeakMap;
+});
 
 return Object.freeze({
-	create({ requestId, url, tabId, }) {
-		const stack = ProfileStack.find(url, tabId);
+	create({ requestId, domain, tabId, }) {
+		const stack = ProfileStack.find(domain, tabId);
 		return new TabProfile(stack, requestId);
 	},
-	get({ requestId = missing, tabId = missing, url = missing, }) {
+	get({ requestId = missing, tabId = missing, domain = missing, }) {
 		let tab = requestId !== missing && uncommittetTabs.get(requestId);
 		if (tab) { return tab; }
-		return url !== missing && tabId !== missing && ProfileStack.find(url, tabId).getTab(tabId);
+		return domain !== missing && tabId !== missing && ProfileStack.find(domain, tabId).getTab(tabId);
 	},
-	findStack(url) {
-		return ProfileStack.find(url);
+	findStack(domain) {
+		return ProfileStack.find(domain);
 	},
 	get current() {
 		return profiles;

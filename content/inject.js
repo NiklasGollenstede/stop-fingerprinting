@@ -350,7 +350,7 @@ function createAPIs() {
 	// TODO: window.frames
 
 	// remove window.name
-	if (window && !options.keepWindowName) {
+	if (window && options.windowName) {
 		define('self', {
 			name: { value: '', },
 		});

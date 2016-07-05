@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
 		selected && (selected.selected = true);
 		select.addEventListener('change', ({ target: { value: profileId, }, }) => {
 			Profiles.setTemp(tab.id, profileId);
+			const path = chrome.extension.getURL('icons/'+ (profileId === '<none>' ? 'default' : 'changed') +'/');
+			chrome.browserAction.setIcon({ tabId: tab.id, path: { 19: path +'19.png', 38: path +'38.png', }});
 		});
 	});
 

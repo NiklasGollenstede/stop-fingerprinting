@@ -3,11 +3,11 @@
 const icons = {
 	default: {
 		layers: { background: '', fingerprint: '', stopSign: 'fill: rgba(255, 0, 0, 1)', fingerprintUpper: '', stopText: '', },
-		sizes: [ 16, 18, 32, 38, 48, 64, 128, 256, ],
+		sizes: [ 16, 19, 32, 38, 48, 64, 128, 256, 1024, ],
 	},
 	changed: {
-		layers: { background: '', fingerprint: '', stopSign: 'fill: rgba(255, 80, 0, 1)', fingerprintUpper: '', stopText: '', },
-		sizes: [ 18, 38, 128, ],
+		layers: { background: '', fingerprint: '', stopSign: 'fill: rgba(187, 0, 255, 1)', fingerprintUpper: '', stopText: '', },
+		sizes: [ 19, 38, 128, ],
 	},
 	error: {
 		layers: { background: '', fingerprint: '', errorTriangle: 'fill: #E60000', },

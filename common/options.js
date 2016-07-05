@@ -1,8 +1,10 @@
-'use strict'; define('common/options', [
+define('common/options', [ // license: MPL-2.0
+	'common/utils',
 	'web-ext-utils/options',
 	'web-ext-utils/chrome',
 	'es6lib',
 ], function(
+	{ DOMAIN_CHARS, },
 	Options,
 	{ storage: Storage, applications: { chromium, }, },
 	{
@@ -15,9 +17,10 @@ const defaults = deepFreeze([
 	Object.assign({
 		name: 'clearCache',
 		title: 'Disable Caching',
+		type: 'label',
 	}, chromium ? { // chrome
 		description: `In Chrome caching can't actually be disabled. The best that is possible (without command line flags) is to clear the browsing data on every web request`,
-		type: 'label',
+		default: true,
 		children: [
 			{
 				name: 'where',
@@ -46,11 +49,37 @@ const defaults = deepFreeze([
 		],
 	} : { // firefox
 		description: `This extension can't disable caching in Firefox. See the Firefox tab for more information`,
+		default: false,
 		children: [
 			{ name: 'where', type: 'hidden', default: false, },
 			{ name: 'what', type: 'hidden', default: false, },
 		],
 	}), {
+		name: 'equivalentDomains',
+		title: 'Equivalent Domains',
+		description: ``, // TODO
+		maxLength: Infinity,
+		addDefault: String.raw`*.domain.com | www.domain.co.uk | *.*.berlin`,
+		restrict: {
+			match: {
+				exp: RegExpX`^(?:
+					(?: ^ | \s* \| \s* )      # '|' separated list of:
+					(?:                                # '<sub>.<name>.<tld>':
+						  (?:
+							   \* \. |(?:    ${ DOMAIN_CHARS }+ \.)*      # '*' or a '.' terminated list of sub domain names
+						) (?:
+							   \*    |       ${ DOMAIN_CHARS }+           # '*' or a domain name
+						) (?:
+							\. \*    |(?: \. ${ DOMAIN_CHARS }+   )+      # '.*' or '.'+ TLD
+						)
+					)
+				)+$`,
+				message: `Each line must be a '|' separated list of domains (<sub>.<name>.<tld>)`,
+			},
+			unique: '.',
+		},
+		type: 'string',
+	}, {
 		name: 'debug',
 		title: 'Enable debugging',
 		description: `Enable some stuff that can definitely be used to compromise your privacy and security but is helpful when debugging`,

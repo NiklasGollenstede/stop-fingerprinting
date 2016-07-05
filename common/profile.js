@@ -1,8 +1,10 @@
-'use strict'; define('common/profile', [ // license: MPL-2.0
+define('common/profile', [ // license: MPL-2.0
+	'common/utils',
 	'web-ext-utils/options',
 	'web-ext-utils/chrome',
 	'es6lib',
 ], function(
+	{ DOMAIN_CHARS, },
 	Options,
 	{ storage: Storage, applications, },
 	{
@@ -48,47 +50,22 @@ If a value is set in more than one profile, the value of the profile with the hi
 		title: 'Include urls',
 		description: 'Decide to with sites this set of rules should apply.',
 		type: 'label',
+		default: true,
 		expanded: false,
 		children: [
-			{
-				name: 'pattern',
-				title: 'Match Pattern',
-				description: `<pre>
-Sites whose urls matches any of the patterns below will be included.
-Patterns are url-prefixes which allow * wildcards at certain positions.
-They must have the form <code>&lt;scheme&gt;://&lt;host&gt;/&lt;path&gt;</code>
-Read more about Match Patterns in <a href="https://developer.chrome.com/extensions/match_patterns">Googles documentation</a>.
-Examples:
-	<code>https://*.something.org/</code>
-	<code>*://whatever.web/sites*</code>
-	<code>https://just.one_domain.net/*</code>
-</pre>`,
+			 {
+				name: 'domain',
+				title: 'Domains',
+				description: ``, // TODO
 				maxLength: Infinity,
-				addDefault: '*://*.domain.com/*',
+				addDefault: `domain.com`,
 				restrict: {
 					match: {
-						exp: RegExpX`^(?:
-							(?: \* | http | https | file | ftp ) # <scheme>
-							:\/\/
-							(?: \* | (?:\*\.)? [^\/\*]+ | ) # <host>
-							\/
-							(?: .* ) # <path>
-						)$`,
-						message: 'Each pattern must be of the form <scheme>://<host>/<path>',
+						exp: RegExpX`^(?: ${ DOMAIN_CHARS }+ (?: \. ${ DOMAIN_CHARS }+ )+ )$`,
+						message: `Each line must be domain name`,
 					},
 					unique: '.',
 				},
-				type: 'string',
-			}, {
-				name: 'regExp',
-				title: 'Regular Expression',
-				description: `<pre>
-Sites whose urls entirely match any of the expressions below will be included.
-Regular expressions are quite error prone, so unless you know exactly what you are doing, you should probably use the match patterns.
-</pre>`,
-				maxLength: Infinity,
-				addDefault: String.raw`^https?://(?:(?:www\.)?domain\.com)/.*$`,
-				restrict: { isRegExp: true, unique: '.', },
 				type: 'string',
 			},
 		],
@@ -97,6 +74,7 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 		title: 'Rules',
 		description: 'Set the rules that should apply to all matching sites, any rules that are not set will be filled in by matching profiles with lower priorities or the extensions default values',
 		type: 'label',
+		default: true,
 		children: [
 			optional({
 				name: 'disabled',
@@ -117,6 +95,18 @@ Regular expressions are quite error prone, so unless you know exactly what you a
 					{ value: 4, label: `Errors only`, },
 				],
 			}), optional({
+				name: 'lifetime',
+				title: 'Values lifetime',
+				description: 'Decide when to regenerate random values',
+				addDefault: 'page',
+				type: 'menulist',
+				options: [
+					// { value: 'browser',  label: `Browser: Only once on browser session. Kept until the browser is closed`, }, // TODO: (separate for private/incognito // mode)
+					// { value: 'window',   label: `Window: Once per window. You should reload tabs if you move them between windows`, },
+					// { value: 'tab',      label: `Tab: Separate for every tab`, },
+					{ value: 'page',     label: `Page: Regenerate on every page reload`, },
+				],
+			}), optional({
 				name: 'hstsDisabled',
 				title: 'Disable HSTS',
 				description: `<pre>
@@ -131,21 +121,17 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				addDefault: true,
 				type: 'bool',
 				expanded: false,
-			}), {
+			}), optional({
 				name: 'navigator',
 				title: 'Navigator and Requests',
 				description: `Decide which values the window.navigator and some HTTP-request header fields should have.
 				<br>These values are randomly generated according to the parameters below`,
-				type: 'label',
+				suffix: 'enable modifications',
+				addDefault: true,
+				type: 'bool',
 				expanded: false,
 				children: [
-					optional({
-						name: 'disabled',
-						title: 'Disable',
-						description: 'Disable User Agent spoofing for all matching sites and use the browsers default values',
-						addDefault: true,
-						type: 'bool',
-					}), ({
+					({
 						name: 'browser',
 						title: 'Browsers',
 						description: 'The browsers that can be chosen from',
@@ -162,7 +148,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						name: 'browserAge',
 						title: 'Browser Age',
 						description: 'The age of the browser version, chose negative values to allow beta versions',
-						unit: 'weeks',
+						suffix: 'weeks',
 						restrict: { from: -10, to: 150, type: 'number', },
 						addDefault: { from: -1, to: 12, },
 						type: 'interval',
@@ -203,7 +189,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						name: 'osAge',
 						title: 'Operating Systems Age',
 						description: 'The age of the operating system version',
-						unit: 'years',
+						suffix: 'years',
 						restrict: { from: 0, to: 11, type: 'number', },
 						addDefault: { from: 0, to: 3, },
 						type: 'interval',
@@ -212,7 +198,9 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						title: 'Do-Not-Track header',
 						description: `If you would trust the <a href="https://en.wikipedia.org/wiki/Do_Not_Track">Do Not Track</a> concept, you wouldn't be using this extension.
 						<br>So the best use for it is probably to send random values`,
-						unit: '<chance to set the header> - <chance to opt in to tracking>',
+						prefix: 'Chance to set the header:',
+						infix: '% &emsp;&emsp;&emsp; Chance to opt in to tracking:',
+						suffix: '%',
 						addDefault: { from: 30, to: 3, },
 						restrict: { from: 0, to: 100, type: 'number', },
 						type: 'interval',
@@ -233,11 +221,13 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						type: 'string',
 					}),
 				],
-			}, {
+			}), optional({
 				name: 'plugins',
 				title: 'Plugins',
 				description: `By default scripts can enumerate the plugins installed on your OS / in your browser`,
-				type: 'label',
+				suffix: 'enable modifications',
+				addDefault: true,
+				type: 'bool',
 				expanded: false,
 				children: [
 					optional({
@@ -248,11 +238,13 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						type: 'bool',
 					}),
 				]
-			}, {
+			}), optional({
 				name: 'devices',
 				title: 'Media Devices',
 				description: `By default scripts can detect the audio/video input hardware of your computer`,
-				type: 'label',
+				suffix: 'enable modifications',
+				addDefault: true,
+				type: 'bool',
 				expanded: false,
 				children: [
 					optional({
@@ -263,28 +255,24 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						type: 'bool',
 					}),
 				]
-			}, optional({
-				name: 'keepWindowName', // TODO: implement
-				title: 'Allow window.name',
-				description: `Unless checked, the window.name property gets reset at every load`,
+			}), optional({
+				name: 'windowName',
+				title: 'Reset window.name',
+				description: `If checked, the window.name property gets reset at every load`,
 				addDefault: true,
 				type: 'bool',
 				expanded: false,
-			}), {
+			}), optional({
 				name: 'screen',
 				title: 'Screen',
 				description: `Decide which values the window.screen and and window.devicePixelRatio should have.
 				<br>These values are randomly generated according to the parameters below`,
-				type: 'label',
+				suffix: 'enable modifications',
+				addDefault: true,
+				type: 'bool',
 				expanded: false,
 				children: [
 					optional({
-						name: 'disabled',
-						title: 'Disable',
-						description: 'Expose your true screen values to the websites',
-						addDefault: true,
-						type: 'bool',
-					}), optional({
 						name: 'devicePixelRatio',
 						title: 'devicePixelRatio',
 						addDefault: { from: 1, to: 1.5, },
@@ -295,14 +283,14 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						title: 'screen.width',
 						addDefault: { from: 1368, to: 3840, },
 						restrict: { from: 1024, to: 8192, type: 'number', },
-						unit: 'pixels',
+						suffix: 'pixels',
 						type: 'interval',
 					}), optional({
 						name: 'height',
 						title: 'screen.height',
 						addDefault: { from: 768, to: 2160, },
 						restrict: { from: 600, to: 8192, type: 'number', },
-						unit: 'pixels',
+						suffix: 'pixels',
 						type: 'interval',
 					}), optional({
 						name: 'ratio',
@@ -316,6 +304,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						title: 'Offset',
 						description: 'The amount of space at each edge of the screen that is occupied by task/title bars etc.',
 						type: 'label',
+						default: true,
 						children: [
 							optional({
 								name: 'top',
@@ -345,7 +334,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						],
 					},
 				],
-			}, {
+			}), optional({
 				name: 'fonts',
 				title: 'Fonts',
 				description: `The set of fonts installed on a computer can be quite unique.
@@ -355,43 +344,35 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 					<li>JavaScript can test the presence of a font by displaying (hidden) text in that font and checking how it is rendered</li>
 				</ul>
 				`,
-				type: 'label',
+				suffix: 'enable modifications',
+				addDefault: true,
+				type: 'bool',
 				expanded: false,
 				children: [
 					optional({
-						name: 'disabled',
-						title: 'Disable',
-						description: `Don't use any technique to hide the set of installed fonts`,
-						addDefault: true,
-						type: 'bool',
-					}), optional({
 						name: 'dispersion',
 						title: 'JavaScript randomness',
 						description: `To prevent JavaScript from detecting fonts, this adds some randomness to the size of text elements.
 						<br>On most websites this should not have any visible effects, but the font detection will effectively disabled if the randomness is greater zero`,
-						unit: '%',
+						suffix: '%',
 						addDefault: 25,
 						restrict: { from: 0, to: 75, },
 						type: 'number',
 					}),
 				],
-			}, {
+			}), optional({
 				name: 'canvas',
 				title: 'Canvas',
 				description: `<pre>
 Websites are able to draw custom images on special &lt;canvas&gt; elements.
 Since different browsers on different operation systems on different hardware draw a little different on different screens, reading these images allows for browser fingerprinting
 </pre>`,
-				type: 'label',
+				suffix: 'enable modifications',
+				addDefault: true,
+				type: 'bool',
 				expanded: false,
 				children: [
-					optional({
-						name: 'disabled',
-						title: 'Disable',
-						description: `Don't use any technique manipulate canvas fingerprints`,
-						addDefault: true,
-						type: 'bool',
-					}), ({
+					({
 						name: 'randomize',
 						title: 'Randomize',
 						description: `<pre>
@@ -399,9 +380,10 @@ Currently the only technique to disable canvas fingerprinting is to add random n
 You can't configure anything about that yet
 </pre>`,
 						type: 'label',
+						default: true,
 					}),
 				],
-			},
+			}),
 		],
 	}, {
 		name: 'manage',
@@ -435,32 +417,36 @@ return deepFreeze(Object.assign(id => new Options({
 }), { defaults, defaultRules: {
 	'disabled': [ false, ],
 	'logLevel': [ 3, ],
+	'lifetime': [ 'page', ],
 	'hstsDisabled': [ true, ],
-	'navigator.disabled': [ false, ],
+	'navigator': [ true, ],
 	'navigator.browser': [ applications.current, ],
 	'navigator.browserAge': [ { from: -1, to: 12, }, ],
-	// 'navigator.os',
-	// 'navigator.osArch',
+	'navigator.os': [ 'win', 'mac', 'lin', ],
+	'navigator.osArch': [ '32_32', '32_64', '64_64', ],
 	'navigator.cpuCores': [ { from: 1, to: 32, }, ],
 	'navigator.osAge': [ { from: 0, to: 3, }, ],
 	'navigator.dntChance': [ { from: 30, to: 1, }, ],
 	'navigator.ieFeatureCount': [ { from: 0, to: 3, }, ],
 	'navigator.ieFeatureExclude': [ ],
+	'plugins': [ true, ],
 	'plugins.hideAll': [ true, ],
+	'devices': [ true, ],
 	'devices.hideAll': [ true, ],
-	'keepWindowName': [ false, ],
-	'screen.disabled': [ false, ],
+	'windowName': [ true, ],
+	'screen': [ true, ],
 	'screen.devicePixelRatio': [ { from: 1, to: window.devicePixelRatio * 1.25, }, ],
 	'screen.width': [  { from: screen.width * 0.8, to: 3840, }, ],
 	'screen.height': [  { from: screen.height * 0.8, to: 2160, }, ],
 	'screen.ratio': [ { from: 0, to: 100, }, ],
+	'screen.offset': [ true, ],
 	'screen.offset.top': [ { from: 0, to: 0, }, ],
 	'screen.offset.right': [ { from: 0, to: 0, }, ],
 	'screen.offset.bottom': [ { from: 30, to: 50, }, ],
 	'screen.offset.left': [ { from: 0, to: 0, }, ],
-	'fonts.disabled': [ false, ],
+	'fonts': [ true, ],
 	'fonts.dispersion': [ 25, ],
-	'canvas.disabled': [ false, ],
+	'canvas': [ true, ],
 	'canvas.randomize': [ true, ],
 }, }));
 

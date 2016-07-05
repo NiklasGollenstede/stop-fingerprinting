@@ -1,7 +1,7 @@
 'use strict'; define('common/utils', [ // license: MPL-2.0
 	'web-ext-utils/chrome',
 ], function(
-	{ Notifications, }
+	{ Notifications, applications: { chromium, }, }
 ) {
 
 const icons = {
@@ -26,7 +26,7 @@ function notify(method, { title, message = '', url, domain, tabId, tabTitle, log
 		message,
 		iconUrl: icons[method] || icons.log,
 		items: [
-			url      == null && { title: 'Domain:', message: ''+ domain, },
+			domain && url == null && { title: 'Domain:', message: ''+ domain, },
 			url      != null && { title: 'Url:   ', message: ''+ url, },
 			tabId    != null && { title: 'Tab:   ', message: ''+ tabId, },
 			tabTitle != null && { title: 'Title: ', message: ''+ tabTitle, },
@@ -39,16 +39,32 @@ notify.info = notify.bind(null, 'info');
 notify.error = notify.bind(null, 'error');
 
 function domainFromUrl(url) {
+	const location = new URL(url);
+	return location.hostname || location.protocol;
+}
+
+function nameprep(string) {
 	try {
-		const location = new URL(url);
-		const { origin, } = location;
-		return origin !== 'null' ? origin.replace(/:\d+$/, '') : location.protocol +'//'+ location.host;
-	} catch (error) {
-		alert('could not extract domain from url "'+ url +'"!');
-		return '<invalid domain>';
+		if (!string) { return string; }
+		if (chromium) {
+			string = string.split('.').map(string => new URL('http://'+ string).host).join('.');
+		} else {
+			string = new URL('http://'+ string).host;
+		}
+		return string.replace(/%2A/g, '*'); // chrome url-escapes chars, but the wildcard needs to stay
+	} catch(e) {
+		return nameprep(Array.from(string).filter(char => {
+			try { return new URL('http://'+ char); } catch(e) { notify.error({
+				title: `Invalid char "${ char }"`,
+				message: `The invalid character "${ char }" in the domain part "${ string }" has been ignored`,
+			}); }
+		}).join(''));
 	}
 }
 
-return { notify, domainFromUrl, };
+const DOMAIN_CHARS = String.raw`[^\x00-\x20\#\*\/\:\?\@\[\\\]\|\x7F\xA0\¨\xAD\¯\´\¸]`; // there are others that don't work, but they are browser dependant. They need to be filtered later
+// Array(0xff/*ff*/).fill(1).map((_, i) => i).filter(i => { try { new URL('http://'+ String.fromCharCode(i)).host; } catch(e) { return true; } }).map(i => '\\u'+ i.toString(16)).join('')
+
+return { notify, domainFromUrl, nameprep, DOMAIN_CHARS, };
 
 });
