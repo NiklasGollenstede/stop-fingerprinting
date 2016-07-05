@@ -56,8 +56,8 @@ const buildIcons = async(function*(...args) {
 });
 
 const buildTldJS = async(function*(...args) {
-	(yield require('./background/tld/build.js')(...args));
-	console.log('background/tld/index.js created');
+	const { data, tlds, } = (yield require('./background/tld/build.js')(...args));
+	console.log(`background/tld/index.js created (${ tlds.reduce((c, s) => c + s.length, 0) } => ${ data.length } bytes)`);
 });
 
 spawn(function*() {

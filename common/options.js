@@ -13,7 +13,7 @@ define('common/options', [ // license: MPL-2.0
 	}
 ) {
 
-const defaults = deepFreeze([
+const model = deepFreeze([
 	Object.assign({
 		name: 'clearCache',
 		title: 'Disable Caching',
@@ -101,8 +101,8 @@ const defaults = deepFreeze([
 
 const listerners = new WeakMap;
 
-return Object.assign(new Options({
-	defaults,
+return Object.freeze(Object.assign(new Options({
+	model,
 	prefix: 'options',
 	storage: Storage.sync || Storage.local,
 	addChangeListener(listener) {
@@ -115,7 +115,6 @@ return Object.assign(new Options({
 		listerners.delete(listener);
 		Storage.onChanged.removeListener(onChanged);
 	},
-}), { defaults, });
-
+}), { model, }));
 
 });

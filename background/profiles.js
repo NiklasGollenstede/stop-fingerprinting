@@ -27,7 +27,7 @@ const missing = Symbol('missing argument');
 return function(options) {
 
 const defaultValues     = Profile.defaultRules;
-const ruleStructure     = Profile.defaults.find(_=>_.name === 'rules').children;
+const ruleModel         = Profile.model.find(_=>_.name === 'rules').children;
 const profiles          = new Map;            // profileId         ==>  Profile
 let   profileIncludes   = new WeakMap;        // Profile(id)       ==>  [DomainPattern]
 const profileStacks     = new Map;            // [id].join($)      ==>  ProfileStack
@@ -78,7 +78,7 @@ const DomainPattern = Object.assign(class DomainPattern {
 	}
 
 	includes(domain) {
-		return this.children.every(child => child.includes(domain));
+		return this.children.every(_=>_.includes(domain));
 	}
 
 	static tldError(original, escaped = original) {
@@ -144,16 +144,16 @@ function getIncludes(profile) {
 }
 
 class ProfileStack {
-	constructor(settings) {
-		const key = settings.map(s => s.children.id.value).join('$');
+	constructor(profiles) {
+		const key = profiles.map(_=>_.children.id.value).join('$');
 		if (profileStacks.has(key)) { return profileStacks.get(key); }
 		this.key = key;
-		this.profiles = settings;
-		this.rules = settings.map(s => s.children.rules.children);
+		this.profiles = profiles;
+		this.rules = profiles.map(_=>_.children.rules.children);
 		this.destroy = this.destroy.bind(this);
 		this.rules.forEach(rule => rule.parent.onAnyChange((value, { parent: { path, }, }) => this.clear(path.replace(/^\.?rules\./, ''))));
 		profileStacks.set(this.key, this);
-		settings.forEach(s => profileInStack.add(s, this));
+		profiles.forEach(profile => profileInStack.add(profile, this));
 		this.cache = new Map;
 		this.tabs = new Map;
 
@@ -200,21 +200,21 @@ class ProfileStack {
 		if ((/\./).test(key)) { debugger; } // XXX: remove
 
 		if (this.cache.has(key)) { return this.cache.get(key); }
-		function get(structure, rules, path) {
+		function get(model, rules, path) {
 			rules = rules.filter(_=>_.values.current.length);
 			const values = rules.length ? rules[0].values.current : defaultValues[path];
 			if (!values) { debugger; } // XXX: remove
 
-			if (structure.children && values.some(_=>_)) {
+			if (model.children && model.children.length && values.some(_=>_)) {
 				const object = { };
-				structure.children.forEach(child => object[child.name] = get(child, rules.map(_=>_.children[child.name]), path +'.' + child.name));
+				model.children.forEach(child => object[child.name] = get(child, rules.map(_=>_.children[child.name]), path +'.' + child.name));
 				return object;
-			} else if (!structure.maxLength || structure.maxLength < 2) {
+			} else if (!model.maxLength || model.maxLength < 2) {
 				return values[0];
 			}
 			return values;
 		}
-		const value = get(ruleStructure.find(_=>_.name === key), this.rules.map(_=>_[key]), key);
+		const value = get(ruleModel.find(_=>_.name === key), this.rules.map(_=>_[key]), key);
 		this.cache.set(key, value);
 		return value;
 	}
@@ -288,7 +288,7 @@ class DomainProfile {
 	}
 
 	get nonce() {
-		return Array.prototype.map.call(window.crypto.getRandomValues(new Uint32Array(6)), r => r.toString(36)).join('');
+		return Array.prototype.map.call(window.crypto.getRandomValues(new Uint32Array(6)), _=>_.toString(36)).join('');
 	}
 
 	get disabled() {

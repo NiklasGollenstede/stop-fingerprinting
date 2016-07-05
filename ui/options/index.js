@@ -109,7 +109,7 @@ const tabs = new Tabs({
 });
 
 new Options({
-	defaults: Profile.defaults,
+	model: Profile.model,
 	prefix: 'default',
 	storage: { get() {
 		const _in = Profile.defaultRules, _out = { 'default.rules': [ false, ], };

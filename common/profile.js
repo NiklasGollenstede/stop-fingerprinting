@@ -21,7 +21,7 @@ function optional(option) {
 	return Object.assign(option, optionalOption);
 }
 
-const defaults = deepFreeze([
+const model = deepFreeze([
 	{
 		name: 'title',
 		title: 'Profile name',
@@ -395,13 +395,13 @@ You can't configure anything about that yet
 
 const listerners = new WeakMap;
 
-return deepFreeze(Object.assign(id => new Options({
-	defaults: [ {
+return deepFreeze(Object.assign(function(id) { return new Options({
+	model: [ {
 		name: 'id',
 		default: id,
 		restrict: { match: RegExp(id), },
 		type: 'hidden',
-	}, ].concat(defaults),
+	}, ].concat(model),
 	prefix: id,
 	storage: Storage.sync || Storage.local,
 	addChangeListener(listener) {
@@ -414,7 +414,7 @@ return deepFreeze(Object.assign(id => new Options({
 		listerners.delete(listener);
 		Storage.onChanged.removeListener(onChanged);
 	},
-}), { defaults, defaultRules: {
+}); }, { model, defaultRules: {
 	'disabled': [ false, ],
 	'logLevel': [ 3, ],
 	'lifetime': [ 'page', ],

@@ -22,10 +22,9 @@ define('${ name }', function() { 'use strict'; // license: MPL-2.0
 		.replace(/({|,)"([\$a-z\_]\w*)":/g, '$1$2:') // remove quotes around simple keys
 		.replace(/\{\$\:1\}/g, 1) // replace leaf-objects with 1
 	+_`);
-	const nameprep = (${ nameprep });
+	const nameprep = (${ nameprep }); // returns browser dependant results
 	const clone = (${ clone });
-	const tree = clone(_tree);
-	window.tldTree = tree; // TODO: remove
+	const tree = clone(_tree); // needs to be done in the browser so that nameprep matches the internal implementation
 	return `+ function getTld(domain) {
 		const parts = domain.split('.');
 		let node = tree, tld = '';
@@ -41,7 +40,7 @@ define('${ name }', function() { 'use strict'; // license: MPL-2.0
 			return null;
 		}
 		return tld;
-	} +`;
+	} +_`;
 });
 `);
 
@@ -63,7 +62,7 @@ const build = module.exports = async(function*(moduleName = 'background/tld', fi
 	// console.log('tld tree', tree);
 	const file = object(tree, moduleName);
 	(yield FS.writeFile(fileName, file, 'utf8'));
-	return file;
+	return { data: file, path: fileName, tlds, };
 });
 
 if (process.argv[1] === __filename) {
@@ -71,23 +70,3 @@ if (process.argv[1] === __filename) {
 	.then(() => console.log('background/tld/index.js created'))
 	.catch(error => { console.error(error); process.exit(-1); });
 }
-
-/*
-const { Timer, } = require('es6lib/functional');
-const tldFw  = require('background/tld-fw');
-const tldRv  = require('background/tld-rv');
-const tldObj = require('background/tld-obj');
-function checkSpeed(domain) {
-	const tFw = new Timer;
-	const rFw = tldFw(domain);
-	const eFw = tFw();
-	const tRv = new Timer;
-	const rRv = tldRv(domain);
-	const eRv = tRv();
-	const tObj = new Timer;
-	const rObj = tldObj(domain);
-	const eObj = tObj();
-	console.log('TDL times', eFw, eRv, eObj);
-	if (rFw !== rRv || rRv !== rObj) { console.error('TLD mismatch', rFw, rRv, rObj); }
-}
-*/
