@@ -12,10 +12,12 @@
 	},
 
 	"dependencies": {
+		"chai": "3.5.0",
 		"fs-extra": "^0.30.0",
 		"es6lib": "NiklasGollenstede/es6lib",
 		"imagemin": "^5.2.1",
 		"imagemin-pngquant": "^5.0.0",
+		"mocha": "^2.5.3",
 		"request-promise": "^3.0.0",
 		"svgexport": "^0.3.2",
 		"web-ext": "1.0.1",
@@ -34,8 +36,9 @@
 	"main": "test/server/debug.js",
 	"scripts": {
 		"start": "node test/server/debug.js",
+    	"test": "mocha ./test/unit/tld.js",
 		"build-icons": "node icons/build",
 		"build": "node build",
-		"postinstall": "node build"
+		"postinstall": "node build && npm test -- -R progress"
 	}
 }

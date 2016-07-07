@@ -86,7 +86,6 @@ const DomainPattern = Object.assign(class DomainPattern {
 			title: `Invalid domain name`,
 			message: `The domain "${ original }"${ original !== escaped ? '('+ escaped +')' : '' } does not end with a valid TLD`,
 		});
-		// TODO: singl-word esearches from the url bar are also sent here
 	}
 }, {
 	Single: function(domain) {
@@ -104,8 +103,8 @@ const DomainPattern = Object.assign(class DomainPattern {
 		this.pattern = domain;
 		domain = nameprep(domain);
 		const anyTld = (/\.\*$/).test(domain);
-		const tld = anyTld || getTLD(domain) || '';
-		if (!tld) { DomainPattern.tldError(this.pattern, domain); }
+		let tld = anyTld || getTLD(domain);
+		if (tld === null) { DomainPattern.tldError(this.pattern, domain); tld = '@'; }
 		domain = domain.slice(0, anyTld ? -2 : -tld.length);
 		const host = (/[^.]*$/).exec(domain)[0];
 		const anyHost = host === '*';
@@ -116,8 +115,8 @@ const DomainPattern = Object.assign(class DomainPattern {
 		this.includes = any ? () => true : _domain => {
 			const obj = domainPartCache[_domain] || (domainPartCache[_domain] = (() => {
 				let domain = _domain;
-				const tld = getTLD(domain) || '';
-				if (!tld) { DomainPattern.tldError(domain); }
+				let tld = getTLD(domain);
+				if (tld === null) { DomainPattern.tldError(domain); tld = '@'; }
 				domain = domain.slice(0, -tld.length);
 				const host = (/[^.]*$/).exec(domain)[0];
 				const sub = domain.slice(0, -host.length);
