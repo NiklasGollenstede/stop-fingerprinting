@@ -19,11 +19,13 @@ const umd = (name, depts, module) => `(function (root, factory) {
 	if (typeof define === 'function'/* && define.amd*/) {
 		define('${ name }', [ ${ depts.map(s => '"'+ s +'"').join(', ') } ], factory);
 	} else if (typeof exports === 'object' && typeof module === 'object') {
-		module.exports = factory(exports${ depts.map(s => ', require("'+ s +'")') });
+		const result = factory(exports${ depts.map(s => ', require("'+ s +'")') });
+		result && (module.exports = result);
 	} else {
-		factory((root['${ name }'] = { })${ depts.map(s => ', root["'+ s +'"]') });
+		const result = factory((root['${ name }'] = { })${ depts.map(s => ', root["'+ s +'"]') });
+		result && (root['${ name }'] = result);
 	}
-}(this, ${ module }));`;
+})(this, ${ module });`;
 
 const object = (tree, name) => umd(name, [ ], _`function() { 'use strict'; // generated code // license: MPL-2.0
 	const _tree = (`+

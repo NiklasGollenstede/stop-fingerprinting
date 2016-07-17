@@ -252,7 +252,7 @@ const context = (() => {
 		},
 	};
 	forEach(keys(context), key => typeof context[key] === 'function' && (context[key] = bind(context[key], context)));
-	log('created context', context);
+	log('created context', token, context);
 
 	context.buildScript = (`
 		const { ${ join(keys(context), ', ') }, } = context;
@@ -350,7 +350,7 @@ function createAPIs() {
 	// TODO: window.frames
 
 	// remove window.name
-	if (window && options.windowName) {
+	if (window && options.windowName) { // TODO: only do this for the top level frame
 		define('self', {
 			name: { value: '', },
 		});
@@ -611,15 +611,13 @@ function fakeAPIs(global) {
 
 function attachObserver() {
 	if (typeof MutationObserver === 'undefined') { return; } // worker
-	// TODO: is it save to forEach over NodeLists ?
+	// TODO: is it save to forEach over NodeLists (how does it get .length ?) ?
 	const observer = new MutationObserver(mutations => forEach(mutations, ({ addedNodes, }) => forEach(addedNodes, element => {
 		let tag; try { tag = nodeGetTagName(element); } catch (e) { }
 		if (tag === 'IFRAME') {
-			// console.log('direct: attaching to iframe', element);
 			fakeAPIs(getContentWindow(element), element);
-		} else if(tag && querySelector(element, 'iframe')) {
+		} else if (tag !== undefined) {
 			forEach(querySelectorAll(element, 'iframe'), element => { try {
-				// console.log('loop: attaching to iframe', element);
 				fakeAPIs(getContentWindow(element), element);
 			} catch(error) { console.error(error); } });
 		}

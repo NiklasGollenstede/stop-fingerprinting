@@ -14,13 +14,12 @@ document.addEventListener('DOMContentLoaded', () => {
 		select.appendChild(option);
 	});
 	tab.then(([ tab, ]) => {
-		const selector = '[value="'+ Profiles.getTemp(tab.id) +'"]';
+		const domain = domainFromUrl(tab.url);
+		const selector = '[value="'+ Profiles.getTemp(domain) +'"]';
 		const selected = select.querySelector(selector);
 		selected && (selected.selected = true);
 		select.addEventListener('change', ({ target: { value: profileId, }, }) => {
-			Profiles.setTemp(tab.id, profileId);
-			const path = chrome.extension.getURL('icons/'+ (profileId === '<none>' ? 'default' : 'changed') +'/');
-			chrome.browserAction.setIcon({ tabId: tab.id, path: { 19: path +'19.png', 38: path +'38.png', }});
+			Profiles.setTemp(domain, profileId);
 		});
 	});
 
@@ -28,3 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
 		!button && chrome.tabs.create({ url: chrome.extension.getURL('ui/home/index.html'), }, () => window.close());
 	});
 });
+
+function domainFromUrl(url) {
+	const location = new URL(url);
+	return location.hostname || location.protocol;
+}

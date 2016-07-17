@@ -18,7 +18,7 @@ getOptions(({ options: json, nonce, }) => {
 function getOptions(callback) {
 	if (root.options) { return void callback(root.options); }
 
-	chrome.runtime.sendMessage({ name: 'getOptionsForUrl', args : [ url, ], }, arg => {
+	chrome.runtime.sendMessage({ name: 'getOptions', args : [ ], }, arg => {
 		if ('error' in arg) { reportError(parseError(arg.error)); }
 		callback(root.options = arg.value);
 	});
@@ -42,7 +42,7 @@ function inject(nonce, script, jsonArg) {
 			typeof error !== 'object' || error === null || !(error instanceof Error) ? error
 			: { name: error.name, message: error.message, stack: error.stack, }
 		);
-	} }).call(document.querySelector('script#injector'));`);
+	} }).call(document.querySelector('script#injector'));`); // TODO: use document.currentScript instead
 	document.documentElement.appendChild(element).remove();
 	if (element.dataset.error) {
 		const error = JSON.parse(element.dataset.error);

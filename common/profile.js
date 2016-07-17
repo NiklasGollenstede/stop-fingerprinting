@@ -9,19 +9,11 @@ define('common/profile', [ // license: MPL-2.0
 	{ storage: Storage, applications, },
 	{
 		format: { RegExpX, },
-		object: { deepFreeze, },
+		object: { deepFreeze, copyProperties, },
 	}
 ) {
 
-const optionalOption = {
-	minLength: 0,
-	maxLength: 1,
-};
-function optional(option) {
-	return Object.assign(option, optionalOption);
-}
-
-const model = deepFreeze([
+let makeModel = (optional, _default) => [
 	{
 		name: 'title',
 		title: 'Profile name',
@@ -80,13 +72,13 @@ If a value is set in more than one profile, the value of the profile with the hi
 				name: 'disabled',
 				title: 'Disable',
 				description: 'Completely disable this extension for all matching sites',
-				addDefault: true,
+				[_default]: false,
 				type: 'bool',
 			}), optional({
 				name: 'logLevel',
 				title: 'Logging',
 				description: 'Decide what priority of notifications you want to see',
-				addDefault: 3,
+				[_default]: 3,
 				type: 'menulist',
 				options: [
 					{ value: 1, label: `Include debugging`, },
@@ -95,15 +87,15 @@ If a value is set in more than one profile, the value of the profile with the hi
 					{ value: 4, label: `Errors only`, },
 				],
 			}), optional({
-				name: 'lifetime',
+				name: 'scope',
 				title: 'Values lifetime',
 				description: 'Decide when to regenerate random values',
-				addDefault: 'page',
+				[_default]: 'page',
 				type: 'menulist',
 				options: [
-					// { value: 'browser',  label: `Browser: Only once on browser session. Kept until the browser is closed`, }, // TODO: (separate for private/incognito // mode)
+					{ value: 'browser',  label: `Browser: Only once on browser session. Kept until the browser is closed`, }, // TODO: (separate for private/incognito // mode)
 					// { value: 'window',   label: `Window: Once per window. You should reload tabs if you move them between windows`, },
-					// { value: 'tab',      label: `Tab: Separate for every tab`, },
+					{ value: 'tab',      label: `Tab: Separate for every tab`, },
 					{ value: 'page',     label: `Page: Regenerate on every page reload`, },
 				],
 			}), optional({
@@ -118,7 +110,7 @@ If you disable HSTS you should be even more careful to always look for the (gree
 Enabling this will only prevent the creation of new HSTS super cookies, any existing ones need to be deleted via the browsers 'clear browsing data' functions.
 THIS DOES NOT WORK IN FIREFOX (yet?)!
 </pre>`,
-				addDefault: true,
+				[_default]: true,
 				type: 'bool',
 				expanded: false,
 			}), optional({
@@ -127,16 +119,17 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				description: `Decide which values the window.navigator and some HTTP-request header fields should have.
 				<br>These values are randomly generated according to the parameters below`,
 				suffix: 'enable modifications',
-				addDefault: true,
+				[_default]: true,
 				type: 'bool',
 				expanded: false,
 				children: [
-					({
+					optional({
 						name: 'browser',
 						title: 'Browsers',
 						description: 'The browsers that can be chosen from',
 						type: 'menulist',
-						addDefault: 'chrome',
+						[_default]: applications.current,
+						minLength: 1,
 						maxLength: 3,
 						restrict: { unique: '.', },
 						options: [
@@ -150,14 +143,16 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						description: 'The age of the browser version, chose negative values to allow beta versions',
 						suffix: 'weeks',
 						restrict: { from: -10, to: 150, type: 'number', },
-						addDefault: { from: -1, to: 12, },
+						[_default]: { from: -1, to: 12, },
 						type: 'interval',
-					}), ({
+					}), optional({
 						name: 'os',
 						title: 'Operating Systems',
 						description: 'The operating systems that can be chosen from',
 						type: 'menulist',
+						[_default]: [ 'win', 'mac', 'lin', ],
 						addDefault: 'win',
+						minLength: 1,
 						maxLength: 3,
 						restrict: { unique: '.', },
 						options: [
@@ -170,6 +165,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						title: 'Processor Architecture',
 						description: 'The processor and process architectures that can be chosen from',
 						type: 'menulist',
+						[_default]: [ '32_32', '32_64', '64_64', ],
 						addDefault: '32_32',
 						maxLength: 3,
 						restrict: { unique: '.', },
@@ -183,7 +179,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						title: 'CPU cores',
 						description: 'Number of (virtual) CPU cores',
 						restrict: { from: 1, to: 16, type: 'number', },
-						addDefault: { from: 1, to: 8, },
+						[_default]: { from: 1, to: 8, },
 						type: 'interval',
 					}), optional({
 						name: 'osAge',
@@ -191,7 +187,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						description: 'The age of the operating system version',
 						suffix: 'years',
 						restrict: { from: 0, to: 11, type: 'number', },
-						addDefault: { from: 0, to: 3, },
+						[_default]: { from: 0, to: 3, },
 						type: 'interval',
 					}), optional({
 						name: 'dntChance',
@@ -201,7 +197,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						prefix: 'Chance to set the header:',
 						infix: '% &emsp;&emsp;&emsp; Chance to opt in to tracking:',
 						suffix: '%',
-						addDefault: { from: 30, to: 3, },
+						[_default]: { from: 30, to: 1, },
 						restrict: { from: 0, to: 100, type: 'number', },
 						type: 'interval',
 					}), optional({
@@ -210,12 +206,13 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						description: `This is rather a detail and only applies if an Internet Explorer User Agent is generated.
 						<br>The IE User Agent contains things like the installed versions on .NET and others. This option restricts the number of these "features"`,
 						restrict: { from: 0, to: 7, type: 'number', },
-						addDefault: { from: 0, to: 4, },
+						[_default]: { from: 0, to: 4, },
 						type: 'interval',
 					}), optional({
 						name: 'ieFeatureExclude',
 						title: 'Exclude Internet Explorer "features"',
 						description: `Any feature strings partially matched by the regular expression below will be excluded`,
+						[_default]: [ ],
 						addDefault: '(?!)',
 						restrict: { isRegExp: true, },
 						type: 'string',
@@ -226,7 +223,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				title: 'Plugins',
 				description: `By default scripts can enumerate the plugins installed on your OS / in your browser`,
 				suffix: 'enable modifications',
-				addDefault: true,
+				[_default]: true,
 				type: 'bool',
 				expanded: false,
 				children: [
@@ -234,7 +231,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						name: 'hideAll',
 						title: 'Hide all',
 						description: `Makes the browser report that there are no plugins installed. If a website decides to load a plugin anyway, that plugin will still work. It is not disabled, just hidden from enumeration`,
-						addDefault: true,
+						[_default]: true,
 						type: 'bool',
 					}),
 				]
@@ -243,7 +240,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				title: 'Media Devices',
 				description: `By default scripts can detect the audio/video input hardware of your computer`,
 				suffix: 'enable modifications',
-				addDefault: true,
+				[_default]: true,
 				type: 'bool',
 				expanded: false,
 				children: [
@@ -251,7 +248,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						name: 'hideAll',
 						title: 'Hide all',
 						description: `Makes the browser report that there are no media devices available`,
-						addDefault: true,
+						[_default]: true,
 						type: 'bool',
 					}),
 				]
@@ -259,7 +256,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				name: 'windowName',
 				title: 'Reset window.name',
 				description: `If checked, the window.name property gets reset at every load`,
-				addDefault: true,
+				[_default]: true,
 				type: 'bool',
 				expanded: false,
 			}), optional({
@@ -268,27 +265,27 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				description: `Decide which values the window.screen and and window.devicePixelRatio should have.
 				<br>These values are randomly generated according to the parameters below`,
 				suffix: 'enable modifications',
-				addDefault: true,
+				[_default]: true,
 				type: 'bool',
 				expanded: false,
 				children: [
 					optional({
 						name: 'devicePixelRatio',
 						title: 'devicePixelRatio',
-						addDefault: { from: 1, to: 1.5, },
+						[_default]: { from: 1, to: 1.5, },
 						restrict: { from: 0.5, to: 8, type: 'number', },
 						type: 'interval',
 					}), optional({
 						name: 'width',
 						title: 'screen.width',
-						addDefault: { from: 1368, to: 3840, },
+						[_default]: { from: screen.width * 0.8, to: 3840, },
 						restrict: { from: 1024, to: 8192, type: 'number', },
 						suffix: 'pixels',
 						type: 'interval',
 					}), optional({
 						name: 'height',
 						title: 'screen.height',
-						addDefault: { from: 768, to: 2160, },
+						[_default]: { from: screen.height * 0.8, to: 2160, },
 						restrict: { from: 600, to: 8192, type: 'number', },
 						suffix: 'pixels',
 						type: 'interval',
@@ -296,7 +293,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						name: 'ratio',
 						title: 'Aspect ratio',
 						description: 'The quotient screen.width / screen.height',
-						addDefault: { from: 1.3, to: 2.4, },
+						[_default]: { from: 1.3, to: 2.4, },
 						restrict: { from: 0.5, to: 8, type: 'number', },
 						type: 'interval',
 					}), {
@@ -309,25 +306,25 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 							optional({
 								name: 'top',
 								title: 'Top',
-								addDefault: { from: 0, to: 0, },
+								[_default]: { from: 0, to: 0, },
 								restrict: { from: 0, to: 200, type: 'number', },
 								type: 'interval',
 							}), optional({
 								name: 'right',
 								title: 'Right',
-								addDefault: { from: 0, to: 0, },
+								[_default]: { from: 0, to: 0, },
 								restrict: { from: 0, to: 200, type: 'number', },
 								type: 'interval',
 							}), optional({
 								name: 'bottom',
 								title: 'Bottom',
-								addDefault: { from: 30, to: 50, },
+								[_default]: { from: 30, to: 50, },
 								restrict: { from: 0, to: 200, type: 'number', },
 								type: 'interval',
 							}), optional({
 								name: 'left',
 								title: 'Left',
-								addDefault: { from: 0, to: 0, },
+								[_default]: { from: 0, to: 0, },
 								restrict: { from: 0, to: 200, type: 'number', },
 								type: 'interval',
 							}),
@@ -345,7 +342,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				</ul>
 				`,
 				suffix: 'enable modifications',
-				addDefault: true,
+				[_default]: true,
 				type: 'bool',
 				expanded: false,
 				children: [
@@ -355,7 +352,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						description: `To prevent JavaScript from detecting fonts, this adds some randomness to the size of text elements.
 						<br>On most websites this should not have any visible effects, but the font detection will effectively disabled if the randomness is greater zero`,
 						suffix: '%',
-						addDefault: 25,
+						[_default]: 25,
 						restrict: { from: 0, to: 75, },
 						type: 'number',
 					}),
@@ -368,7 +365,7 @@ Websites are able to draw custom images on special &lt;canvas&gt; elements.
 Since different browsers on different operation systems on different hardware draw a little different on different screens, reading these images allows for browser fingerprinting
 </pre>`,
 				suffix: 'enable modifications',
-				addDefault: true,
+				[_default]: true,
 				type: 'bool',
 				expanded: false,
 				children: [
@@ -391,11 +388,12 @@ You can't configure anything about that yet
 		default: [ 'delete', ],
 		type: 'control',
 	},
-]);
+];
+
+const model = makeModel(option => Object.assign(option, { minLength: 0, }), 'addDefault');
 
 const listerners = new WeakMap;
-
-return deepFreeze(Object.assign(function(id) { return new Options({
+const createProfile = (id, model) => new Options({
 	model: [ {
 		name: 'id',
 		default: id,
@@ -414,43 +412,38 @@ return deepFreeze(Object.assign(function(id) { return new Options({
 		listerners.delete(listener);
 		Storage.onChanged.removeListener(onChanged);
 	},
-}); }, { model, defaultRules: {
-	'disabled': [ false, ],
-	'logLevel': [ 3, ],
-	'lifetime': [ 'page', ],
-	'hstsDisabled': [ true, ],
-	'navigator': [ true, ],
-	'navigator.browser': [ applications.current, ],
-	'navigator.browserAge': [ { from: -1, to: 12, }, ],
-	'navigator.os': [ 'win', 'mac', 'lin', ],
-	'navigator.osArch': [ '32_32', '32_64', '64_64', ],
-	'navigator.cpuCores': [ { from: 1, to: 32, }, ],
-	'navigator.osAge': [ { from: 0, to: 3, }, ],
-	'navigator.dntChance': [ { from: 30, to: 1, }, ],
-	'navigator.ieFeatureCount': [ { from: 0, to: 3, }, ],
-	'navigator.ieFeatureExclude': [ ],
-	'plugins': [ true, ],
-	'plugins.hideAll': [ true, ],
-	'devices': [ true, ],
-	'devices.hideAll': [ true, ],
-	'windowName': [ true, ],
-	'screen': [ true, ],
-	'screen.devicePixelRatio': [ { from: 1, to: window.devicePixelRatio * 1.25, }, ],
-	'screen.width': [  { from: screen.width * 0.8, to: 3840, }, ],
-	'screen.height': [  { from: screen.height * 0.8, to: 2160, }, ],
-	'screen.ratio': [ { from: 0, to: 100, }, ],
-	'screen.offset': [ true, ],
-	'screen.offset.top': [ { from: 0, to: 0, }, ],
-	'screen.offset.right': [ { from: 0, to: 0, }, ],
-	'screen.offset.bottom': [ { from: 30, to: 50, }, ],
-	'screen.offset.left': [ { from: 0, to: 0, }, ],
-	'fonts': [ true, ],
-	'fonts.dispersion': [ 25, ],
-	'canvas': [ true, ],
-	'canvas.randomize': [ true, ],
-}, }));
+});
 
 
+const defaultProfile = createProfile('<default>', copyProperties(makeModel(_=>_, 'default'), [
+	/* title: */ {
+		default: '<default>',
+	},
+	/* description: */ {
+		expanded: null,
+		type:  'label',
+		description: `TODO`,
+	},
+	/* priority: */ {
+		expanded: null,
+		disabled: true,
+		default: -Infinity,
+		type: 'string',
+	},
+	/* include: */ {
+		expanded: null,
+		type: 'label',
+		description: `TODO`,
+		children: null,
+	},
+	/* rules: */ ,
+	/* manage: */ { type: 'hidden', },
+]));
 
+function Profile(id) {
+	return id === '<default>' ? defaultProfile : createProfile(id, model);
+}
+
+return deepFreeze(Object.assign(Profile, { defaultProfile, model, }));
 
 });

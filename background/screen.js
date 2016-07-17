@@ -127,7 +127,7 @@ const Generator = exports.Generator = class Generator {
 		const dprRange = parseRange(config.devicePixelRatio, { from: 1, to: 1.5, });
 		this.devicePixelRatios = devicePixelRatios.filter(({ value, }) => isIn(value, dprRange));
 		[ 'top', 'right', 'bottom', 'left' ].forEach(offset => {
-			const range = parseRange(config[offset], offset === 'bottom' ? { from: 30, to: 50, } : { from: 0, to: 0, });
+			const range = parseRange(config[offset] || config.offset && config.offset[offset], offset === 'bottom' ? { from: 30, to: 50, } : { from: 0, to: 0, });
 			this[offset] = offsets.filter(({ value, }) => isIn(value, range));
 		});
 		config.noThrow ? this.makeValid() : this.validate();

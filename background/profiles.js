@@ -12,7 +12,7 @@ define('background/profiles', [ // license: MPL-2.0
 	{ Generator: ScreenGen, },
 	getTLD,
 	Profile,
-	{ notify, nameprep, },
+	{ notify, nameprep, domainFromUrl, },
 	{ applications, Tabs, },
 	{ matchPatternToRegExp, },
 	{
@@ -26,7 +26,7 @@ const missing = Symbol('missing argument');
 
 return function(options) {
 
-const defaultValues     = Profile.defaultRules;
+let   defaultRules      = Profile.defaultProfile.then((_ => defaultRules = _.children.rules.children));
 const ruleModel         = Profile.model.find(_=>_.name === 'rules').children;
 const profiles          = new Map;            // profileId         ==>  Profile
 let   profileIncludes   = new WeakMap;        // Profile(id)       ==>  [DomainPattern]
@@ -34,9 +34,9 @@ const profileStacks     = new Map;            // [id].join($)      ==>  ProfileS
 const profileInStack    = new MultiMap;       // Profile(id)       ==>  ProfileStack
 let   sortedProfiles    = [ ];                // [Profile(id)] sorted by .priority
 const uncommittetTabs   = new Map;            // requestId         ==>  TabProfile
-const tabTemps          = new Map;            // tabId             ==>  Profile
+const   committetTabs   = new Map;            // tabId             ==>  TabProfile
+const domainTemps       = new Map;            // DomainPattern|String ==>  Profile
 let   equivalentDomains = [ ];                // [DomainPattern] sorted by apperance
-const domainPartCache   = { };                // domain            ==>  { sub, host, tld, }
 
 window.profiles = profiles;
 
@@ -57,7 +57,7 @@ function removeProfile(id) {
 	profileInStack.get(profile).forEach(stack => stack.destroy());
 	profileIncludes.delete(profile);
 	sortProfiles();
-	tabTemps.forEach((prof, tabId) => prof === profile && tabTemps.delete(tabId));
+	domainTemps.forEach((prof, equiv) => prof === profile && domainTemps.delete(equiv));
 
 	console.log('removed profile', profiles, profile);
 }
@@ -112,35 +112,36 @@ const DomainPattern = Object.assign(class DomainPattern {
 		const anySub = sub === '*.';
 		const any = anySub && anyHost && anyTld;
 
-		this.includes = any ? () => true : _domain => {
-			const obj = domainPartCache[_domain] || (domainPartCache[_domain] = (() => {
-				let domain = _domain;
-				let tld = getTLD(domain);
-				if (tld === null) { DomainPattern.tldError(domain); tld = '@'; }
-				domain = domain.slice(0, -tld.length);
-				const host = (/[^.]*$/).exec(domain)[0];
-				const sub = domain.slice(0, -host.length);
-				return { sub, host, tld, };
-			})());
+		this.includes = any ? () => true : cached(_domain => {
+			let _tld = getTLD(_domain);
+			if (_tld === null) { DomainPattern.tldError(_domain); _tld = '@'; }
+			_domain = _domain.slice(0, -_tld.length);
+			const _host = (/[^.]*$/).exec(_domain)[0];
+			const _sub = _domain.slice(0, -_host.length);
 			return (
-				(anyTld || tld === obj.tld)
-				&& (anyHost || host === obj.host)
-				&& (anySub || sub === obj.sub)
+				(anyTld || tld === _tld)
+				&& (anyHost || host === _host)
+				&& (anySub || sub === _sub)
 			);
-		};
-		window.includes = this.includes; // XXX
+		});
 	},
 });
 
-function getIncludes(profile) {
-	let includes = profileIncludes.get(profile);
-	if (includes) { return includes; }
-	includes = profile.children.include.children.domain.values.current.map(domain => {
-		const preped = nameprep(domain);
-		return equivalentDomains.find(_=>_.includes(preped)) || new DomainPattern.Single(domain);
-	});
-	profileIncludes.set(profile, includes);
-	return includes;
+const getIncludes = cached(profile => profile.children.include.children.domain.values.current.map(getEquivalent), profileIncludes);
+
+function getEquivalent(domain) {
+	const preped = nameprep(domain);
+	return equivalentDomains.find(_=>_.includes(preped)) || preped;
+}
+
+function getScopeId(type, { domain, tabId, requestId, }) {
+	switch (type) {
+		case 'browser': return 'b#'+ domain; // TODO: private mode
+		case 'window': throw new Error('Not Implemented');
+		case 'tab': return 't#'+ tabId;
+		case 'page': return 'r#'+ requestId;
+		default: throw new Error('Invalid scope type "'+ type +'"');
+	}
 }
 
 class ProfileStack {
@@ -151,11 +152,13 @@ class ProfileStack {
 		this.profiles = profiles;
 		this.rules = profiles.map(_=>_.children.rules.children);
 		this.destroy = this.destroy.bind(this);
-		this.rules.forEach(rule => rule.parent.onAnyChange((value, { parent: { path, }, }) => this.clear(path.replace(/^\.?rules\./, ''))));
+		this.rules.concat([ defaultRules, ]).forEach(rule => {
+			rule.parent.onAnyChange((value, { parent: { path, }, }) => this.clear(path.replace(/^\.?rules\./, '')));
+		});
 		profileStacks.set(this.key, this);
 		profiles.forEach(profile => profileInStack.add(profile, this));
 		this.cache = new Map;
-		this.tabs = new Map;
+		this.scopes = new Map;
 
 		console.log('created ProfileStack', this);
 	}
@@ -170,27 +173,20 @@ class ProfileStack {
 		return value;
 	}
 
-	getNavigator() {
-		return this.navGen.generate();
-	}
-
 	get screenGen() {
 		const options = this.get('screen');
 		const value = !options
 		? { generate() { return null; }, }
-		: new ScreenGen(options); // TODO: offsets are passed in as an extra object but are expected as inline properties
+		: new ScreenGen(options);
 		console.log('created screenGen', value);
 		Object.defineProperty(this, 'screenGen', { value, configurable: true, });
 		return value;
 	}
 
-	getScreen() {
-		return this.screenGen.generate();
-	}
-
 	clear(key) {
 		key = (/^[^\.]*/).exec(key)[0];
 		console.log('ProfileStack.clear', key);
+		// key.startsWith('scope') && Object.keys(this.scope).forEach(key => this.scope[key].destroy());
 		key.startsWith('navigator') && (delete this.navGen);
 		key.startsWith('screen') && (delete this.screenGen);
 		this.cache.delete(key);
@@ -200,32 +196,39 @@ class ProfileStack {
 		if ((/\./).test(key)) { debugger; } // XXX: remove
 
 		if (this.cache.has(key)) { return this.cache.get(key); }
-		function get(model, rules, path) {
+		function get(model, rules, _default, path) {
 			rules = rules.filter(_=>_.values.current.length);
-			const values = rules.length ? rules[0].values.current : defaultValues[path];
+			const values = rules.length ? rules[0].values.current : _default.values.current;
 			if (!values) { debugger; } // XXX: remove
 
 			if (model.children && model.children.length && values.some(_=>_)) {
 				const object = { };
-				model.children.forEach(child => object[child.name] = get(child, rules.map(_=>_.children[child.name]), path +'.' + child.name));
+				model.children.forEach(child => object[child.name] = get(
+					child,
+					rules.map(_=>_.children[child.name]),
+					_default.children[child.name],
+					path +'.' + child.name
+				));
 				return object;
 			} else if (!model.maxLength || model.maxLength < 2) {
 				return values[0];
 			}
 			return values;
 		}
-		const value = get(ruleModel.find(_=>_.name === key), this.rules.map(_=>_[key]), key);
+		const value = get(
+			ruleModel.find(_=>_.name === key),
+			this.rules.map(_=>_[key]),
+			defaultRules[key],
+			key
+		);
 		this.cache.set(key, value);
 		return value;
 	}
 
-	getTab(id) {
-		let tab = this.tabs.get(id);
-		if (!tab) {
-			tab = new TabProfile(this);
-			this.tabs.set(id, tab);
-		}
-		return tab;
+	createScope(arg/*{ domain, tabId, requestId, }*/) {
+		let scopeId = getScopeId(this.get('scope'), arg);
+		let scope = this.scopes[scopeId] || (this.scopes[scopeId] = new ProfileScope(this, scopeId, arg));
+		return scope;
 	}
 
 	destroy() {
@@ -233,54 +236,44 @@ class ProfileStack {
 		this.profiles.forEach(s => profileInStack.delete(s, this));
 	}
 
-	static find(domain, tabId = -1) {
-		const tabTemp = tabId <= 0 && tabTemps.get(tabId);
+	static find(equiv) {
+		const domainTemp = domainTemps.get(equiv);
 		const matching = sortedProfiles.filter(profile => {
 			const groups = getIncludes(profile);
-			return profile !== tabTemp && groups.some(_=>_.includes(domain));
+			return profile !== domainTemp && groups.includes(equiv);
 		});
-		tabTemp && matching.unshift(tabTemp);
+		domainTemp && matching.unshift(domainTemp);
 
 		return new ProfileStack(matching);
 	}
 }
 
-class TabProfile {
-	constructor(stack, requestId = missing) {
-		requestId !== missing && uncommittetTabs.set(requestId, this);
-		this.requestId = requestId;
+class ProfileScope {
+	constructor(stack, scopeId, { domain, tabId, requestId, }) {
+		this.id = scopeId;
 		this.stack = stack;
-
-		this.domains = new Map;
-		console.log('TabProfile.created', this);
+		this.domain = domain;
+		this.tabIds = new Set;
+		if ((/^r/).test(scopeId)) {
+			uncommittetTabs.set(this.requestId = requestId, this);
+		} else {
+			committetTabs.set(tabId, this);
+			this.tabIds.add(tabId);
+		}
+		console.log('ProfileScope.created', this);
 	}
-	commit({ tabId, domain, }) {
+	commit(tabId) {
 		uncommittetTabs.delete(this.requestId);
-		this.stack.tabs.set(tabId, this);
-		this.tabId = tabId;
-		console.log('TabProfile.commited', this);
+		delete this.requestId;
+		committetTabs.set(tabId, this);
+		this.tabIds.add(tabId);
+		console.log('ProfileScope.commited', this);
 	}
 	destroy() {
-		!uncommittetTabs.delete(this.requestId)
-		&& this.stack.tabs.delete(this.tabId);
-		console.log('TabProfile.destroyed', this);
-	}
-	getDomain(name) {
-		let domain = this.domains.get(name);
-		if (!domain) {
-			domain = new DomainProfile(this, name);
-			this.domains.set(name, domain);
-		}
-		return domain;
-	}
-}
-
-class DomainProfile {
-	constructor(tab, domain) {
-		this.tab = tab;
-		this.domain = domain;
-		this.stack = tab.stack;
-		console.log('DomainProfile.created', this);
+		uncommittetTabs.delete(this.requestId);
+		this.tabIds.forEach(tabId => committetTabs.get(tabId) === this && committetTabs.delete(tabId));
+		delete this.stack.scopes[this.id];
+		console.log('ProfileScope.destroyed', this);
 	}
 
 	get(key) {
@@ -304,9 +297,9 @@ class DomainProfile {
 	}
 
 	get navigator() {
-		const navigator = this.stack.getNavigator();
+		const navigator = this.stack.navGen.generate();
 		const logLevel = this.get('logLevel');
-		navigator && notify.log({ title: 'Generated UA', message: navigator.userAgent.replace(/^Mozilla\/5\.0 /, ''), domain: this.domain, tabId: this.tab.tabId, logLevel, });
+		navigator && notify.log({ title: 'Generated UA', message: navigator.userAgent.replace(/^Mozilla\/5\.0 /, ''), domain: this.domain, tabId: this.tabId, logLevel, });
 		return navigator;
 	}
 
@@ -323,7 +316,7 @@ class DomainProfile {
 	}
 
 	get screen() {
-		return this.stack.getScreen();
+		return this.stack.screenGen.generate();
 	}
 
 	get fonts() {
@@ -348,17 +341,17 @@ class DomainProfile {
 		if (this.json) { return this.json; }
 		if (this.disabled) { return false; }
 		const json = { };
-		DomainProfile.keys.forEach(key => json[key] = this[key]);
+		ProfileScope.keys.forEach(key => json[key] = this[key]);
 		return (this.json = json);
 	}
 }
-DomainProfile.keys = Object.getOwnPropertyNames(DomainProfile.prototype).filter(key => {
-	const getter = Object.getOwnPropertyDescriptor(DomainProfile.prototype, key).get;
+ProfileScope.keys = Object.getOwnPropertyNames(ProfileScope.prototype).filter(key => {
+	const getter = Object.getOwnPropertyDescriptor(ProfileScope.prototype, key).get;
 	if (!getter) { return false; }
-	Object.defineProperty(DomainProfile.prototype, key, { get() {
+	Object.defineProperty(ProfileScope.prototype, key, { get() {
 		const value = getter.call(this);
 		Object.defineProperty(this, key, { value, configurable: true, });
-		// console.log('DomainProfile.'+ key, this.tab.tabId, this.tab.requestId, this.domain, value);
+		// console.log('ProfileScope.'+ key, this.tab.tabId, this.tab.requestId, this.domain, value);
 		return value;
 	}, });
 	return true;
@@ -375,35 +368,57 @@ options.children.equivalentDomains.whenChange((_, { current: patterns, }) => {
 	profileIncludes = new WeakMap;
 });
 
-return Object.freeze({
-	create({ requestId, domain, tabId, }) {
-		const stack = ProfileStack.find(domain, tabId);
-		return new TabProfile(stack, requestId);
+const changedIcon = { 19: chrome.extension.getURL('icons/changed/19.png'), 38: chrome.extension.getURL('icons/changed/38.png'), }
+const defaultIcon = { 19: chrome.extension.getURL('icons/default/19.png'), 38: chrome.extension.getURL('icons/default/38.png'), }
+
+let exports; return Object.freeze(exports = {
+	create(arg/*{ domain, tabId, requestId, }*/) {
+		const equiv = getEquivalent(arg.domain);
+		const stack = ProfileStack.find(equiv);
+		return stack.createScope(arg);
 	},
-	get({ requestId = missing, tabId = missing, domain = missing, }) {
-		let tab = requestId !== missing && uncommittetTabs.get(requestId);
-		if (tab) { return tab; }
-		return domain !== missing && tabId !== missing && ProfileStack.find(domain, tabId).getTab(tabId);
+	get({ tabId, requestId, /*domain,*/ }) {
+		return requestId && uncommittetTabs.get(requestId) || committetTabs.get(tabId) || exports.create(arguments[0]);
 	},
 	findStack(domain) {
-		return ProfileStack.find(domain);
+		return ProfileStack.find(getEquivalent(domain));
 	},
 	get current() {
 		return profiles;
 	},
-	setTemp(tabId, profileId) {
-		if (profileId === '<none>') { return tabTemps.delete(tabId) * -1; }
-		const profile = profiles.get(profileId);
-		if (!profile) { throw new Error('No such Profile "'+ profileId +'"'); }
-		tabTemps.set(tabId, profile);
-		console.log('setTemp', tabId, profile);
-		return 1;
+	setTemp(domain, profileId) {
+		let retVal = 1, icon = changedIcon;
+		let equiv = getEquivalent(domain);
+		if (!profileId || profileId === '<none>') {
+			icon = defaultIcon;
+			retVal = domainTemps.delete(equiv) * -1;
+		} else {
+			const profile = profiles.get(profileId);
+			if (!profile) { throw new Error('No such Profile "'+ profileId +'"'); }
+			domainTemps.set(equiv, profile);
+		}
+		// TODO: update when equivalentDomains change
+		typeof equiv === 'string' && (equiv = new DomainPattern.Single(equiv));
+		Tabs.query({ }).then(_=>_.forEach(({ id, url, }) => equiv.includes(domainFromUrl(url)) && chrome.browserAction.setIcon({ tabId: id, path: icon, })));
+		return retVal;
 	},
-	getTemp(tabId) {
-		const profile = tabTemps.get(tabId);
+	getTemp(domain) {
+		let equiv = getEquivalent(domain);
+		const profile = domainTemps.get(equiv);
 		return profile && profile.children.id.value;
 	},
 });
+
+function cached(func, cache) {
+	cache = cache || new Map;
+	return function(arg) {
+		let result = cache.get(arg);
+		if (result !== undefined) { return result; }
+		result = func.apply(this, arguments);
+		cache.set(arg, result);
+		return result;
+	};
+}
 
 };
 

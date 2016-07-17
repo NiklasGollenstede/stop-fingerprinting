@@ -40,7 +40,11 @@ const addProfile = async(function*(id) {
 	profile.children.title.whenChange(title => {
 		tabs.set({ id, title, });
 	});
-	profile.children.priority.whenChange(prio => {
+	id === '<default>' ? tabs.set({ id, icon: createElement('span', { textContent: '\u2605'/* '★' */, style: {
+		color: `hsl(90, 100%, 70%)`, fontWeight: 'bold',
+		position: 'relative', top: '-7px',
+		transform: 'scale(2)', display: 'block',
+	}, }), }) : profile.children.priority.whenChange(prio => {
 		tabs.set({ id, icon: createElement('span', { textContent: prio, style: {
 			color: `hsl(${ prio * 10 }, 100%, 70%)`, fontWeight: 'bold',
 			position: 'relative', top: '-7px',
@@ -50,14 +54,9 @@ const addProfile = async(function*(id) {
 	window.profiles[id] = profile;
 });
 
-function onOptionCommand({ name, }, value) {
+function onCommand({ name, }, value) {
 	({
 		addProfile: addProfile.bind(null, null, null),
-	})[name](value);
-}
-
-function onProfileCommand({ name, }, value) {
-	({
 		manage: name => ({
 			delete: () => deleteProfile(this),
 		})[name](),
@@ -65,7 +64,6 @@ function onProfileCommand({ name, }, value) {
 }
 
 const editors = new Map;
-let defaultProfile;
 
 const tabs = new Tabs({
 	host: document.body,
@@ -87,45 +85,17 @@ const tabs = new Tabs({
 		host.textContent = '';
 		let editor = editors.get(branch);
 		if (editor) { return host.appendChild(editor); }
-		const onCommand = branch === options ? onOptionCommand : onProfileCommand.bind(branch);
 		editor = Editor({
 			options: branch,
 			host: createElement('div'),
-			onCommand,
+			onCommand: onCommand.bind(branch),
 		});
-		if (branch === defaultProfile) {
-			editor = createElement('div', { }, [
-				createElement('h2', { innerHTML: (`
-					This page lists the default values that are used unless they are overwritten by a profile.
-					<br>Some of these values are browser dependant and may change in future versions of this extension.
-				`), }),
-				editor.querySelector('.pref-container.pref-name-rules'),
-			]);
-			Array.prototype.forEach.call(editor.querySelectorAll('.remove-value-entry, .add-value-entry'), e => e.remove());
-		}
 		editors.set(branch, editor);
 		host.appendChild(editor);
 	},
 });
 
-new Options({
-	model: Profile.model,
-	prefix: 'default',
-	storage: { get() {
-		const _in = Profile.defaultRules, _out = { 'default.rules': [ false, ], };
-		Object.keys(_in).forEach(key => _out['default.rules.'+ key] = _in[key]);
-		return Promise.resolve(_out);
-	}, },
-}).then(_default => tabs.add({
-	id: 'default',
-	title: '<default>',
-	icon: createElement('span', { textContent: '\u2605'/* '★' */, style: {
-		color: `hsl(90, 100%, 70%)`, fontWeight: 'bold',
-		position: 'relative', top: '-7px',
-		transform: 'scale(2)', display: 'block',
-	}, }),
-	data:  { branch: (defaultProfile = _default), },
-}));
+addProfile('<default>');
 
 options.children.profiles.values.current.forEach(addProfile);
 

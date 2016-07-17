@@ -13,11 +13,12 @@ window.options = options;
 
 const Profiles = window.Profiles = require('background/profiles')(options);
 
+// TODO: do cached pages from the history pose a problem?
 new RequestListener(class {
 	constructor({ requestId, url, tabId, type, }) {
 		this.requestId = requestId; this.url = url; this.type = type, this.tabId = tabId;
 		const domain = this.domain = domainFromUrl(url);
-		const profile = this.profile = (type === 'main_frame' ? Profiles.create({ requestId, domain, tabId, }) : Profiles.get({ tabId, domain, })).getDomain(domain);
+		const profile = this.profile = type === 'main_frame' ? Profiles.create({ requestId, domain, tabId, }) : Profiles.get({ tabId, domain, });
 		if (profile.disabled) { this.destroy(); throw ignore; }
 		console.log('request start', this.requestId);
 	}
@@ -79,7 +80,7 @@ new RequestListener(class {
 		!childSrc && (childSrc = defaultSrc.slice());
 		!frameSrc && (frameSrc = childSrc.slice());
 
-		function inject(tokens, token, test = $=>$ === token) {
+		function inject(tokens, token, test = _=>_=== token) {
 			if (tokens.includes("'none'")) {
 				tokens.splice(0, Infinity, token);
 				return (changed = true);
@@ -135,7 +136,7 @@ new RequestListener(class {
 			if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return this.removeHSTS(header); }
 		});
 
-		type === 'main_frame' && this.profile.tab.commit({ tabId, domain: this.domain, });
+		type === 'main_frame' && this.profile.commit(tabId);
 
 		if (changed) { return { responseHeaders, }; }
 	}
@@ -187,11 +188,11 @@ options.children.clearCache.children.where.when({
 	true: () => chrome.webRequest.onHeadersReceived.addListener(clearCache, { urls: [ '*://*/*', ], }, [ ]),
 });
 
-Messages.addHandler('getOptionsForUrl', function(url) {
+Messages.addHandler('getOptions', function() {
 	const tabId = this.tab.id;
-	const domain = domainFromUrl(url);
-	const profile = Profiles.get({ tabId, domain, }).getDomain(domain);
-	console.log('getOptionsForUrl', url, domain, profile);
+	const domain = domainFromUrl(this.tab.url);
+	const profile = Profiles.get({ tabId, domain, });
+	console.log('getOptions', domain, profile);
 	return { options: JSON.stringify(profile), nonce: profile.nonce, };
 });
 
@@ -203,9 +204,9 @@ Messages.addHandler('notify', function(method, { title, message, url, }) {
 });
 
 // set the correct browserAction icon
-chrome.tabs.onUpdated.addListener(function(tabId, info) {
+chrome.tabs.onUpdated.addListener(function(tabId, info, { url, }) {
 	if (!('status' in info)) { return; }
-	const path = chrome.extension.getURL('icons/'+ (Profiles.getTemp(tabId) == null ? 'default' : 'changed') +'/');
+	const path = chrome.extension.getURL('icons/'+ (Profiles.getTemp(domainFromUrl(url)) == null ? 'default' : 'changed') +'/');
 	chrome.browserAction.setIcon({ tabId, path: { 19: path +'19.png', 38: path +'38.png', }});
 });
 
