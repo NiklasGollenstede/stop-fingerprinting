@@ -4,6 +4,10 @@ let root = window, url; try { do {
 	url = root.location.href;
 } while (root.parent !== root && root.parent.location.href && (root = root.parent)); } catch (e) { }
 
+const doc = document.documentElement;
+// doc.remove();
+// document.appendChild(document.createElement('html'));
+
 getOptions(({ options: json, nonce, }) => {
 	if (json === 'false') { return console.log('Spoofing is disabled for ', url, window); }
 
@@ -13,12 +17,18 @@ getOptions(({ options: json, nonce, }) => {
 	});
 
 	inject(nonce, script, json);
+
+//	console.log('stalledScripts', JSON.parse(json).stalledScripts);
+//	document.documentElement.remove();
+//	document.appendChild(doc);
+//	setTimeout(() => document.dispatchEvent(new Event('DOMContentLoaded')), 100);
 });
 
 function getOptions(callback) {
 	if (root.options) { return void callback(root.options); }
 
 	chrome.runtime.sendMessage({ name: 'getOptions', args : [ ], }, arg => {
+		if (!arg) { reportError(new TypeError('"getOptions" return value is falsy')); }
 		if ('error' in arg) { reportError(parseError(arg.error)); }
 		callback(root.options = arg.value);
 	});

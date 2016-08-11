@@ -11,7 +11,7 @@ const Editor = require('web-ext-utils/options/editor');
 const Tabs = require('web-ext-utils/tabview');
 const Profile = require('common/profile');
 
-require('common/options').then(options => {
+require.async('common/options').then(options => {
 
 window.options = options;
 window.profiles = { };

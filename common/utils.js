@@ -1,15 +1,23 @@
 'use strict'; define('common/utils', [ // license: MPL-2.0
+	'icons/urls',
 	'web-ext-utils/chrome',
 ], function(
-	{ Notifications, applications: { chromium, }, }
+	icons,
+	{ chrome, Tabs, Notifications, BrowserAction, applications: { webkit, }, }
 ) {
 
-const icons = {
-	debug: chrome.extension.getURL('icons/debug/256.png'),
-	log: chrome.extension.getURL('icons/log/256.png'),
-	info: chrome.extension.getURL('icons/info/256.png'),
-	error: chrome.extension.getURL('icons/error/256.png'),
+const titles = {
+	default: 'Stop Fingerprinting is active',
+	tempActive: 'A temporary profile overwrite is active for this tab',
+	installed: 'Stop Fingerprinting was just installed. The protection for this tab will be inconsistent until it gets reloaded',
+	tempChanged: 'The temporary overwrite for this domain changed. Please reload to apply',
+	optionsChanged: 'Options affecting this tab changed. Please reload to apply',
+	equivChanged: 'A change in the equivalent domains affects this tab. Please reload',
+	includesChanged: 'A change in the include domains of a profile affects this tab. Please reload',
+	// includesNew: 'A new profile was created that may affects this tab. Please reload',
+	// includesDeleted: 'A profile that may have affected this tab was deleted. Please reload',
 };
+
 const logLevels = {
 	debug: 1,
 	log: 2,
@@ -24,7 +32,7 @@ function notify(method, { title, message = '', url, domain, tabId, tabTitle, log
 		type: 'list',
 		title,
 		message,
-		iconUrl: icons[method] || icons.log,
+		iconUrl: (icons[method] || icons.log)[256],
 		items: [
 			domain && url == null && { title: 'Domain:', message: ''+ domain, },
 			url      != null && { title: 'Url:   ', message: ''+ url, },
@@ -38,6 +46,17 @@ notify.log = notify.bind(null, 'log');
 notify.info = notify.bind(null, 'info');
 notify.error = notify.bind(null, 'error');
 
+function setBrowserAction({ tab, tabId, tabs, tabIds, filter, icon, title, text, }) {
+	return (
+		filter
+		? Tabs.query({ }).then(_=>_.filter(filter).map(_=>_.id))
+		: Promise.resolve(tabIds || tabs && tabs.map(_=>_.id) || tab && [ tab.id, ] || tabId && [ tabId, ] || [ null, ])
+	).then(tabIds => Promise.all(tabIds.map(tabId => {
+		(title || text) && chrome.browserAction.setTitle({ tabId, title: titles[title] || text || title, });
+		return icon && BrowserAction.setIcon({ tabId, path: icons[icon], });
+	})).then(() => tabIds));
+}
+
 function domainFromUrl(url) {
 	const location = new URL(url);
 	return location.hostname || location.protocol;
@@ -46,7 +65,7 @@ function domainFromUrl(url) {
 function nameprep(string) {
 	try {
 		if (!string) { return string; }
-		if (chromium) {
+		if (webkit) {
 			string = string.split('.').map(string => new URL('http://'+ string).host).join('.');
 		} else {
 			string = new URL('http://'+ string).host;
@@ -62,9 +81,9 @@ function nameprep(string) {
 	}
 }
 
-const DOMAIN_CHARS = String.raw`[^\x00-\x20\#\*\/\:\?\@\[\\\]\|\x7F\xA0\¨\xAD\¯\´\¸]`; // there are others that don't work, but they are browser dependant. They need to be filtered later
+const DOMAIN_CHARS = /[^\x00-\x20\#\*\/\:\?\@\[\\\]\|\x7F\xA0\¨\xAD\¯\´\¸]/; // there are others that don't work, but they are browser dependant. They need to be filtered later
 // Array(0xff/*ff*/).fill(1).map((_, i) => i).filter(i => { try { new URL('http://'+ String.fromCharCode(i)).host; } catch(e) { return true; } }).map(i => '\\u'+ i.toString(16)).join('')
 
-return { notify, domainFromUrl, nameprep, DOMAIN_CHARS, };
+return { notify, setBrowserAction, domainFromUrl, nameprep, DOMAIN_CHARS, };
 
 });

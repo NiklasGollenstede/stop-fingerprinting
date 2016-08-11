@@ -124,8 +124,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 
-
+/*
 new Fingerprint2().get(function(result, components){
 	console.log('Fingerprint2 hash', result);
 	console.log('Fingerprint2 components', components);
 });
+*/

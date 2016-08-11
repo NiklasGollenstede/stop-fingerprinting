@@ -1,29 +1,95 @@
-'use strict'; // license: MPL-2.0
+define('background/main', [ // license: MPL-2.0
+	'common/options',
+	'background/profiles',
+	'web-ext-utils/update/result',
+], function(
+	options,
+	Profiles,
+	updated
+) {
+window.options = options;
+window.Profiles = Profiles;
 
+const {
+	concurrent: { sleep, },
+} = require('es6lib');
 const { Tabs, Messages, } = require('web-ext-utils/chrome');
 Messages.isExclusiveMessageHandler = true;
 
-const { notify, domainFromUrl, } = require('common/utils');
+const { notify, domainFromUrl, setBrowserAction, } = require('common/utils');
 const { debounce, } = require('es6lib/functional');
 const RequestListener = require('background/request');
 const { ignore, reset, } = RequestListener;
+const icons = require('icons/urls');
 
-require('common/options').then(options => {
-window.options = options;
-
-const Profiles = window.Profiles = require('background/profiles')(options);
+/// tabIds whose tabs have loaded their main_frame document but have not yet completed getOptions()
+const stalledTabs = new Map; // TODO: do per frame
 
 // TODO: do cached pages from the history pose a problem?
-new RequestListener(class {
+new RequestListener({
+	urls: [ '<all_urls>', ],
+}, {
+	onBeforeRequest: [ 'blocking', ],
+	onBeforeSendHeaders: [ 'blocking', 'requestHeaders', ],
+	onHeadersReceived: [ 'blocking', 'responseHeaders', ],
+}, class {
 	constructor({ requestId, url, tabId, type, }) {
+		console.log('request start', this.requestId);
 		this.requestId = requestId; this.url = url; this.type = type, this.tabId = tabId;
 		const domain = this.domain = domainFromUrl(url);
 		const profile = this.profile = type === 'main_frame' ? Profiles.create({ requestId, domain, tabId, }) : Profiles.get({ tabId, domain, });
 		if (profile.disabled) { this.destroy(); throw ignore; }
-		console.log('request start', this.requestId);
 	}
 	destroy() {
 		console.log('request end', this.requestId);
+	}
+
+	onBeforeRequest() { return;
+		if (this.type !== 'script' || !stalledTabs.has(this.tabId)) { return; }
+		console.log('stalling tab', this.tabId);
+		stalledTabs.get(this.tabId).add(this.url);
+		return { cancel: true, };
+	}
+
+	// TODO: (only?) firefox: this is not called for the favicon
+	onBeforeSendHeaders({ requestHeaders, }) {
+		if (!this.profile.navigator) { return; }
+
+		const order = this.profile.navigator.headerOrder;
+		const headers = this.objectifyHeaders(requestHeaders, order);
+
+		this.setUserAgent(headers, this.type);
+		this.setDNT(headers);
+		this.setCachControl(headers);
+
+		// console.log('request', type, url, ordered);
+		return { requestHeaders: this.orderHeaders(headers, requestHeaders, order), };
+	}
+
+	onHeadersReceived({ responseHeaders, }) { // was only [ '*://*/*', ]
+		let changed = false;
+		changed |= (this.type === 'main_frame' || this.type === 'sub_frame') && responseHeaders.some(header => {
+			if ((/^(?:Content-Security-Policy)$/i).test(header.name) && header.value) { return this.injectCSP(header); }
+		});
+		changed |= this.profile.hstsDisabled && responseHeaders.some(header => {
+			if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return this.removeHSTS(header); }
+		});
+
+		this.type === 'main_frame' && this.profile.attachTo(this.tabId);
+
+		stalledTabs.set(this.tabId, new Set);
+
+		if (changed) { return { responseHeaders, }; }
+	}
+
+	onAuthRequired() {
+		if (this.type === 'main_frame') { this.profile.detachFrom(this.tabId); throw reset; }
+	}
+	onBeforeRedirect() {
+		if (this.type === 'main_frame') { this.profile.detachFrom(this.tabId); throw reset; }
+	}
+	onErrorOccurred() {
+		if (this.type === 'main_frame') { this.profile.detachFrom(this.tabId); }
 	}
 
 	objectifyHeaders(headers, which) {
@@ -111,68 +177,11 @@ new RequestListener(class {
 		console.log('HSTS header removed', this.domain, header);
 		return true;
 	}
-
-	// TODO: (only?) firefox: this is not called for the favicon
-	onBeforeSendHeaders({ requestId, url, tabId, type, requestHeaders, }) {
-		if (!this.profile.navigator) { return; }
-
-		const order = this.profile.navigator.headerOrder;
-		const headers = this.objectifyHeaders(requestHeaders, order);
-
-		this.setUserAgent(headers, type);
-		this.setDNT(headers);
-		this.setCachControl(headers);
-
-		// console.log('request', type, url, ordered);
-		return { requestHeaders: this.orderHeaders(headers, requestHeaders, order), };
-	}
-
-	onHeadersReceived({ requestId, url, tabId, type, responseHeaders, }) { // was only [ '*://*/*', ]
-		let changed = false;
-		changed |= (type === 'main_frame' || type === 'sub_frame') && responseHeaders.some(header => {
-			if ((/^(?:Content-Security-Policy)$/i).test(header.name) && header.value) { return this.injectCSP(header); }
-		});
-		changed |= this.profile.hstsDisabled && responseHeaders.some(header => {
-			if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return this.removeHSTS(header); }
-		});
-
-		type === 'main_frame' && this.profile.commit(tabId);
-
-		if (changed) { return { responseHeaders, }; }
-	}
-
-	onAuthRequired({ type, }) {
-		if (type === 'main_frame') { this.profile.tab.destroy(); throw reset; }
-	}
-	onBeforeRedirect({ type, }) {
-		if (type === 'main_frame') { this.profile.tab.destroy(); throw reset; }
-	}
-	onErrorOccurred({ type, }) {
-		if (type === 'main_frame') { this.profile.tab.destroy(); }
-	}
-}, { urls: [ '<all_urls>', ], }, {
-	onBeforeSendHeaders: [ 'blocking', 'requestHeaders', ],
-	onHeadersReceived: [ 'blocking', 'responseHeaders', ],
 });
 
 // clear cache on requests
 let clearCacheWhat = null, clearCacheWhere = null;
-const clearCache = (() => {
-	return debounce(() => { // works
-		chrome.browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat);
-	}, 3000);
-
-	const interval = 3000; let queued = false, last = 0;
-	const clearCache = () => chrome.browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat, () => {
-		// console.log('cleared cache', clearCacheWhere, clearCacheWhat);
-		queued = false; last = Date.now();
-	});
-
-	return function() {
-		if (queued) { return; } queued = true; // for some reason 'queued' is true before this function was ever called
-		setTimeout(clearCache, last + interval - Date.now());
-	};
-})();
+const clearCache = debounce(() => chrome.browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat), 3000);
 options.children.clearCache.children.what.whenChange(value => clearCacheWhat = ({
 	passive:  { appcache: true, cache: true, pluginData: true, },
 	active:   { appcache: true, cache: true, pluginData: true, serviceWorkers: true, cookies: true, serverBoundCertificates: true, indexedDB: true, localStorage: true, webSQL: true, fileSystems: true, },
@@ -193,7 +202,13 @@ Messages.addHandler('getOptions', function() {
 	const domain = domainFromUrl(this.tab.url);
 	const profile = Profiles.get({ tabId, domain, });
 	console.log('getOptions', domain, profile);
-	return { options: JSON.stringify(profile), nonce: profile.nonce, };
+	const stalledScripts = Array.from(stalledTabs.get(tabId) || [ ]);
+	stalledTabs.delete(tabId);
+	return /*sleep(300).then(() => (*/{
+		nonce: profile.nonce,
+		options: JSON.stringify(profile)
+		.replace(/\}$/, () => ', "stalledScripts": '+ JSON.stringify(stalledScripts) +'}'),
+	}/*))*/;
 });
 
 Messages.addHandler('notify', function(method, { title, message, url, }) {
@@ -203,11 +218,24 @@ Messages.addHandler('notify', function(method, { title, message, url, }) {
 	notify(method, { title, message, url, tabId, tabTitle, logLevel, });
 });
 
+Messages.addHandler('openOptions', () => {
+	const window = chrome.extension.getViews({ type: 'tab', }).find(_=>_.location.pathname === '/ui/home/index.html');
+	window ? chrome.tabs.update(window.tabId, { active: true, }) : chrome.tabs.create({ url: chrome.extension.getURL('ui/home/index.html#options'), });
+});
+
+Messages.addHandler('Profiles.setTemp', (...args) => Profiles.setTemp(...args));
+Messages.addHandler('Profiles.getTemp', (...args) => Profiles.getTemp(...args));
+Messages.addHandler('Profiles.getCurrent', () => Array.from(Profiles.current.values()).map(({ children: { id: { value: id, }, title: { value: name, }, }, }) => ({ id, name, })));
+
 // set the correct browserAction icon
-chrome.tabs.onUpdated.addListener(function(tabId, info, { url, }) {
+setBrowserAction({ icon: 'detached', title: 'installed', });
+Tabs.onUpdated.addListener(function(tabId, info, { url, }) {
 	if (!('status' in info)) { return; }
-	const path = chrome.extension.getURL('icons/'+ (Profiles.getTemp(domainFromUrl(url)) == null ? 'default' : 'changed') +'/');
-	chrome.browserAction.setIcon({ tabId, path: { 19: path +'19.png', 38: path +'38.png', }});
+	setBrowserAction(
+		Profiles.getTemp(domainFromUrl(url)) == null
+		? { tabId, icon: 'default', title: 'default', }
+		: { tabId, icon: 'temp', title: 'tempActive', }
+	);
 });
 
 });

@@ -90,13 +90,22 @@ If a value is set in more than one profile, the value of the profile with the hi
 				name: 'scope',
 				title: 'Values lifetime',
 				description: 'Decide when to regenerate random values',
-				[_default]: 'page',
+				[_default]: false,
 				type: 'menulist',
 				options: [
 					{ value: 'browser',  label: `Browser: Only once on browser session. Kept until the browser is closed`, }, // TODO: (separate for private/incognito // mode)
 					// { value: 'window',   label: `Window: Once per window. You should reload tabs if you move them between windows`, },
 					{ value: 'tab',      label: `Tab: Separate for every tab`, },
-					{ value: 'page',     label: `Page: Regenerate on every page reload`, },
+					{ value: false,      label: `Page: Regenerate on every page reload`, },
+				],
+				children: [
+					optional({
+						name: 'domain',
+						title: 'Per Domain',
+						description: 'TODO',
+						[_default]: true,
+						type: 'bool',
+					}),
 				],
 			}), optional({
 				name: 'hstsDisabled',
@@ -397,7 +406,7 @@ const createProfile = (id, model) => new Options({
 	model: [ {
 		name: 'id',
 		default: id,
-		restrict: { match: RegExp(id), },
+		restrict: { readOnly: true, },
 		type: 'hidden',
 	}, ].concat(model),
 	prefix: id,

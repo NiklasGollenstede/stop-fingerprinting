@@ -4,6 +4,8 @@ define('background/profiles', [ // license: MPL-2.0
 	'background/tld',
 	'common/profile',
 	'common/utils',
+	'common/options',
+	'icons/urls',
 	'web-ext-utils/chrome',
 	'web-ext-utils/utils',
 	'es6lib',
@@ -12,8 +14,10 @@ define('background/profiles', [ // license: MPL-2.0
 	{ Generator: ScreenGen, },
 	getTLD,
 	Profile,
-	{ notify, nameprep, domainFromUrl, },
-	{ applications, Tabs, },
+	{ notify, nameprep, domainFromUrl, setBrowserAction, },
+	options,
+	icons,
+	{ applications, Tabs, rootUrl, },
 	{ matchPatternToRegExp, },
 	{
 		concurrent: { async, },
@@ -22,10 +26,6 @@ define('background/profiles', [ // license: MPL-2.0
 	}
 ) {
 
-const missing = Symbol('missing argument');
-
-return function(options) {
-
 let   defaultRules      = Profile.defaultProfile.then((_ => defaultRules = _.children.rules.children));
 const ruleModel         = Profile.model.find(_=>_.name === 'rules').children;
 const profiles          = new Map;            // profileId         ==>  Profile
@@ -33,8 +33,8 @@ let   profileIncludes   = new WeakMap;        // Profile(id)       ==>  [DomainP
 const profileStacks     = new Map;            // [id].join($)      ==>  ProfileStack
 const profileInStack    = new MultiMap;       // Profile(id)       ==>  ProfileStack
 let   sortedProfiles    = [ ];                // [Profile(id)] sorted by .priority
-const uncommittetTabs   = new Map;            // requestId         ==>  TabProfile
-const   committetTabs   = new Map;            // tabId             ==>  TabProfile
+const detachedScopes    = new Map;            // requestId         ==>  ProfileScope
+const attachedScopes    = new Map;            // tabId             ==>  ProfileScope
 const domainTemps       = new Map;            // DomainPattern|String ==>  Profile
 let   equivalentDomains = [ ];                // [DomainPattern] sorted by apperance
 
@@ -44,7 +44,7 @@ const addProfile = async(function*(id) {
 	const profile = (yield Profile(id));
 	profiles.set(id, profile);
 
-	profile.children.include.children.domain.onChange(() => profileIncludes.delete(profile));
+	profile.children.include.children.domain.onChange(() => profileIncludes.delete(profile)); // TODO call detachScopes() on diff()
 	profile.children.priority.onChange(sortProfiles);
 
 	console.log('added profile', profile);
@@ -63,7 +63,14 @@ function removeProfile(id) {
 }
 
 function sortProfiles() {
-	sortedProfiles = Array.from(profiles.values()).sort((a, b) => a.children.priority.value - b.children.priority.value);
+	const _profiles = Array.from(profiles.values());
+	const prio = new Map(_profiles.map(p => [ p, p.children.priority.value ]));
+	sortedProfiles = _profiles.sort((a, b) => prio.get(b) - prio.get(a)); // descending
+
+	// .destroy() all ProfileStacks whose order is now invalid
+	for (let stack of profileStacks.values()) {
+		isNaN(stack.profiles.reduce((last, now) => last > prio.get(now) ? prio.get(now) : NaN, Infinity)) && stack.destroy('profileReordered');
+	}
 }
 
 const DomainPattern = Object.assign(class DomainPattern {
@@ -135,13 +142,26 @@ function getEquivalent(domain) {
 }
 
 function getScopeId(type, { domain, tabId, requestId, }) {
-	switch (type) {
-		case 'browser': return 'b#'+ domain; // TODO: private mode
+	domain = type && type.domain ? '?'+ domain : '';
+	switch (type && type.value) {
+		case 'browser': return 'b'+ domain; // TODO: private mode
 		case 'window': throw new Error('Not Implemented');
-		case 'tab': return 't#'+ tabId;
-		case 'page': return 'r#'+ requestId;
+		case 'tab': return 't#'+ tabId + domain;
+		case false: return 'r#'+ requestId;
 		default: throw new Error('Invalid scope type "'+ type +'"');
 	}
+}
+
+function detachScopes(equivs, title) {
+	setBrowserAction({
+		filter: ({ url, }) => equivs.some(equiv => typeof equiv === 'string' ? url === equiv : equiv.includes(domainFromUrl(url))),
+		icon: 'detached', title,
+	})
+	.then(_=>_.forEach(tabId => {
+		const scope = attachedScopes.get(tabId);
+		if (!scope) { return; }
+		scope.detachParent();
+	}));
 }
 
 class ProfileStack {
@@ -186,23 +206,28 @@ class ProfileStack {
 	clear(key) {
 		key = (/^[^\.]*/).exec(key)[0];
 		console.log('ProfileStack.clear', key);
-		// key.startsWith('scope') && Object.keys(this.scope).forEach(key => this.scope[key].destroy());
 		key.startsWith('navigator') && (delete this.navGen);
 		key.startsWith('screen') && (delete this.screenGen);
 		this.cache.delete(key);
+
+		// detach from current scopes
+		const tabIds = [ ], scopes = new Set(this.scopes.values());
+		attachedScopes.forEach((scope, tabId) => {
+			if (!scopes.has(scope)) { return; }
+			scope.detachParent();
+			tabIds.push(tabId);
+		});
+		setBrowserAction({ tabIds, icon: 'detached', title: 'optionsChanged', });
 	}
 
 	get(key) {
-		if ((/\./).test(key)) { debugger; } // XXX: remove
-
 		if (this.cache.has(key)) { return this.cache.get(key); }
 		function get(model, rules, _default, path) {
 			rules = rules.filter(_=>_.values.current.length);
 			const values = rules.length ? rules[0].values.current : _default.values.current;
-			if (!values) { debugger; } // XXX: remove
 
 			if (model.children && model.children.length && values.some(_=>_)) {
-				const object = { };
+				const object = { value: !model.maxLength || model.maxLength < 2 ? values[0] : values, };
 				model.children.forEach(child => object[child.name] = get(
 					child,
 					rules.map(_=>_.children[child.name]),
@@ -225,13 +250,15 @@ class ProfileStack {
 		return value;
 	}
 
-	createScope(arg/*{ domain, tabId, requestId, }*/) {
+	scope(arg/*{ domain, tabId, requestId, }*/) {
 		let scopeId = getScopeId(this.get('scope'), arg);
-		let scope = this.scopes[scopeId] || (this.scopes[scopeId] = new ProfileScope(this, scopeId, arg));
+		let scope = this.scopes.get(scopeId) || new ProfileScope(this, scopeId, arg);
+		this.scopes.set(scopeId, scope);
 		return scope;
 	}
 
-	destroy() {
+	destroy(reason = 'profileDeleted') {
+		detachScopes(Array.from(new Set([ ].concat(...this.profiles.map(getIncludes)))), reason);
 		profileStacks.delete(this.key, this);
 		this.profiles.forEach(s => profileInStack.delete(s, this));
 	}
@@ -255,25 +282,38 @@ class ProfileScope {
 		this.domain = domain;
 		this.tabIds = new Set;
 		if ((/^r/).test(scopeId)) {
-			uncommittetTabs.set(this.requestId = requestId, this);
+			detachedScopes.set(this.requestId = requestId, this);
 		} else {
-			committetTabs.set(tabId, this);
+			attachedScopes.set(tabId, this);
 			this.tabIds.add(tabId);
 		}
 		console.log('ProfileScope.created', this);
 	}
-	commit(tabId) {
-		uncommittetTabs.delete(this.requestId);
+
+	attachTo(tabId) {
+		console.log('ProfileScope.attachTo', this, tabId);
+		detachedScopes.delete(this.requestId);
 		delete this.requestId;
-		committetTabs.set(tabId, this);
+		attachedScopes.set(tabId, this);
 		this.tabIds.add(tabId);
-		console.log('ProfileScope.commited', this);
 	}
-	destroy() {
-		uncommittetTabs.delete(this.requestId);
-		this.tabIds.forEach(tabId => committetTabs.get(tabId) === this && committetTabs.delete(tabId));
-		delete this.stack.scopes[this.id];
-		console.log('ProfileScope.destroyed', this);
+	detachFrom(tabId) {
+		console.log('ProfileScope.detachFrom', this, tabId);
+		attachedScopes.get(tabId) === this && attachedScopes.delete(tabId);
+		this.tabIds.delete(tabId);
+		!this.tabIds.size && this.stack.scopes.delete(this.id);
+	}
+	detachFromAll() {
+		console.log('ProfileScope.detachAll', this);
+		detachedScopes.delete(this.requestId);
+		this.tabIds.forEach(tabId => attachedScopes.get(tabId) === this && attachedScopes.delete(tabId));
+		this.tabIds.clear();
+		this.stack.scopes.delete(this.id);
+	}
+	detachParent() {
+		console.log('ProfileScope.detachParent', this, this.stack);
+		this.stack.scopes.delete(this.id);
+		this.stack = null;
 	}
 
 	get(key) {
@@ -364,21 +404,24 @@ options.children.profiles.whenChange((_, { current: ids, }) => {
 });
 
 options.children.equivalentDomains.whenChange((_, { current: patterns, }) => {
-	equivalentDomains = patterns.map(p => equivalentDomains.find(g => g.pattern === p) || new DomainPattern(p));
+	const { added, deleted, } = diff(equivalentDomains.map(_=>_.pattern), patterns), outdated = [ ];
+	deleted.forEach(p => outdated.push(equivalentDomains.find(_=>_.pattern === p)));
+	equivalentDomains = patterns.map(p => equivalentDomains.find(_=>_.pattern === p) || new DomainPattern(p));
+	added.forEach(p => outdated.push(equivalentDomains.find(_=>_.pattern === p)));
+	setBrowserAction({ filter: ({ url, }) => outdated.some(_=>_.includes(domainFromUrl(url))), icon: 'detached', title: 'equivChanged', });
+
 	profileIncludes = new WeakMap;
 });
 
-const changedIcon = { 19: chrome.extension.getURL('icons/changed/19.png'), 38: chrome.extension.getURL('icons/changed/38.png'), }
-const defaultIcon = { 19: chrome.extension.getURL('icons/default/19.png'), 38: chrome.extension.getURL('icons/default/38.png'), }
 
-let exports; return Object.freeze(exports = {
+const Profiles = Object.freeze({
 	create(arg/*{ domain, tabId, requestId, }*/) {
 		const equiv = getEquivalent(arg.domain);
 		const stack = ProfileStack.find(equiv);
-		return stack.createScope(arg);
+		return stack.scope(arg);
 	},
 	get({ tabId, requestId, /*domain,*/ }) {
-		return requestId && uncommittetTabs.get(requestId) || committetTabs.get(tabId) || exports.create(arguments[0]);
+		return requestId && detachedScopes.get(requestId) || attachedScopes.get(tabId) || Profiles.create(arguments[0]);
 	},
 	findStack(domain) {
 		return ProfileStack.find(getEquivalent(domain));
@@ -387,19 +430,22 @@ let exports; return Object.freeze(exports = {
 		return profiles;
 	},
 	setTemp(domain, profileId) {
-		let retVal = 1, icon = changedIcon;
+		(!profileId || profileId === '<none>') && (profileId = undefined);
+		let retVal = 1, icon = icons.temp;
 		let equiv = getEquivalent(domain);
-		if (!profileId || profileId === '<none>') {
-			icon = defaultIcon;
-			retVal = domainTemps.delete(equiv) * -1;
+		const current = domainTemps.get(equiv);
+		if (profileId === (current && current.children.id.value)) { return 0; }
+
+		if (!profileId) {
+			retVal = -1;
+			domainTemps.delete(equiv);
 		} else {
 			const profile = profiles.get(profileId);
 			if (!profile) { throw new Error('No such Profile "'+ profileId +'"'); }
 			domainTemps.set(equiv, profile);
 		}
-		// TODO: update when equivalentDomains change
 		typeof equiv === 'string' && (equiv = new DomainPattern.Single(equiv));
-		Tabs.query({ }).then(_=>_.forEach(({ id, url, }) => equiv.includes(domainFromUrl(url)) && chrome.browserAction.setIcon({ tabId: id, path: icon, })));
+		setBrowserAction({ filter: ({ url, }) => equiv.includes(domainFromUrl(url)), icon: 'detached', title: 'tempChanged', });
 		return retVal;
 	},
 	getTemp(domain) {
@@ -420,6 +466,13 @@ function cached(func, cache) {
 	};
 }
 
-};
+function diff(before, after, mapper = x=>x) {
+	before = new Set(before), after = new Set(after);
+	const added = after, kept = new Set, deleted = new Set;
+	before.forEach(e => after.has(e) ? (added.delete(e), kept.add(e)) : deleted.add(e));
+	return { added: mapper(added), kept: mapper(kept), deleted: mapper(deleted), };
+}
+
+return Profiles;
 
 });

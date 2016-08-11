@@ -4,6 +4,8 @@ const script = window.script = function(options, script, workerOptions)  { 'use 
 const self = this;
 const window = self.constructor.name === 'Window' ? self : null;
 const worker = window ? null : self;
+const { document, } = self;
+const { documentElement, } = document;
 
 const {
 	Math, Math: {
@@ -32,6 +34,7 @@ const {
 	ArrayBuffer,
 	Uint8Array,
 	Promise,
+	Map, WeakMap, Set, WeakSet,
 	String, String: {
 		raw, },
 	Symbol, Symbol: {
@@ -46,7 +49,7 @@ const {
 		revokeObjectURL, },
 	JSON, JSON: {
 		stringify, },
-	ImageData, WebGLRenderingContext: { prototype: {
+	ImageData, WebGLRenderingContext: { prototype: { // TODO: WebGLRenderingContext_pis not defined in workers (in chrome)
 		RGBA, UNSIGNED_BYTE, }, },
 } = self;
 
@@ -63,10 +66,14 @@ const test           = _call.bind(RegExp   .prototype.test);
 const weakMapSet     = _call.bind(WeakMap  .prototype.set);
 const weakMapGet     = _call.bind(WeakMap  .prototype.get);
 const weakMapHas     = _call.bind(WeakMap  .prototype.has);
+const setHas         = _call.bind(Set      .prototype.has);
 const hasOwnProperty = _call.bind(Object   .prototype.hasOwnProperty);
 const querySelector     = window && _call.bind(Element          .prototype.querySelector);
 const querySelectorAll  = window && _call.bind(Element          .prototype.querySelectorAll);
 const observe           = window && _call.bind(MutationObserver .prototype.observe);
+const cloneNode         = window && _call.bind(Node             .prototype.cloneNode);
+const insertBefore      = window && _call.bind(Node             .prototype.insertBefore);
+const removeElemet      = window && _call.bind(Element          .prototype.remove);
 
 const console = (console => {
 	const clone = { };
@@ -82,6 +89,9 @@ const canvasGetHeight      = window && _call.bind(getGetter(HTMLCanvasElement  .
 const customEventGetDetail =           _call.bind(getGetter(CustomEvent        .prototype, 'detail'));
 const nodeGetTagName       = window && _call.bind(getGetter(Element            .prototype, 'tagName'));
 const getContentWindow     = window && _call.bind(getGetter(HTMLIFrameElement  .prototype, 'contentWindow'));
+const getScriptSrc         = window && _call.bind(getGetter(HTMLScriptElement  .prototype, 'src'));
+const getSetSize           = window && _call.bind(getGetter(Set                .prototype, 'size'));
+const getParentNode        = window && _call.bind(getGetter(Node               .prototype, 'parentNode'));
 
 const context = (() => {
 	const token = options.nonce;
@@ -100,10 +110,10 @@ const context = (() => {
 
 	// create context
 	context = {
-		values: options, options, script, workerOptions, top: self, worker, window, topUrl: location.href,
+		values: options, options, script, workerOptions, top: self, worker, window, document, documentElement, topUrl: location.href,
 
 		// all 'globals' from above here too
-		Math, clz32, random, round, min, max, CustomEvent, dispatchEvent, Object, keys, create, assign, getOwnPropertyDescriptor, defineProperty, defineProperties, getPrototypeOf, Array, Function, ArrayBuffer, Uint8Array, Promise, String, raw, Symbol, iterator, toStringTag, Reflect, construct, apply, Blob, URL, createObjectURL, revokeObjectURL, JSON, stringify,
+		Math, clz32, random, round, min, max, CustomEvent, dispatchEvent, Object, keys, create, assign, getOwnPropertyDescriptor, defineProperty, defineProperties, getPrototypeOf, Array, Function, ArrayBuffer, Uint8Array, Promise, Map, WeakMap, Set, WeakSet, String, raw, Symbol, iterator, toStringTag, Reflect, construct, apply, Blob, URL, createObjectURL, revokeObjectURL, JSON, stringify,
 		call, bind, forEach, map, reduce, join, split, replace, test, weakMapSet, weakMapGet, weakMapHas, hasOwnProperty,
 		console,
 		getRandomValues, typedArrayGetLength, imageDataGetData, canvasGetWidth, canvasGetHeight, customEventGetDetail,
@@ -656,6 +666,11 @@ function getGetter(proto, prop) {
 	return desc && desc.get || function() { return this[prop]; };
 }
 
+function getSetter(proto, prop) {
+	const desc = getOwnPropertyDescriptor(proto, prop);
+	return desc && desc.set || function(val) { this[prop] = val; };
+}
+
 function exists(obj, ...keys) {
 	return keys.reduce((obj, key) => obj && obj[key], obj);
 }
@@ -668,9 +683,26 @@ function log() {
 	console.log.apply(console, arguments); return arguments[arguments.length - 1];
 }
 
+function runStalledScripts() {
+	const sources = new Set(options.stalledScripts);
+	delete options.stalledScripts;
+	if (!getSetSize(sources)) { return; }
+	forEach(querySelectorAll(documentElement, 'script'), script => {
+		const src = getScriptSrc(script);
+		if (!setHas(sources, src)) { return; }
+		script.src = '';
+		const clone = document.createElement('script'); // cloneNode(script, true);
+		console.log('reload <script>', script, clone);
+		insertBefore(getParentNode(script), clone, script);
+		removeElemet(script);
+		clone.src = src;
+	});
+}
+
 return (function main() {
 	fakeAPIs(self);
 	attachObserver();
+	// runStalledScripts();
 })();
 
 };

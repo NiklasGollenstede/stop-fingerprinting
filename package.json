@@ -39,6 +39,6 @@
     	"test": "mocha ./test/unit/tld.js",
 		"build-icons": "node icons/build",
 		"build": "node build",
-		"postinstall": "node build && npm test -- -R progress"
+		"postinstall": "node build.js && npm test -- -R progress"
 	}
 }

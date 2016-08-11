@@ -2,12 +2,16 @@
 
 const icons = {
 	default: {
-		layers: { background: '', fingerprint: '', stopSign: 'fill: rgba(255, 0, 0, 1)', fingerprintUpper: '', stopText: '', },
+		layers: { background: '', fingerprint: '', stopSign: 'fill: hsla(000, 100%, 50%, 1.00)', fingerprintUpper: '', stopText: '', },
 		sizes: [ 16, 19, 32, 38, 48, 64, 128, 256, 1024, ],
 	},
-	changed: {
-		layers: { background: '', fingerprint: '', stopSign: 'fill: rgba(187, 0, 255, 1)', fingerprintUpper: '', stopText: '', },
-		sizes: [ 19, 38, 128, ],
+	temp: {
+		layers: { background: '', fingerprint: '', stopSign: 'fill: hsla(284, 100%, 50%, 1.00)', fingerprintUpper: '', stopText: '', },
+		sizes: [ 16, 19, 32, 38, 48, 64, 128, ],
+	},
+	detached: {
+		layers: { background: '', fingerprint: '', stopSign: 'fill: hsla( 40, 100%, 50%, 1.00)', fingerprintUpper: '', stopText: '', },
+		sizes: [ 16, 19, 32, 38, 48, 64, 128, ],
 	},
 	error: {
 		layers: { background: '', fingerprint: '', errorTriangle: 'fill: #E60000', },
@@ -26,19 +30,19 @@ const icons = {
 		sizes: [ 256, ],
 	},
 	options: {
-		layers: { gearIcon: 'fill: #7A7DB9', },
+		layers: { gearIcon: 'fill: hsla(237, 31%, 60%, 1.0)', },
 		sizes: [ 96, ],
 	},
 	state: {
-		layers: { cardiogram: 'fill: #5AE25A', },
+		layers: { cardiogram: 'fill: hsla(120, 70%, 62%, 1.0)', },
 		sizes: [ 96, ],
 	},
 	issues: {
-		layers: { bugIcon: 'fill: #F07451', },
+		layers: { bugIcon: 'fill: hsla( 13, 84%, 63%, 1.0)', },
 		sizes: [ 96, ],
 	},
 	about: {
-		layers: { infoCircle: 'fill: hsla(212, 68%, 51%, 1)', },
+		layers: { infoCircle: 'fill: hsla(212, 68%, 51%, 1.0)', },
 		sizes: [ 96, ],
 	},
 	chrome: {
@@ -68,6 +72,18 @@ const build = module.exports = async(function*(names = Object.keys(icons)) {
 
 	const template = relative('template.svg');
 	(yield Promise.all(names.map(writeSvg)));
+
+	(yield FS.writeFile(relative('urls.js'), `define('icons/urls', () => {
+		const rootUrl = chrome.extension.getURL('icons/');
+		const urls = { };`+
+		Object.keys(icons).map(name => `\n\t\t{
+			const icon = urls['${ name }'] = { };\n`+
+				icons[name].sizes.map(size => `\t\t\ticon[${ size }] = rootUrl + '${ name }/${ size }.png';\n`).join('')
+			+`\t\t}`
+		).join('') +`
+		return urls;
+	});`.replace(/\n\t/g, '\n'), 'utf8'));
+
 	return names;
 
 	function writeSvg(name) {

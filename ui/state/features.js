@@ -32,7 +32,7 @@ window.features = {
 				title: `Notifications`,
 				description: `Optionally show notifications for all relevant events`,
 				state: {
-					all: { partial: `There are only notifications for a few things, they can me suppressed according to their priority`, },
+					all: { partial: `There are only notifications for a few things, they can be suppressed according to their priority`, },
 				},
 			},
 		},
@@ -108,7 +108,7 @@ window.features = {
 				title: `Screen`,
 				description: `Generate random but realistic window.screen values (which represent the monitor hardware)`,
 				state: {
-					all: { stable: `window.inner/outerWidth/Height still leak browser layout info`, },
+					all: { stable: `window.inner/outerWidth/Height still leak browser layout info, the DPR can be detected e.g. via CSS`, },
 				},
 			},
 			plugins: {
@@ -169,7 +169,7 @@ window.features = {
 			},
 			mediaDevices: {
 				title: `Media Device`,
-				description: `Prevent Media Device enumeration an unique IDs`,
+				description: `Prevent Media Device enumeration and unique IDs`,
 				state: {
 					all: { implemented: ``, },
 				},

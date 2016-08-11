@@ -43,3 +43,5 @@ document.addEventListener('DOMContentLoaded', () => {
 	});
 	window.addEventListener('popstate', event => tabs.active = location.hash.replace(/^\#/, ''));
 });
+
+chrome.tabs.getCurrent(tab => window.tabId = tab.id);
