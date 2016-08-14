@@ -268,6 +268,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				[_default]: true,
 				type: 'bool',
 				expanded: false,
+				// TODO: make read only true (in chrome ?)
 			}), optional({
 				name: 'screen',
 				title: 'Screen',

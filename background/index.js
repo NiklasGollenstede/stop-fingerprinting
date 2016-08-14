@@ -75,9 +75,18 @@ new RequestListener({
 			if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return this.removeHSTS(header); }
 		});
 
-		this.type === 'main_frame' && this.profile.attachTo(this.tabId);
-
 		stalledTabs.set(this.tabId, new Set);
+
+		if (this.type === 'main_frame') {
+			this.profile.attachTo(this.tabId);
+
+			// this lands _before_ the navigation happened, to set the options for the context_script injected directly afterwards
+			// this is the fastest way to inject custom content into a new page
+			// TODO: find out what happens if the navigation is cancelled, or if the old page has any other way to read this
+			chrome.tabs.executeScript(this.tabId, { code: (`
+				window.name = \`${ this.profile.nonce +','+ JSON.stringify(this.profile).replace('`', '\\`') }\`;
+			`), });
+		}
 
 		if (changed) { return { responseHeaders, }; }
 	}

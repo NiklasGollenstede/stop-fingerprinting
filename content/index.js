@@ -4,37 +4,21 @@ let root = window, url; try { do {
 	url = root.location.href;
 } while (root.parent !== root && root.parent.location.href && (root = root.parent)); } catch (e) { }
 
-const doc = document.documentElement;
-// doc.remove();
-// document.appendChild(document.createElement('html'));
-
-getOptions(({ options: json, nonce, }) => {
-	if (json === 'false') { return console.log('Spoofing is disabled for ', url, window); }
-
-	window.addEventListener('stopFingerprintingPostMessage$'+ nonce, ({ detail: message, }) => {
-		message.post = true;
-		chrome.runtime.sendMessage(message);
-	});
-
-	inject(nonce, script, json);
-
-//	console.log('stalledScripts', JSON.parse(json).stalledScripts);
-//	document.documentElement.remove();
-//	document.appendChild(doc);
-//	setTimeout(() => document.dispatchEvent(new Event('DOMContentLoaded')), 100);
-});
-
-function getOptions(callback) {
-	if (root.options) { return void callback(root.options); }
-
-	chrome.runtime.sendMessage({ name: 'getOptions', args : [ ], }, arg => {
-		if (!arg) { reportError(new TypeError('"getOptions" return value is falsy')); }
-		if ('error' in arg) { reportError(parseError(arg.error)); }
-		callback(root.options = arg.value);
-	});
+let json, nonce;
+if (root === window) { // TODO: find a better way to ensure that window is a top-level frame
+	const comma = window.name.indexOf(',');
+	nonce = root.nonce = window.name.slice(0, comma);
+	json = root.json = window.name.slice(comma + 1);
+	console.log('top frame, reading window.name', nonce +',...');
+	window.name = '';
+} else {
+	nonce = root.nonce;
+	json = root.json;
 }
 
-function inject(nonce, script, jsonArg) {
+inject(nonce, json);
+
+function inject(nonce, jsonArg) {
 	const element = document.createElement('script');
 	element.async = false;
 	element.id = 'injector';
