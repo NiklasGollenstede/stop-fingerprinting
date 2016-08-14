@@ -54,7 +54,7 @@ const CSP = module.exports = function CSP(app) {
 		// Set to true if you want to force buggy CSP in Safari 5.1 and below.
 		safari5: false,
 	}));
-	app.use(new Frameguard()); // prevent being loaded in cros-origin frames
+	// app.use(new Frameguard()); // prevent being loaded in cros-origin frames
 	app.use(noSniff()); // force browsers to respect mime-types
 	app.disable('x-powered-by');
 	return app;
