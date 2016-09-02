@@ -1,24 +1,17 @@
-define('common/options', [ // license: MPL-2.0
-	'common/utils',
-	'web-ext-utils/options',
-	'web-ext-utils/chrome',
-	'es6lib',
-], function(
-	{ DOMAIN_CHARS, },
-	Options,
-	{ storage: Storage, applications: { chromium, }, },
-	{
-		format: { RegExpX, },
-		object: { deepFreeze, },
-	}
-) {
+(() => { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'node_modules/es6lib/format': { RegExpX, },
+	'node_modules/es6lib/object': { deepFreeze, },
+	'node_modules/web-ext-utils/options/': Options,
+	'node_modules/web-ext-utils/chrome/': { Storage, applications: { blink, }, },
+	utils: { DOMAIN_CHARS, },
+}) {
 
 const model = deepFreeze([
 	Object.assign({
 		name: 'clearCache',
 		title: 'Disable Caching',
 		type: 'label',
-	}, chromium ? { // chrome
+	}, blink ? { // chrome
 		description: `In Chrome caching can't actually be disabled. The best that is possible (without command line flags) is to clear the browsing data on every web request`,
 		default: true,
 		children: [
@@ -62,7 +55,7 @@ const model = deepFreeze([
 		addDefault: String.raw`*.domain.com | www.domain.co.uk | *.*.berlin`,
 		restrict: {
 			match: {
-				exp: RegExpX`^(?:
+				exp: RegExpX`^(?! \s* \| \s* ) (?:
 					(?: ^ | \s* \| \s* )      # '|' separated list of:
 					(?:                                # '<sub>.<name>.<tld>':
 						  (?:
@@ -101,7 +94,7 @@ const model = deepFreeze([
 
 const listerners = new WeakMap;
 
-return Object.freeze(Object.assign(new Options({
+const options = (yield new Options({
 	model,
 	prefix: 'options',
 	storage: Storage.sync || Storage.local,
@@ -115,6 +108,10 @@ return Object.freeze(Object.assign(new Options({
 		listerners.delete(listener);
 		Storage.onChanged.removeListener(onChanged);
 	},
-}), { model, }));
+}));
 
-});
+options.model = model;
+
+return Object.freeze(options);
+
+}); })();

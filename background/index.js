@@ -1,41 +1,37 @@
-define('background/main', [ // license: MPL-2.0
-	'common/options',
-	'background/profiles',
-	'web-ext-utils/update/result',
-], function(
-	options,
+(() => { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'node_modules/es6lib/concurrent': { sleep, },
+	'node_modules/es6lib/functional': { debounce, },
+	'node_modules/web-ext-utils/update/': update,
+	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, },
+	'node_modules/web-ext-utils/utils': { showExtensionTab, },
+	'common/utils': { notify, domainFromUrl, setBrowserAction, },
+	'common/options': options,
+	'icons/urls': icons,
+	RequestListener, RequestListener: { ignore, reset, },
 	Profiles,
-	updated
-) {
+}) {
+const updated = (yield update());
+console.log('Ran updates', updated);
+
 window.options = options;
 window.Profiles = Profiles;
 
-const {
-	concurrent: { sleep, },
-} = require('es6lib');
-const { Tabs, Messages, } = require('web-ext-utils/chrome');
-Messages.isExclusiveMessageHandler = true;
-
-const { notify, domainFromUrl, setBrowserAction, } = require('common/utils');
-const { debounce, } = require('es6lib/functional');
-const RequestListener = require('background/request');
-const { ignore, reset, } = RequestListener;
-const icons = require('icons/urls');
 
 /// tabIds whose tabs have loaded their main_frame document but have not yet completed getOptions()
 const stalledTabs = new Map; // TODO: do per frame
 
 // TODO: do cached pages from the history pose a problem?
 new RequestListener({
-	urls: [ '<all_urls>', ],
+	urls: [ '*://*/*', ],
+	// urls: [ '<all_urls>', ],
 }, {
 	onBeforeRequest: [ 'blocking', ],
 	onBeforeSendHeaders: [ 'blocking', 'requestHeaders', ],
 	onHeadersReceived: [ 'blocking', 'responseHeaders', ],
 }, class {
 	constructor({ requestId, url, tabId, type, }) {
-		console.log('request start', this.requestId);
 		this.requestId = requestId; this.url = url; this.type = type, this.tabId = tabId;
+		console.log('request start', this.requestId);
 		const domain = this.domain = domainFromUrl(url);
 		const profile = this.profile = type === 'main_frame' ? Profiles.create({ requestId, domain, tabId, }) : Profiles.get({ tabId, domain, });
 		if (profile.disabled) { this.destroy(); throw ignore; }
@@ -218,14 +214,9 @@ Messages.addHandler('notify', function(method, { title, message, url, }) {
 	notify(method, { title, message, url, tabId, tabTitle, logLevel, });
 });
 
-Messages.addHandler('openOptions', () => {
-	const window = chrome.extension.getViews({ type: 'tab', }).find(_=>_.location.pathname === '/ui/home/index.html');
-	window ? chrome.tabs.update(window.tabId, { active: true, }) : chrome.tabs.create({ url: chrome.extension.getURL('ui/home/index.html#options'), });
-});
+Messages.addHandler('openOptions', () => showExtensionTab('/ui/home/index.html#options', '/ui/home/index.html'));
 
-Messages.addHandler('Profiles.setTemp', (...args) => Profiles.setTemp(...args));
-Messages.addHandler('Profiles.getTemp', (...args) => Profiles.getTemp(...args));
-Messages.addHandler('Profiles.getCurrent', () => Array.from(Profiles.current.values()).map(({ children: { id: { value: id, }, title: { value: name, }, }, }) => ({ id, name, })));
+Messages.addHandlers('Profiles.', Profiles);
 
 // set the correct browserAction icon
 setBrowserAction({ icon: 'detached', title: 'installed', });
@@ -238,4 +229,4 @@ Tabs.onUpdated.addListener(function(tabId, info, { url, }) {
 	);
 });
 
-});
+}); })();

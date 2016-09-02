@@ -13,6 +13,8 @@
 - change time zone and add small random offsets to Dates and change toLocaleString
 - disable WebRTC local IP detection on a per-tab basis, make sure media device enumeration is disabled
 - do something about console.memory in chrome (?)
+- how exactly are CSP reports send?
+- what about protocols other than http(s) ? (ftp, ... ?)
 - InstallTrigger (firefox)
 - ``<img srcset="... 2x">``, CSS media queries and the "mozmm" CSS unit leak the true devicePixelRatio
 

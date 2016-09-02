@@ -4,3 +4,4 @@ icons/*/*.png
 icons/urls.js
 npm-debug.log
 background/tld/index.js
+/build/

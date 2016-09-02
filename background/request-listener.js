@@ -1,4 +1,6 @@
-define('background/request', function() { 'use strict'; // license: MPL-2.0
+(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'node_modules/web-ext-utils/chrome/': { webRequest, },
+}) {
 
 const ignore = Symbol('ignore');
 const reset = Symbol('ignore');
@@ -10,9 +12,9 @@ function RequestListener(filter, options, Handler) {
 	!listeners.onErrorOccurred && on('onErrorOccurred');
 
 	function on(event) {
-		if (!chrome.webRequest[event]) { return; }
+		if (!webRequest[event]) { return; }
 
-		chrome.webRequest[event].addListener(
+		webRequest[event].addListener(
 			listeners[event] = [ 'onCompleted', 'onErrorOccurred', ].includes(event)
 			? Handler.prototype[event] ? fireAndDone : done : fire,
 			filter, ...(options[event] ? [ options[event], ] : [ ])
@@ -55,7 +57,7 @@ function RequestListener(filter, options, Handler) {
 	}
 
 	return { destroy() {
-		Object.keys(listeners).forEach(event => chrome.webRequest[event].removeListener(listeners[event]));
+		Object.keys(listeners).forEach(event => webRequest[event].removeListener(listeners[event]));
 		Object.keys(handlers).forEach(requestId => destroy(handlers[requestId]));
 	}, };
 }
@@ -71,4 +73,4 @@ function destroy(obj) {
 
 return RequestListener;
 
-});
+}); })();

@@ -4,7 +4,7 @@ const now = f => f();
 
 if (!('electron' in process.versions)) { // started as node.js program, launch electron app
 
-	var electron = require('child_process').spawn(
+	const electron = require('child_process').spawn(
 		require('electron-prebuilt'),
 		[ '.', '--debug', process.argv.slice(2), ],
 		{
@@ -14,15 +14,17 @@ if (!('electron' in process.versions)) { // started as node.js program, launch e
 		}
 	);
 
-	electron.on('error', function(error) { console.error(error); });
+	electron.on('Uncaught Electron error:', function(error) { console.error(error); });
 
-	console.log('Sarted electron ('+ electron.pid +')');
+	console.log('Started electron ('+ electron.pid +')');
 
 } else { // started as electron app
 
 	const { app: App, BrowserWindow, } = require('electron');
 
-	const file = require('es6lib/template/escape').escapeString(process.argv[3] ? process.argv[3].replace(/^\.[\\\/]/, __dirname +'/../../') : __dirname +'/index.js');
+	const escapeString = _=>_.replace(/([\\\n\$\`\'\"])/g, '\\$1');
+
+	const file = escapeString(process.argv[3] ? process.argv[3].replace(/^\.[\\\/]/, __dirname +'/../../') : __dirname +'/index.js');
 
 	(App.isReady() ? now : App.once.bind(App, 'ready'))(() => {
 

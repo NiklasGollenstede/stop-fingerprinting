@@ -130,3 +130,58 @@ new Fingerprint2().get(function(result, components){
 	console.log('Fingerprint2 components', components);
 });
 */
+
+const HttpRequest = (function() {
+
+var XHR; try { XHR = (/* global XMLHttpRequest */ typeof XMLHttpRequest !== 'undefined') ? XMLHttpRequest : require('sdk/net/xhr'/* firefox */).XMLHttpRequest; } catch(e) { }
+var ProgressEventConstruntor; try { /* global ProgressEvent */ new ProgressEvent(''); ProgressEventConstruntor = ProgressEvent; } catch (error) { ProgressEventConstruntor = function(reason) { const error = document.createEvent('ProgressEvent'); error.initEvent(reason, false, false); return error; }; }
+
+return function HttpRequest(url, options) {
+	var request, cancel;
+	const o = arguments[arguments.length - 1] || { };
+	const promise = new Promise(function(resolve, reject) {
+		typeof url !== 'string' && (url = o.url || o.src);
+
+		request = new XHR(o);
+		cancel = cancelWith.bind(request, reject);
+
+		request.open(o.method || "get", url, true, o.user, o.password);
+
+		o.responseType && (request.responseType = o.responseType);
+		o.timeout && (request.timeout = o.timeout);
+		o.overrideMimeType && request.overrideMimeType(o.overrideMimeType);
+		(o.xhr == null || o.xhr) && request.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+		o.header && Object.keys(o.header).forEach(function(key) { request.setRequestHeader(key, o.header[key]); });
+
+		request.onerror = reject;
+		request.ontimeout = reject;
+		request.onload = function(event) {
+			if (request.status >= 200 && request.status < 300) {
+				resolve(request);
+			} else {
+				cancel('bad status');
+			}
+		};
+		request.send(o.body);
+	});
+	o.needAbort && (promise.abort = function() {
+		request.abort();
+		cancel('canceled');
+	});
+	return promise;
+};
+function cancelWith(reject, reason) {
+	const error = new ProgressEventConstruntor(reason);
+	this.dispatchEvent(error);
+	reject(error);
+}
+})();
+
+/*
+HttpRequest('./frame.html').then(({ response: html, }) => {
+	const iframe = document.createElement('iframe');
+	iframe.srcdoc = html;
+	document.body.appendChild(iframe);
+	return (window.last = iframe.contentWindow);
+});
+*/

@@ -1,30 +1,17 @@
-define('background/profiles', [ // license: MPL-2.0
-	'background/ua',
-	'background/screen',
-	'background/tld',
-	'common/profile',
-	'common/utils',
-	'common/options',
-	'icons/urls',
-	'web-ext-utils/chrome',
-	'web-ext-utils/utils',
-	'es6lib',
-], function(
-	{ Generator: NavGen, Navigator: { prototype: { toJSON: NavToJSON, }, }, },
-	{ Generator: ScreenGen, },
-	getTLD,
-	Profile,
-	{ notify, nameprep, domainFromUrl, setBrowserAction, },
-	options,
-	icons,
-	{ applications, Tabs, rootUrl, },
-	{ matchPatternToRegExp, },
-	{
-		concurrent: { async, },
-		functional: { log, },
-		object: { MultiMap, deepFreeze, },
-	}
-) {
+(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'node_modules/es6lib/concurrent': { async, },
+	'node_modules/es6lib/functional': { log, },
+	'node_modules/es6lib/object': { MultiMap, deepFreeze, },
+	'node_modules/web-ext-utils/chrome/': { Tabs, applications, rootUrl, },
+	'node_modules/web-ext-utils/utils': { matchPatternToRegExp, },
+	'node_modules/get-tld/': { Domain, getTLD, },
+	'common/profile': Profile,
+	'common/utils': { notify, nameprep, domainFromUrl, setBrowserAction, },
+	'common/options': options,
+	'icons/urls': icons,
+	ua: { Generator: NavGen, },
+	screen: { Generator: ScreenGen, },
+}) {
 
 let   defaultRules      = Profile.defaultProfile.then((_ => defaultRules = _.children.rules.children));
 const ruleModel         = Profile.model.find(_=>_.name === 'rules').children;
@@ -429,6 +416,11 @@ const Profiles = Object.freeze({
 	get current() {
 		return profiles;
 	},
+	getNames() {
+		return Array.from(Profiles.current.values()).map(
+			({ children: { id: { value: id, }, title: { value: name, }, }, }) => ({ id, name, })
+		);
+	},
 	setTemp(domain, profileId) {
 		(!profileId || profileId === '<none>') && (profileId = undefined);
 		let retVal = 1, icon = icons.temp;
@@ -475,4 +467,4 @@ function diff(before, after, mapper = x=>x) {
 
 return Profiles;
 
-});
+}); })();

@@ -1,10 +1,7 @@
-'use strict'; define('common/utils', [ // license: MPL-2.0
-	'icons/urls',
-	'web-ext-utils/chrome',
-], function(
-	icons,
-	{ chrome, Tabs, Notifications, BrowserAction, applications: { webkit, }, }
-) {
+(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'node_modules/web-ext-utils/chrome/': { chrome, Tabs, Notifications, BrowserAction, applications: { blink, }, },
+	'icons/urls': icons,
+}) {
 
 const titles = {
 	default: 'Stop Fingerprinting is active',
@@ -65,7 +62,7 @@ function domainFromUrl(url) {
 function nameprep(string) {
 	try {
 		if (!string) { return string; }
-		if (webkit) {
+		if (blink) {
 			string = string.split('.').map(string => new URL('http://'+ string).host).join('.');
 		} else {
 			string = new URL('http://'+ string).host;
@@ -86,4 +83,4 @@ const DOMAIN_CHARS = /[^\x00-\x20\#\*\/\:\?\@\[\\\]\|\x7F\xA0\¨\xAD\¯\´\¸]/;
 
 return { notify, setBrowserAction, domainFromUrl, nameprep, DOMAIN_CHARS, };
 
-});
+}); })();

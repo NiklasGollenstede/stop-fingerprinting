@@ -1,4 +1,4 @@
-'use strict'; require('es6lib/concurrent').spawn(function*() {
+'use strict'; require('es6lib/require'); require('es6lib/concurrent').spawn(function*() {
 /* globals __dirname, module, exports, process */
 
 

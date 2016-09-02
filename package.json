@@ -12,18 +12,20 @@
 	},
 
 	"dependencies": {
-		"chai": "3.5.0",
 		"fs-extra": "^0.30.0",
-		"es6lib": "NiklasGollenstede/es6lib",
 		"imagemin": "^5.2.1",
 		"imagemin-pngquant": "^5.0.0",
-		"mocha": "^2.5.3",
-		"request-promise": "^3.0.0",
 		"svgexport": "^0.3.2",
-		"web-ext": "1.0.1",
+		"zip-dir": "1.0.2",
+
+		"es6lib": "NiklasGollenstede/es6lib",
+		"get-tld": "NiklasGollenstede/get-tld",
 		"web-ext-utils": "NiklasGollenstede/web-ext-utils"
 	},
 	"devDependencies": {
+		"chai": "3.5.0",
+		"mocha": "^2.5.3",
+
 		"body-parser": "^1.15.1",
 		"cookie-parser": "^1.4.1",
 		"electron-prebuilt": "^1.2.0",
@@ -36,9 +38,8 @@
 	"main": "test/server/debug.js",
 	"scripts": {
 		"start": "node test/server/debug.js",
-    	"test": "mocha ./test/unit/tld.js",
-		"build-icons": "node icons/build",
+    	"test": "mocha",
 		"build": "node build",
-		"postinstall": "node build.js && npm test -- -R progress"
+		"postinstall": "node build.js"
 	}
 }

@@ -1,4 +1,4 @@
-(function(exports) { 'use strict';
+(() => { 'use strict'; define(function(_, exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
  * data from: https://en.wikipedia.org/wiki/List_of_common_resolutions and https://en.wikipedia.org/wiki/Display_resolution
@@ -206,4 +206,4 @@ function addTotalParts(array) {
 	array.total_parts = array.reduce((sum, { parts, }) => sum + parts, 0);
 }
 
-const moduleName = 'background/screen'; if (typeof module !== 'undefined') { module.exports = exports; } else if (typeof define === 'function') { define(moduleName, exports); } else if (typeof window !== 'undefined' && typeof module === 'undefined') { window[moduleName] = exports; } return exports; })({ });
+}); })();
