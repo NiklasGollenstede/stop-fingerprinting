@@ -4,11 +4,21 @@ let root = window, url; try { do {
 	url = root.location.href;
 } while (root.parent !== root && root.parent.location.href && (root = root.parent)); } catch (e) { }
 
-const doc = document.documentElement;
-// doc.remove();
-// document.appendChild(document.createElement('html'));
+const echoPorts = [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ];
 
-getOptions(({ options: json, nonce, }) => {
+for (let i = 0; i < echoPorts.length; ++i) { try {
+
+	const request = new XMLHttpRequest();
+	request.open('GET', `https://localhost:${ echoPorts[i] }/stop_fingerprint_get_options`, false); // sync
+	try { request.send(null); }
+	catch (error) { if (i === echoPorts.length - 1) { throw error; } continue; } // try next port
+
+	const { response, } = request;
+
+	console.log('response', response);
+
+	const nonce = (/^[^;]*/).exec(response)[0];
+	const json = response.slice(nonce.length + 1);
 	if (json === 'false') { return console.log('Spoofing is disabled for ', url, window); }
 
 	window.addEventListener('stopFingerprintingPostMessage$'+ nonce, ({ detail: message, }) => {
@@ -17,30 +27,23 @@ getOptions(({ options: json, nonce, }) => {
 	});
 
 	inject(nonce, script, json);
-
-//	console.log('stalledScripts', JSON.parse(json).stalledScripts);
-//	document.documentElement.remove();
-//	document.appendChild(doc);
-//	setTimeout(() => document.dispatchEvent(new Event('DOMContentLoaded')), 100);
-});
-
-function getOptions(callback) {
-	if (root.options) { return void callback(root.options); }
-
-	chrome.runtime.sendMessage({ name: 'getOptions', args : [ ], }, arg => {
-		if (!arg) { reportError(new TypeError('"getOptions" return value is falsy')); }
-		if ('error' in arg) { reportError(parseError(arg.error)); }
-		callback(root.options = arg.value);
-	});
-}
+	break;
+} catch (error) {
+	if (root === self) {
+		document.documentElement && document.documentElement.remove();
+		window.stop();
+		reportError(error, 'error');
+	} else {
+		reportError(error, 'debug');
+	}
+} }
 
 function inject(nonce, script, jsonArg) {
 	const element = document.createElement('script');
-	element.async = false;
-	element.id = 'injector';
 	element.setAttribute('nonce', nonce);
 	element.textContent =
 	(`(function () { try {
+		// throw new Error('nope');
 		const script = (${ script });
 		const arg = JSON.parse(\`${ jsonArg }\`);
 		const value = script.call(window, arg, script);
@@ -48,18 +51,15 @@ function inject(nonce, script, jsonArg) {
 		this.dataset.value = JSON.stringify(value) || 'null';
 	} catch (error) {
 		console.error(error);
-		this.dataset.error = JSON.stringify(
-			typeof error !== 'object' || error === null || !(error instanceof Error) ? error
-			: { name: error.name, message: error.message, stack: error.stack, }
-		);
-	} }).call(document.querySelector('script#injector'));`); // TODO: use document.currentScript instead
+		this.dataset.error = JSON.stringify(error, (key, value) => {
+			if (!value || typeof value !== 'object') { return value; }
+			if (value instanceof Error) { return '$_ERROR_$'+ JSON.stringify({ name: value.name, message: value.message, stack: value.stack, }); }
+			return value;
+		});
+	} }).call(document.currentScript)`);
 	document.documentElement.appendChild(element).remove();
-	if (element.dataset.error) {
-		const error = JSON.parse(element.dataset.error);
-		const constructor = window[error && error.name] || Error;
-		reportError(Object.assign(new constructor, error));
-	}
-	if (!element.dataset.done) { reportError(new Error('Script was not executed at all'), 'debug'); }
+	if (element.dataset.error) { throw parseError(element.dataset.error); }
+	if (!element.dataset.done) { throw new Error('Script was not executed at all'); }
 	return JSON.parse(element.dataset.value);
 }
 
@@ -68,8 +68,10 @@ function parseError(string) {
 	return JSON.parse(string, (key, value) => {
 		if (!value || typeof value !== 'string' || !value.startsWith('$_ERROR_$')) { return value; }
 		const object = JSON.parse(value.slice(9));
-		const constructor = object.name ? window[object.name] || Error : Error;
-		return Object.assign(new constructor, object);
+		const Constructor = object.name ? window[object.name] || Error : Error;
+		const error = Object.create(Constructor.prototype);
+		Object.assign(error, object);
+		return error;
 	});
 }
 

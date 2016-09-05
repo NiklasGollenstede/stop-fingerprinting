@@ -22,13 +22,14 @@
 	"applications": {
 		"gecko": {
 			"id": "@stop-fingerprinting",
-			"strict_min_version": "47.0"
+			"strict_min_version": "50.0"
 		}
 	},
 
 	"permissions": [
 		"browsingData",
 		"notifications",
+		"nativeMessaging",
 		"storage",
 		"tabs",
 		"webRequest",
@@ -63,6 +64,10 @@
 	},
 	"web_accessible_resources": [
 	],
+	"run_update": {
+		"base_path": "/update/",
+		"history_epsilon": "days"
+	},
 
 	"incognito": "spanning"
 }

@@ -1,24 +1,41 @@
 (() => { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'node_modules/web-ext-utils/update/': updated,
 	'node_modules/es6lib/concurrent': { sleep, },
-	'node_modules/es6lib/functional': { debounce, },
-	'node_modules/web-ext-utils/update/': update,
-	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, },
+	'node_modules/es6lib/functional': { throttle, },
+	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, Runtime: { sendNativeMessage, }, },
 	'node_modules/web-ext-utils/utils': { showExtensionTab, },
 	'common/utils': { notify, domainFromUrl, setBrowserAction, },
 	'common/options': options,
 	'icons/urls': icons,
 	RequestListener, RequestListener: { ignore, reset, },
 	Profiles,
+	Native,
 }) {
-const updated = (yield update());
 console.log('Ran updates', updated);
 
 window.options = options;
 window.Profiles = Profiles;
 
+let echoPort = 0;
+const native = new Native({
+	version: 1,
+	ports: [ 8075, 29941, 35155, 61830, 63593, 23862, 47358, 47585 ],
+	onStart() {
+		this.socket.onmessage = ({ data, }) => {
+			console.log('data', data);
+			data = JSON.parse(data);
+			data.name === 'port' && (echoPort = data.args[0]);
+			console.log('echoPort', echoPort);
+		};
+		this.socket.send(JSON.stringify({ name: 'getPort', args: [ ], }));
+	},
+	onStop() {
+		echoPort = 0;
+	},
+});
+native.start();
 
-/// tabIds whose tabs have loaded their main_frame document but have not yet completed getOptions()
-const stalledTabs = new Map; // TODO: do per frame
+const getOptionsUrl = (/^https\:\/\/localhost\:(\d+)\/stop_fingerprint_get_options$/);
 
 // TODO: do cached pages from the history pose a problem?
 new RequestListener({
@@ -31,24 +48,37 @@ new RequestListener({
 }, class {
 	constructor({ requestId, url, tabId, type, }) {
 		this.requestId = requestId; this.url = url; this.type = type, this.tabId = tabId;
-		console.log('request start', this.requestId);
+		console.log('request start', this.requestId, this.url);
 		const domain = this.domain = domainFromUrl(url);
 		const profile = this.profile = type === 'main_frame' ? Profiles.create({ requestId, domain, tabId, }) : Profiles.get({ tabId, domain, });
-		if (profile.disabled) { this.destroy(); throw ignore; }
+		if (profile.disabled) { return ignore; }
 	}
 	destroy() {
 		console.log('request end', this.requestId);
 	}
 
-	onBeforeRequest() { return;
-		if (this.type !== 'script' || !stalledTabs.has(this.tabId)) { return; }
-		console.log('stalling tab', this.tabId);
-		stalledTabs.get(this.tabId).add(this.url);
-		return { cancel: true, };
+	onBeforeRequest() {
+		const match = getOptionsUrl.exec(this.url);
+		// TODO: it seems that sync XHRs are not sent here by firefox
+		if (match && +match[1] !== echoPort) { // get-options request to wrong port
+			console.log('cancel getOptions request on port', +match[1]);
+			return { cancel: true, };
+		}
 	}
 
 	// TODO: (only?) firefox: this is not called for the favicon
 	onBeforeSendHeaders({ requestHeaders, }) {
+		if (getOptionsUrl.test(this.url)) {
+			// TODO: only allow this once per frame
+			return {
+				ignore,
+				requestHeaders: [
+					{ name: 'x-options', value: JSON.stringify(this.profile), },
+					{ name: 'x-nonce', value: this.profile.nonce, },
+				],
+			};
+		}
+
 		if (!this.profile.navigator) { return; }
 
 		const order = this.profile.navigator.headerOrder;
@@ -62,7 +92,7 @@ new RequestListener({
 		return { requestHeaders: this.orderHeaders(headers, requestHeaders, order), };
 	}
 
-	onHeadersReceived({ responseHeaders, }) { // was only [ '*://*/*', ]
+	onHeadersReceived({ responseHeaders, }) {
 		let changed = false;
 		changed |= (this.type === 'main_frame' || this.type === 'sub_frame') && responseHeaders.some(header => {
 			if ((/^(?:Content-Security-Policy)$/i).test(header.name) && header.value) { return this.injectCSP(header); }
@@ -73,16 +103,14 @@ new RequestListener({
 
 		this.type === 'main_frame' && this.profile.attachTo(this.tabId);
 
-		stalledTabs.set(this.tabId, new Set);
-
 		if (changed) { return { responseHeaders, }; }
 	}
 
 	onAuthRequired() {
-		if (this.type === 'main_frame') { this.profile.detachFrom(this.tabId); throw reset; }
+		if (this.type === 'main_frame') { this.profile.detachFrom(this.tabId); return reset; }
 	}
 	onBeforeRedirect() {
-		if (this.type === 'main_frame') { this.profile.detachFrom(this.tabId); throw reset; }
+		if (this.type === 'main_frame') { this.profile.detachFrom(this.tabId); return reset; }
 	}
 	onErrorOccurred() {
 		if (this.type === 'main_frame') { this.profile.detachFrom(this.tabId); }
@@ -177,7 +205,7 @@ new RequestListener({
 
 // clear cache on requests
 let clearCacheWhat = null, clearCacheWhere = null;
-const clearCache = debounce(() => chrome.browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat), 3000);
+const clearCache = throttle(() => chrome.browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat), 3000);
 options.children.clearCache.children.what.whenChange(value => clearCacheWhat = ({
 	passive:  { appcache: true, cache: true, pluginData: true, },
 	active:   { appcache: true, cache: true, pluginData: true, serviceWorkers: true, cookies: true, serverBoundCertificates: true, indexedDB: true, localStorage: true, webSQL: true, fileSystems: true, },
@@ -198,12 +226,9 @@ Messages.addHandler('getOptions', function() {
 	const domain = domainFromUrl(this.tab.url);
 	const profile = Profiles.get({ tabId, domain, });
 	console.log('getOptions', domain, profile);
-	const stalledScripts = Array.from(stalledTabs.get(tabId) || [ ]);
-	stalledTabs.delete(tabId);
 	return /*sleep(300).then(() => (*/{
 		nonce: profile.nonce,
-		options: JSON.stringify(profile)
-		.replace(/\}$/, () => ', "stalledScripts": '+ JSON.stringify(stalledScripts) +'}'),
+		options: JSON.stringify(profile),
 	}/*))*/;
 });
 

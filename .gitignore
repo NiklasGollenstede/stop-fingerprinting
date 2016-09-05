@@ -5,3 +5,8 @@ icons/urls.js
 npm-debug.log
 background/tld/index.js
 /build/
+tmp/
+log.txt
+/native/native.*
+/native/*.json
+/update/versions.json

@@ -1,5 +1,6 @@
 'use strict'; /* globals __dirname, process */ // license: MPL-2.0
 
+// files to be included
 const include = {
 	'.': [
 		'background/',
@@ -47,7 +48,7 @@ const include = {
 	},
 };
 
-const args = process.argv.length > 2 ? process.argv.slice(2) : [ '-z', '-i', '-t', ];
+const args = process.argv.length > 2 ? process.argv.slice(2) : [ '-z', '-i', '-t', '-u', ];
 
 require('es6lib/require');
 
@@ -57,6 +58,7 @@ const {
 	fs: { FS, },
 	process: { execute, },
 } = require('es6lib');
+const { join, relative, resolve, dirname, basename, } = require('path');
 
 const buildIcons = async(function*(...args) {
 	const iconNames = (yield require('./icons/build')(...args));
@@ -68,24 +70,36 @@ const buildTldJS = async(function*(...args) {
 	console.log(`./node_modules/get-tld/index.js created/updated (${ tlds.reduce((c, s) => c + s.length, 0) } => ${ data.length } bytes)`);
 });
 
+const buildUpdate = async(function*(...args) {
+	const versions = (yield FS.readdir(resolve(__dirname, 'update')).catch(e => [ ]))
+	.map(path => basename(path))
+	.filter(name => (/^\d+\.\d+\.\d+\.js$/).test(name))
+	.map(_=>_.slice(0, -3));
+	(yield promisify(require('fs-extra').outputJson)('./update/versions.json', versions));
+	console.log('wrote update versions', versions);
+});
+
+let outputName;
+const veryfyManifest = async(function*(...args) {
+	const _package  = JSON.parse((yield FS.readFile('package.json', 'utf8')));
+	const _manifest = JSON.parse((yield FS.readFile('manifest.json', 'utf8')));
+	[ 'title', 'version', 'author', ]
+	.forEach(key => {
+		if (_manifest[key] && _package[key] !== _manifest[key]) { throw new Error('Key "'+ key +'" mismatch (package.json, manifest.json)'); }
+	});
+	outputName = _package.title.toLowerCase().replace(/[^a-z0-9\.-]+/g, '_') +'-'+ _package.version;
+});
+
 spawn(function*() {
 
 (yield Promise.all([
 	args.includes('-i') && buildIcons(),
 	args.includes('-t') && buildTldJS(),
+	args.includes('-u') && buildUpdate(),
+	args.includes('-z') && veryfyManifest(),
 ]));
 
-const [ _package, _manifest, ] = (yield Promise.all([ FS.readFile('package.json', 'utf8'), FS.readFile('manifest.json', 'utf8'), ])).map(JSON.parse);
-[ 'title', 'version', 'author', ]
-.forEach(key => {
-	if (_manifest[key] && _package[key] !== _manifest[key]) { throw new Error('Key "'+ key +'" mismatch (package.json, manifest.json)'); }
-});
-
-const outputName = _package.title.toLowerCase().replace(/[^a-z0-9\.-]+/g, '_') +'-'+ _package.version;
-
 if (args.includes('-z')) {
-	const { join, relative, resolve, dirname, } = require('path');
-
 	const paths = [ ];
 	function addPaths(prefix, module) {
 		if (Array.isArray(module)) { return paths.push(...module.map(file => join(prefix, file))); }
@@ -99,6 +113,8 @@ if (args.includes('-z')) {
 	(yield Promise.all(paths.map(path => copy(path, join('build', path)).catch(error => console.error('Skipping missing file/folder "'+ path +'"')))));
 
 	(yield promisify(require('zip-dir'))('./build', { filter: path => !(/\.(?:zip|xpi)$/).test(path), saveTo: `./build/${ outputName }.zip`, }));
+
+	console.log(`Saved package to ./build/${ outputName }.zip`);
 }
 
 })

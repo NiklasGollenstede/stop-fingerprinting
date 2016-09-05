@@ -5,6 +5,8 @@
 const ignore = Symbol('ignore');
 const reset = Symbol('ignore');
 
+// TODO: If a request is redirected to a data:// URL, onBeforeRedirect is the last reported event.
+
 function RequestListener(filter, options, Handler) {
 	const listeners = { }, handlers = { };
 	Object.getOwnPropertyNames(Handler.prototype).forEach(event => (/^on[A-Z]/).test(event) && on(event));
@@ -14,11 +16,16 @@ function RequestListener(filter, options, Handler) {
 	function on(event) {
 		if (!webRequest[event]) { return; }
 
-		webRequest[event].addListener(
-			listeners[event] = [ 'onCompleted', 'onErrorOccurred', ].includes(event)
-			? Handler.prototype[event] ? fireAndDone : done : fire,
-			filter, ...(options[event] ? [ options[event], ] : [ ])
-		);
+		const listener = listeners[event] = (() => {
+			if (![ 'onCompleted', 'onErrorOccurred', ].includes(event)) { return fire; }
+			return Handler.prototype[event] ? fireAndDone : done;
+		})();
+
+		if (options[event]) {
+			webRequest[event].addListener(listener, filter, options[event]);
+		} else {
+			webRequest[event].addListener(listener, filter);
+		}
 
 		function fireAndDone() {
 			const value = fire.apply(null, arguments);
@@ -26,27 +33,36 @@ function RequestListener(filter, options, Handler) {
 			return value;
 		}
 
-		function fire({ requestId, url }) {
+		function fire({ requestId, url, }) {
 			let handler = handlers[requestId];
 			if (handler === ignore) { return; }
 			if (!handler) { try {
 				handler = handlers[requestId] = new Handler(...arguments);
+				if (handler === reset) { done(arguments[0]); console.log('reset', requestId, event, url); }
+				if (handler === ignore) { done(arguments[0]); handlers[requestId] = ignore; console.log('ignore', requestId, event, url); }
 			} catch (error) {
-				switch (error) {
-					case ignore: handlers[requestId] = ignore; console.log('skip request', url); break;
-					case reset: done(arguments[0]); console.log('skip handler', event, url); break;
-					default: console.error('Uncaught error during handler construction', error);
-				}
+				console.error('Uncaught error during handler construction', error);
 				return;
 			} }
 			try {
-				return handler[event](...arguments);
-			} catch (error) {
-				switch (error) {
-					case ignore: handlers[requestId] = ignore; console.log('skip request', url); break;
-					case reset: done(arguments[0]); console.log('skip handler', event, url); break;
-					default: console.error('Uncaught error in "'+ event +'" handler', error);
+				let value = handler[event](...arguments);
+				if (value === reset) { value = undefined; done(arguments[0]); console.log('reset', requestId, event, url); }
+				if (value === ignore) { value = undefined; done(arguments[0]); handlers[requestId] = ignore; console.log('ignore', requestId, event, url); }
+				if (typeof value === 'object') {
+					if (value.ignore === ignore) {
+						delete value.ignore;
+						done(arguments[0]);
+						handlers[requestId] = ignore;
+						console.log('ignoring after', requestId, event, url);
+					} else if (value.reset === reset) {
+						delete value.reset;
+						done(arguments[0]);
+						console.log('reset after', requestId, event, url);
+					}
 				}
+				return value;
+			} catch (error) {
+				console.error(`Uncaught error in "${ event }" handler`, error);
 			}
 		}
 	}
