@@ -48,10 +48,7 @@
 			"match_about_blank": true,
 			"all_frames": true,
 			"run_at": "document_start",
-			"js": [
-				"content/inject.js",
-				"content/index.js"
-			]
+			"js": [ "content/index.js" ]
 		}
 	],
 	"browser_action": {
@@ -62,11 +59,10 @@
 		"page": "ui/home/index.html#options",
 		"open_in_tab": true
 	},
-	"web_accessible_resources": [
-	],
+	"web_accessible_resources": [ ],
 	"run_update": {
 		"base_path": "/update/",
-		"history_epsilon": "days"
+		"history_epsilon": "day"
 	},
 
 	"incognito": "spanning"

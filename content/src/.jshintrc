@@ -1,0 +1,79 @@
+// this is the same .jshintrc as in the project root, only that it does not allow any globals
+
+{
+	"indent": 1, // indent with tabs
+	"-W002": false, // Value of '{cought exception}' may be overwritten in IE 8 and earlier.
+	"-W006": false, // Confusing minuses.
+	"-W030": false, // Expected an assignment or function call and instead saw an expression.
+	"-W034": false, // Unnecessary directive "use strict".
+	"-W054": false, // The Function constructor is a form of eval.
+	"-W058": false, // Missing '()' invoking a constructor.
+	"-W078": false, // Setter is defined without getter.
+	"-W082": false, // Function declarations should not be placed in blocks. (Not a problem in strict mode)
+
+	"curly": true,
+	"elision": true,
+	"eqeqeq": true,
+	"eqnull": true,
+	"laxbreak": true,
+	"loopfunc": true, // allow functions winthin loops
+	"newcap": false,
+	"sub": true, // allow headers['DNT'] instead of headers.DNT
+	"validthis": true,
+	"varstmt": true, // enforce 'let' or 'const' instead of 'var'
+
+	"esversion": 6,
+	"strict": "implied",
+	"globalstrict": true,
+
+	"undef": true,
+	"globals": { },
+	"predef": [ // from https://github.com/jshint/jshint/blob/master/src/vars.js
+		"-Array",
+		"-Boolean",
+		"-Date",
+		"-decodeURI",
+		"-decodeURIComponent",
+		"-encodeURI",
+		"-encodeURIComponent",
+		"-Error",
+		"-eval",
+		"-EvalError",
+		"-Function",
+		"-hasOwnProperty",
+		"-isFinite",
+		"-isNaN",
+		"-Math",
+		"-Number",
+		"-Object",
+		"-parseInt",
+		"-parseFloat",
+		"-RangeError",
+		"-ReferenceError",
+		"-RegExp",
+		"-String",
+		"-SyntaxError",
+		"-TypeError",
+		"-URIError",
+		"-JSON",
+		"-ArrayBuffer",
+		"-DataView",
+		"-Float32Array",
+		"-Float64Array",
+		"-Int8Array",
+		"-Int16Array",
+		"-Int32Array",
+		"-Map",
+		"-Promise",
+		"-Proxy",
+		"-Reflect",
+		"-Set",
+		"-Symbol",
+		"-Uint8Array",
+		"-Uint16Array",
+		"-Uint32Array",
+		"-Uint8ClampledArray",
+		"-WeakMap",
+		"-WeakSet"
+	]
+}

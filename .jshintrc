@@ -19,6 +19,7 @@
 	"elision": true,
 	"varstmt": true, // enforce 'let' or 'const' instead of 'var'
 	"sub": true, // allow headers['DNT'] instead of headers.DNT
+	"loopfunc": true,
 
 	"esversion": 6,
 	"strict": true, // 'use strict' is neither implicit nor allowed for functions with non-simple parameter lists, must be in outer function

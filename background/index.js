@@ -48,7 +48,7 @@ new RequestListener({
 }, class {
 	constructor({ requestId, url, tabId, type, }) {
 		this.requestId = requestId; this.url = url; this.type = type, this.tabId = tabId;
-		console.log('request start', this.requestId, this.url);
+		console.log('request start', this);
 		const domain = this.domain = domainFromUrl(url);
 		const profile = this.profile = type === 'main_frame' ? Profiles.create({ requestId, domain, tabId, }) : Profiles.get({ tabId, domain, });
 		if (profile.disabled) { return ignore; }
@@ -70,6 +70,7 @@ new RequestListener({
 	onBeforeSendHeaders({ requestHeaders, }) {
 		if (getOptionsUrl.test(this.url)) {
 			// TODO: only allow this once per frame
+			this.profile.misc.main_frame = this.type === 'main_frame';
 			return {
 				ignore,
 				requestHeaders: [

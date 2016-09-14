@@ -28,7 +28,7 @@ const CSP = module.exports = function CSP(app) {
 			// formAction: [ ],
 			// frameAncestors: self(),
 			frameSrc: [ '*', 'data:', 'blob:', ],
-			imgSrc: self('data:'),
+			imgSrc: self('data:', 'blob:'),
 			// manifestSrc: [ ],
 			// mediaSrc: [ ],
 			// objectSrc: [ ],

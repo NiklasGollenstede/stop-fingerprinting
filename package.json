@@ -30,6 +30,8 @@
 		"chai": "3.5.0",
 		"mocha": "^2.5.3",
 
+		"nexe": "1.1.2",
+
 		"body-parser": "^1.15.1",
 		"cookie-parser": "^1.4.1",
 		"electron-prebuilt": "^1.2.0",
@@ -44,6 +46,7 @@
 		"start": "node test/server/debug.js",
     	"test": "mocha",
 		"build": "node build",
+		"build-native": "nexe -i ./native/index.js -o ./native/native.exe -f",
 		"postinstall": "node build.js"
 	}
 }

@@ -1,4 +1,6 @@
 
+- add prompt to ether accept cert -or- enable chrome://flags/#allow-insecure-localhost -or- FireFox -> Options -> Advanced -> Certificates -> View Certificates -> Servers -> Add Exception
+
 - test data: or blob: as main_frame URLs
 
 - write introduction/description/about/credits/... pages
@@ -8,7 +10,7 @@
 - handle ServiceWorkers (cache deactivation should make them de-facto useless, but they are probably still able to provide similar services as an unwrapped Shared Worker would)
 - prevent AudioContext fingerprinting (see https://audiofingerprint.openwpm.com/)
 - mess with WebGL (https://www.browserleaks.com/webgl)
-- try different methods to change the canvas (sharpening, moving, blurring, ...)
+- try different methods to change the canvas (sharpening, moving, blurring, ...); related: images with and w/o ICC profiles render differently
 - do something about emoji fonts (they greatly vary, what if they are drawn on a canvas?)
 - change time zone and add small random offsets to Dates and change toLocaleString
 - disable WebRTC local IP detection on a per-tab basis, make sure media device enumeration is disabled

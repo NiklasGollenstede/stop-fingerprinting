@@ -9,7 +9,7 @@ const connect = (ports) => new Promise((resolve, reject) => {
 	let resolved = false, rejected = 0;
 	ports.forEach(port => {
 		const socket = new WebSocket('ws://localhost:'+ port);
-		socket.onerror = error => ++rejected >= ports.length ? reject(error) : 	console.error(error);
+		socket.onerror = error => ++rejected >= ports.length && reject(error);
 		socket.onopen = () => resolved ? socket.close() : ((resolved = true), resolve(socket));
 	});
 });

@@ -1,4 +1,9 @@
-(function() { 'use strict'; /* global script */ // license: MPL-2.0
+/* globals
+ injectedSource, injectedSourceMap,
+ window, self, document,
+ XMLHttpRequest, chrome, console
+*/
+main: {
 
 let root = window, url; try { do {
 	url = root.location.href;
@@ -6,12 +11,12 @@ let root = window, url; try { do {
 
 const echoPorts = [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ];
 
-for (let i = 0; i < echoPorts.length; ++i) { try {
+for (let i = 0, errors = [ ]; i < echoPorts.length; ++i) { try {
 
 	const request = new XMLHttpRequest();
 	request.open('GET', `https://localhost:${ echoPorts[i] }/stop_fingerprint_get_options`, false); // sync
 	try { request.send(null); }
-	catch (error) { if (i === echoPorts.length - 1) { throw error; } continue; } // try next port
+	catch (error) { errors.push(error); if (i === echoPorts.length - 1) { console.error(errors); throw error; } continue; } // try next port
 
 	const { response, } = request;
 
@@ -19,14 +24,18 @@ for (let i = 0; i < echoPorts.length; ++i) { try {
 
 	const nonce = (/^[^;]*/).exec(response)[0];
 	const json = response.slice(nonce.length + 1);
-	if (json === 'false') { return console.log('Spoofing is disabled for ', url, window); }
+	if (json === 'false') { console.log('Spoofing is disabled for ', url, window); break main; }
 
 	window.addEventListener('stopFingerprintingPostMessage$'+ nonce, ({ detail: message, }) => {
 		message.post = true;
 		chrome.runtime.sendMessage(message);
 	});
 
-	inject(nonce, script, json);
+	injectedSourceMap.sourceRoot = applyingSourceMap.sourceRoot = getCallingScript().replace(/[^\/]*?$/, '');
+	const code0 = injectedSource +`\n\n//# sourceMappingURL=data:application/json;base64,`+ btoa(JSON.stringify(injectedSourceMap));
+	const code1 = applyingSource +`\n\n//# sourceMappingURL=data:application/json;base64,`+ btoa(JSON.stringify(applyingSourceMap));
+
+	inject(nonce, code0, code1, json);
 	break;
 } catch (error) {
 	if (root === self) {
@@ -38,25 +47,12 @@ for (let i = 0; i < echoPorts.length; ++i) { try {
 	}
 } }
 
-function inject(nonce, script, jsonArg) {
+function inject(nonce, script, sArg0, sArg1) {
 	const element = document.createElement('script');
 	element.setAttribute('nonce', nonce);
-	element.textContent =
-	(`(function () { try {
-		// throw new Error('nope');
-		const script = (${ script });
-		const arg = JSON.parse(\`${ jsonArg }\`);
-		const value = script.call(window, arg, script);
-		this.dataset.done = true;
-		this.dataset.value = JSON.stringify(value) || 'null';
-	} catch (error) {
-		console.error(error);
-		this.dataset.error = JSON.stringify(error, (key, value) => {
-			if (!value || typeof value !== 'object') { return value; }
-			if (value instanceof Error) { return '$_ERROR_$'+ JSON.stringify({ name: value.name, message: value.message, stack: value.stack, }); }
-			return value;
-		});
-	} }).call(document.currentScript)`);
+	element.textContent = script;
+	element.dataset.arg0 = sArg0;
+	element.dataset.arg1 = sArg1;
 	document.documentElement.appendChild(element).remove();
 	if (element.dataset.error) { throw parseError(element.dataset.error); }
 	if (!element.dataset.done) { throw new Error('Script was not executed at all'); }
@@ -88,4 +84,11 @@ function reportError(error, level = 'error') {
 	throw error;
 }
 
-})();
+function getCallingScript() {
+	const stack = (new Error).stack.split(/$/m);
+	const line = stack[(/^Error/).test(stack[0]) + 1];
+	const parts = line.split(/(?:\@|\(|\ )/g);
+	return parts[parts.length - 1].replace(/\:\d+(?:\:\d+)\)?$/, '');
+}
+
+}

@@ -109,6 +109,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	document.body.appendChild(canvas);
 	document.body.appendChild(document.createElement('img')).src = canvasImg;
+	canvas.toBlob(blob =>
+		document.body.appendChild(document.createElement('img')).src = URL.createObjectURL(blob)
+	);
 
 	Array.prototype.forEach.call(document.querySelectorAll('iframe'), frame => {
 		const cw = frame.contentWindow;
