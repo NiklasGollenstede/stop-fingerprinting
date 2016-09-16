@@ -97,7 +97,7 @@ const listerners = new WeakMap;
 const options = (yield new Options({
 	model,
 	prefix: 'options',
-	storage: Storage.sync || Storage.local,
+	storage: Storage.sync,
 	addChangeListener(listener) {
 		const onChanged = changes => Object.keys(changes).forEach(key => key.startsWith('options') && listener(key, changes[key].newValue));
 		listerners.set(listener, onChanged);

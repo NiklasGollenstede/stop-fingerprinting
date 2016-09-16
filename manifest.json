@@ -60,10 +60,12 @@
 		"open_in_tab": true
 	},
 	"web_accessible_resources": [ ],
+
 	"run_update": {
-		"base_path": "/update/",
-		"history_epsilon": "day"
+		"base_path": "/update/"
 	},
+
+	"seleniun_setup_port": 54681,
 
 	"incognito": "spanning"
 }

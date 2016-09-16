@@ -61,7 +61,6 @@ suffix: `
 };
 
 
-
 const build = async(function*() {
 
 	const globalsJs = (yield FS.readFile('./src/globals.js', 'utf8'));
@@ -82,7 +81,14 @@ const build = async(function*() {
 	const applying = new SourceNode(null, null, null); {
 		for (let name of (yield FS.readdir('./src/fake/'))) {
 			applying.add(`{ // /content/src/fake/${ name }\n`);
-			addFile(applying, './src/fake/'+ name, (yield FS.readFile('./src/fake/'+ name, 'utf8')));
+			const file = (yield FS.readFile('./src/fake/'+ name, 'utf8'));
+			const match = (/\/\*\s*globals\s+([\w+$]+(?:,\s*[\w$]+)*)/).exec(file);
+			if (!match) { throw new Error(`"/content/src/fake/${ name }" does not specify its global dependencies`); }
+			const deps = match[1].split(/,\s*/g);
+			const missing = deps.find(dep => !globalNames.includes(dep));
+			if (missing) { throw new Error(`"/content/src/fake/${ name }" requires a missing global ${ missing }`); }
+
+			addFile(applying, './src/fake/'+ name, file);
 			applying.add(`}\n`);
 		}
 

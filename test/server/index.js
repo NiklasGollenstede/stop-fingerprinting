@@ -22,7 +22,6 @@ const {
 	format: { RegExpX, },
 	functional: { log, },
 	network: { mimeTypes, },
-	polyfill,
 } = require('es6lib');
 
 const CSP = require('./csp.js');

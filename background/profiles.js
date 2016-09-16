@@ -175,7 +175,7 @@ class ProfileStack {
 		const options = this.get('navigator');
 		const value = !options
 		? { generate() { return null; }, }
-		: new NavGen(options);
+		: new NavGen(Object.assign(options, { noThrow: true, }));
 		console.log('created navGen', value);
 		Object.defineProperty(this, 'navGen', { value, configurable: true, });
 		return value;
@@ -185,7 +185,7 @@ class ProfileStack {
 		const options = this.get('screen');
 		const value = !options
 		? { generate() { return null; }, }
-		: new ScreenGen(options);
+		: new ScreenGen(Object.assign(options, { noThrow: true, }));
 		console.log('created screenGen', value);
 		Object.defineProperty(this, 'screenGen', { value, configurable: true, });
 		return value;

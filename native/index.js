@@ -1,8 +1,9 @@
-'use strict'; /* globals process */
+'use strict'; /* globals process, __filename */
 
 const wsPorts = [ 8075, 29941, 35155, 61830, 63593, 23862, 47358, 47585 ];
 const echoPorts = [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ];
 
+const dialog = require('dialog');
 const Path = require('path');
 const fs = require('fs');
 const writeFile = promisify(fs.writeFile);
@@ -133,17 +134,22 @@ spawn(function*() {
 	switch (args[0]) {
 		case 'i': {
 			(yield install.windows(!args.includes('-n')));
+			dialog.info('Installation successful', 'Stop Fingerprinting');
 		} break;
 		case 'u': {
 			(yield uninstall.windows());
+			dialog.info('Uninstallation successful', 'Stop Fingerprinting');
 		} break;
 		default: {
 			(yield startServer());
+			console.log('server started');
 		}
 	}
-	console.log('main done');
 })
-.catch(error => console.error('Startup failed', error.stack || error));
+.catch(error => {
+	console.error('Startup failed', error.stack || error);
+	dialog.warn(`Operation failed: ${ error.stack || error }`, 'Error: Stop Fingerprinting');
+});
 
 function spawn(generator) {
 	const iterator = generator();

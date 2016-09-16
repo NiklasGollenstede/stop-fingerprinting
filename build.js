@@ -71,12 +71,14 @@ const buildTldJS = async(function*(...args) {
 });
 
 const buildUpdate = async(function*(...args) {
-	const versions = (yield FS.readdir(resolve(__dirname, 'update')).catch(e => [ ]))
-	.map(path => basename(path))
-	.filter(name => (/^\d+\.\d+\.\d+\.js$/).test(name))
-	.map(_=>_.slice(0, -3));
-	(yield promisify(require('fs-extra').outputJson)('./update/versions.json', versions));
-	console.log('wrote update versions', versions);
+	const outputJson = promisify(require('fs-extra').outputJson);
+	for (let component of (yield FS.readdir(resolve(__dirname, `update`)))) {
+		const names = (yield FS.readdir(resolve(__dirname, `update/${ component }`)))
+		.filter(_=>_ !== 'versions.json')
+		.map(path => basename(path).slice(0, -3));
+		(yield outputJson(resolve(__dirname, `update/${ component }/versions.json`), names));
+	}
+	console.log('wrote version info');
 });
 
 let outputName;

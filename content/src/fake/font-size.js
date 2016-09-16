@@ -22,8 +22,8 @@ const randomFontFactor = (() => {
 })();
 
 function getOffsetSize(client, offset, element) {
-	const correct = call(offset, element);
-	if (!correct || call(client, element)) { return correct; }
+	const correct = offset(element);
+	if (!correct || client(element)) { return correct; }
 	const factor = randomFontFactor();
 	return correct === correct << 0 ? round(correct * factor) : correct * factor;
 }

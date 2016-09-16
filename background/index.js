@@ -2,7 +2,7 @@
 	'node_modules/web-ext-utils/update/': updated,
 	'node_modules/es6lib/concurrent': { sleep, },
 	'node_modules/es6lib/functional': { throttle, },
-	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, Runtime: { sendNativeMessage, }, },
+	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, Runtime: { sendNativeMessage, }, browsingData, webRequest, },
 	'node_modules/web-ext-utils/utils': { showExtensionTab, },
 	'common/utils': { notify, domainFromUrl, setBrowserAction, },
 	'common/options': options,
@@ -33,7 +33,7 @@ const native = new Native({
 		echoPort = 0;
 	},
 });
-native.start();
+const started = native.start();
 
 const getOptionsUrl = (/^https\:\/\/localhost\:(\d+)\/stop_fingerprint_get_options$/);
 
@@ -206,7 +206,7 @@ new RequestListener({
 
 // clear cache on requests
 let clearCacheWhat = null, clearCacheWhere = null;
-const clearCache = throttle(() => chrome.browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat), 3000);
+const clearCache = throttle(() => browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat), 3000);
 options.children.clearCache.children.what.whenChange(value => clearCacheWhat = ({
 	passive:  { appcache: true, cache: true, pluginData: true, },
 	active:   { appcache: true, cache: true, pluginData: true, serviceWorkers: true, cookies: true, serverBoundCertificates: true, indexedDB: true, localStorage: true, webSQL: true, fileSystems: true, },
@@ -218,8 +218,8 @@ options.children.clearCache.children.where.whenChange(value => clearCacheWhere =
 	extension:       { unprotectedWeb: true, protectedWeb: true, extension: true, },
 })[value]);
 options.children.clearCache.children.where.when({
-	false: () => chrome.webRequest.onHeadersReceived.removeListener(clearCache),
-	true: () => chrome.webRequest.onHeadersReceived.addListener(clearCache, { urls: [ '*://*/*', ], }, [ ]),
+	false: () => webRequest.onHeadersReceived.removeListener(clearCache),
+	true: () => webRequest.onHeadersReceived.addListener(clearCache, { urls: [ '*://*/*', ], }, [ ]),
 });
 
 Messages.addHandler('getOptions', function() {
@@ -255,4 +255,25 @@ Tabs.onUpdated.addListener(function(tabId, info, { url, }) {
 	);
 });
 
+(yield started);
+
 }); })();
+
+// report to selenium integration tests
+(() => { 'use strict';
+	const port = (window.browser || window.chrome).runtime.getManifest().seleniun_setup_port;
+	if (!port) { return; }
+
+	require('background/index')
+	.then(() => {
+		const xhr = new XMLHttpRequest();
+		xhr.open('GET', `http://localhost:${ port }/statup-done`, true);
+		xhr.send(null);
+	})
+	.catch(error => {
+		const xhr = new XMLHttpRequest();
+		xhr.open('POST', `http://localhost:${ port }/statup-failed`, true);
+		xhr.send(error && (error.stack || error.message) || error);
+		throw error;
+	});
+})();
