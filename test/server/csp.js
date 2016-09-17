@@ -1,8 +1,10 @@
-(function() { 'use strict';
+(function() { 'use strict'; /* globals module */
 
 const {
 	network: { mimeTypes, },
 } = require('es6lib');
+
+const BodyParser = require('body-parser');
 
 const {
 	contentSecurityPolicy: Csp,
@@ -11,9 +13,11 @@ const {
 	noSniff,
 } = require('helmet');
 
-const config = process.project_config;
-
-const CSP = module.exports = function CSP(app) {
+const CSP = module.exports = function CSP(app, {
+	host = 'localhost',
+	origins = null,
+	reportUri = '/csp',
+} = { }) {
 	app.use(new Csp({
 		/**
 		 * Rules
@@ -41,7 +45,7 @@ const CSP = module.exports = function CSP(app) {
 			// sandbox: [ ],
 			// pluginTypes: [ mimeTypes.html, ],
 
-			reportUri: '/csp',
+			reportUri,
 		},
 
 		/**
@@ -57,22 +61,23 @@ const CSP = module.exports = function CSP(app) {
 	// app.use(new Frameguard()); // prevent being loaded in cros-origin frames
 	app.use(noSniff()); // force browsers to respect mime-types
 	app.disable('x-powered-by');
+
+	app.use(reportUri, BodyParser.json({ limit: '10kb', type: [ 'application/csp-report', mimeTypes.json, ], }));
+	app.post(reportUri, function(request, response) {
+		console.log('CSP error: ', request.body);
+		response.writeHead(204);
+		response.end();
+	});
+
+	function self(...others) {
+		return (
+			origins
+			? origins.concat("'self'")
+			: [ "'self'", /*'https://$$', 'http://$$', 'https://*.$$', 'http://*.$$',*/ ].map(s => s.replace(/\$\$/, () => host))
+		).concat(others);
+	}
+
 	return app;
 };
-
-CSP.onerror = function(request, response) {
-	console.log('CSP error: ', request.body);
-	response.writeHead(204);
-	response.end();
-};
-
-
-function self(...others) {
-	return (
-		config.origins
-		? config.origins.concat("'self'")
-		: [ "'self'", /*'https://$$', 'http://$$', 'https://*.$$', 'http://*.$$',*/ ].map(s => s.replace(/\$\$/, () => config.host))
-	).concat(others);
-}
 
 })();

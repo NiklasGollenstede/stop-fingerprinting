@@ -4,19 +4,17 @@ const now = f => f();
 
 if (!('electron' in process.versions)) { // started as node.js program, launch electron app
 
+	const root = require('path').resolve(__dirname, '../..');
+
 	const electron = require('child_process').spawn(
 		require('electron-prebuilt'),
-		[ '.', '--debug', process.argv.slice(2), ],
-		{
-			cwd: process.cwd(),
-			env: process.env,
-			detached: true,
-		}
+		[ root, '--debug', process.argv.slice(2), ],
+		{ cwd: root, env: process.env, detached: true, }
 	);
 
 	electron.on('Uncaught Electron error:', function(error) { console.error(error); });
 
-	console.log('Started electron ('+ electron.pid +')');
+	console.log(`Started electron (${ electron.pid })`);
 
 } else { // started as electron app
 
@@ -24,26 +22,26 @@ if (!('electron' in process.versions)) { // started as node.js program, launch e
 
 	const escapeString = _=>_.replace(/([\\\n\$\`\'\"])/g, '\\$1');
 
-	const file = escapeString(process.argv[3] ? process.argv[3].replace(/^\.[\\\/]/, __dirname +'/../../') : __dirname +'/index.js');
+	const file = escapeString(require('path').resolve(process.argv[3] ? process.argv[3].replace(/^\.[\\\/]/, __dirname +'/../../') : __dirname +'/index.js'));
 
 	(App.isReady() ? now : App.once.bind(App, 'ready'))(() => {
 
 		let win = new BrowserWindow({ width: 1700, height: 1390, });
-		win.loadURL('about:blank');
-
-		win.webContents.executeJavaScript(`
+		win.loadURL(`data:text/html,<body style="background:#222"><script>
 			try {
-				server = require('${ file }');
+				const entry = (\`${ file }\`);
+				process.argv.splice(1, 0, entry);
+				server = require(entry);
 			} catch (error) {
 				console.error('Uncought', error);
-				// window.close();
-				// process.exit(0);
 			}
-			window.onbeforeunload = () => process.exit(0);
-		`);
+		</script>`);
 
 		win.openDevTools({ detach: false, });
 		win.once('closed', () => win = null);
+
+		// install dark devTools theme
+		require('electron-devtools-installer').default('bomhdjeadceaggdgfoefmpeafkjhegbo');
 	});
 
 }

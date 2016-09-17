@@ -10,4 +10,4 @@ npm-debug.log
 /icons/urls.js
 /native/native.*
 /native/*.json
-/update/versions.json
+/update/*/versions.json

@@ -23,14 +23,16 @@ const builder = new Builder()
 )
 .disableEnvironmentOverrides();
 
+const HttpServer = require('../server/index.js');
+
 describe('Stop Fingerprinting', (function() {
 	this.timeout(15000);
 	const ctx = { };
 
-	before(async(function*() {
-		// atart a web server which the extension will contact during startup
+	const enableSetUp = async(function*() {
+		// start a web server which the extension will contact during startup
 		const port = JSON.parse((yield FS.readFile(Path.resolve(__dirname, '../../manifest.json'), 'utf8'))).seleniun_setup_port;
-		ctx.server = (yield new Promise((resolve, reject) => {
+		return new Promise((resolve, reject) => {
 			require('http').createServer(function({ url, body, }, out) {
 				switch (url.slice(1)) {
 					case 'get-storage': {
@@ -42,7 +44,7 @@ describe('Stop Fingerprinting', (function() {
 					} break;
 					case 'statup-failed': {
 						getBody(arguments[0])
-						.catch('<unknown>')
+						.catch(() => '<unknown>')
 						.then(error => ctx.hasNotStarted(new Error('Failed to start extension: '+ error)));
 					} break;
 					default: {
@@ -53,8 +55,8 @@ describe('Stop Fingerprinting', (function() {
 				out.end();
 			})
 			.listen(port, function(error) { error ? reject(error) : resolve(this); });
-		}));
-	}));
+		});
+	});
 
 	const build = async(function*(options = { }) {
 		ctx.storage = options.storage;
@@ -63,6 +65,11 @@ describe('Stop Fingerprinting', (function() {
 		(yield done);
 		return driver;
 	});
+
+	before(async(function*() {
+		ctx.setUpServer = (yield enableSetUp());
+		ctx.httpServer = (yield new HttpServer());
+	}));
 
 	beforeEach(async(function*() {
 	}));
@@ -74,13 +81,16 @@ describe('Stop Fingerprinting', (function() {
 	}));
 
 	after(async(function*() {
-		(yield promisify(ctx.server.close).call(ctx.server));
-		ctx.server = null;
+		(yield promisify(ctx.setUpServer.close).call(ctx.setUpServer));
+		ctx.setUpServer = null;
+		(yield ctx.httpServer.close());
+		ctx.httpServer = null;
 	}));
 
 	it('start with options', async(function*() {
+		const port = ctx.httpServer.https[0].address().port;
 		const driver = (yield build({ storage: { sync: { '<default>.rules.screen.devicePixelRatio': [ 8, ], }, }, }));
-		(yield driver.get('http://www.google.com/'));
+		(yield driver.get(`https://localhost:${ port }/`));
 		expect((yield driver.executeScript(() => window.devicePixelRatio))).to.equal(8);
 	}));
 }));
