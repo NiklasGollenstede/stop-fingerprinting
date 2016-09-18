@@ -16,6 +16,7 @@
 	"laxbreak": true, // allow 'possibly unsafe line breakings'
 	"loopfunc": true, // allow functions winthin loops
 	"newcap": false, // deprecated
+	"noyield": true, // allow generator functions without yield statements
 	"sub": true, // allow headers['DNT'] instead of headers.DNT
 	"undef": true, // warn about not-defined variables
 	"validthis": true,

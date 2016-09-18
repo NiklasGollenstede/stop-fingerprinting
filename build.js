@@ -48,7 +48,7 @@ const include = {
 	},
 };
 
-const args = process.argv.length > 2 ? process.argv.slice(2) : [ '-z', '-i', '-t', '-u', ];
+const args = process.argv.length > 2 ? process.argv.slice(2) : [ '-z', '-i', '-t', '-u', '-c', ];
 
 require('es6lib/require');
 
@@ -60,8 +60,13 @@ const {
 } = require('es6lib');
 const { join, relative, resolve, dirname, basename, } = require('path');
 
+const buildContent = async(function*(...args) {
+	(yield require('./content/build.js')(...args));
+	console.log('/content/index.js created');
+});
+
 const buildIcons = async(function*(...args) {
-	const iconNames = (yield require('./icons/build')(...args));
+	const iconNames = (yield require('./icons/build.js')(...args));
 	console.log('created icons: "'+ iconNames.join('", "') +'"');
 });
 
@@ -95,6 +100,7 @@ const veryfyManifest = async(function*(...args) {
 spawn(function*() {
 
 (yield Promise.all([
+	args.includes('-c') && buildContent(),
 	args.includes('-i') && buildIcons(),
 	args.includes('-t') && buildTldJS(),
 	args.includes('-u') && buildUpdate(),

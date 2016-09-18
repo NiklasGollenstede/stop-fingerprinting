@@ -7,15 +7,19 @@ const dialog = require('dialog');
 const Path = require('path');
 const fs = require('fs');
 const writeFile = promisify(fs.writeFile);
+require('es6lib/require');
 const { execute, } = require('es6lib/process');
+const Port = require('es6lib/port');
 const _ = String.raw;
 const folder = process.cwd();
 
-const sendMessage = (dump => (name, ...args) => dump(JSON.stringify({ name, args, }) +'\n'))(console.log);
+const args = process.argv.slice(2);
 
-const logFile = fs.createWriteStream(Path.resolve(folder, './log.txt'));
-[ 'error', 'info', 'log', 'warn', ]
-.forEach(level => console[level] = (...args) => logFile.write(level +': '+ args.map(_=>JSON.stringify(_)).join(', ') +'\n'));
+if (args.length === 0) {
+	const logFile = fs.createWriteStream(Path.resolve(folder, './log.txt'));
+	[ 'error', 'info', 'log', 'warn', ]
+	.forEach(level => console[level] = (...args) => logFile.write(level +': '+ args.map(_=>JSON.stringify(_)).join(', ') +'\n'));
+}
 
 const manifest = {
 	name: 'stop_fingerprint_echo_server.v1',
@@ -57,9 +61,7 @@ const uninstall = {
 	}
 };
 
-const args = process.argv.slice(2);
-
-const startServer = () => spawn(function*() {
+const startServer = (permanent) => spawn(function*() {
 	function echo(_in, _out) {
 		console.log('bouncing', _in.headers['x-nonce']);
 		_out.end(_in.headers['x-nonce'] +';'+ _in.headers['x-options']);
@@ -94,37 +96,34 @@ const startServer = () => spawn(function*() {
 
 	console.log(`Opened ${ wsSs.length } WebSocketServers:`, wsSs.map(_=>_.options.port));
 
-	wsSs.forEach(_=>_.on('connection', socket => addSocket(socket)));
+	wsSs.forEach(_=>_.on('connection', socket => addPort(socket)));
 
-	const sockets = new Set;
+	const ports = new Set;
 
-	const shutdown = debounce(() => {
-		if (sockets.size) { return; }
-		console.log('All connections closed, shutting down now');
-		process.exit(0);
-	}, 3000);
-
-	function addSocket(socket) {
+	function addPort(socket) {
 		console.log('adding socket');
-		sockets.add(socket);
-		socket.on('message', message => {
-			console.log('Socket received', message);
-			message = JSON.parse(message);
-			switch (message.name) {
-				case 'getPort': {
-					socket.send(JSON.stringify({ name: 'port', args: [ echoPort, ], }));
-				} break;
-			}
+		const port = new Port(socket);
+		ports.add(port);
+		port.addHandlers({
+			getPort() {
+				return echoPort;
+			},
 		});
 
-		socket.on('close', removeSocket.bind(null, socket));
+		socket.on('close', removePort.bind(null, port));
 	}
 
-	function removeSocket(socket) {
-		sockets.delete(socket);
-		console.log('removing socket');
+	function removePort(port) {
+		ports.delete(port);
+		console.log('removing port');
 		shutdown();
 	}
+
+	const shutdown = debounce(() => {
+		if (ports.size) { return; }
+		console.log('All connections closed, shutting down now');
+		!permanent && process.exit(0);
+	}, 3000);
 
 	shutdown();
 });
@@ -141,7 +140,7 @@ spawn(function*() {
 			dialog.info('Uninstallation successful', 'Stop Fingerprinting');
 		} break;
 		default: {
-			(yield startServer());
+			(yield startServer(args[0] === 's'));
 			console.log('server started');
 		}
 	}

@@ -1,6 +1,6 @@
 (() => { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/web-ext-utils/update/': updated,
-	'node_modules/es6lib/concurrent': { sleep, },
+	'node_modules/es6lib/concurrent': { sleep, async, },
 	'node_modules/es6lib/functional': { throttle, },
 	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, Runtime: { sendNativeMessage, }, browsingData, webRequest, },
 	'node_modules/web-ext-utils/utils': { showExtensionTab, },
@@ -20,17 +20,14 @@ let echoPort = 0;
 const native = new Native({
 	version: 1,
 	ports: [ 8075, 29941, 35155, 61830, 63593, 23862, 47358, 47585 ],
-	onStart() {
-		this.socket.onmessage = ({ data, }) => {
-			console.log('data', data);
-			data = JSON.parse(data);
-			data.name === 'port' && (echoPort = data.args[0]);
-			console.log('echoPort', echoPort);
-		};
-		this.socket.send(JSON.stringify({ name: 'getPort', args: [ ], }));
-	},
+	onStart: async(function*() {
+		echoPort = (yield this.port.request('getPort'));
+		console.log(`Native app running on https://localhost:${ echoPort }/`);
+	}),
 	onStop() {
 		echoPort = 0;
+		console.error(`Native app closed, restarting ...`);
+		this.start(true);
 	},
 });
 const started = native.start();
@@ -258,22 +255,3 @@ Tabs.onUpdated.addListener(function(tabId, info, { url, }) {
 (yield started);
 
 }); })();
-
-// report to selenium integration tests
-(() => { 'use strict';
-	const port = (window.browser || window.chrome).runtime.getManifest().seleniun_setup_port;
-	if (!port) { return; }
-
-	require('background/index')
-	.then(() => {
-		const xhr = new XMLHttpRequest();
-		xhr.open('GET', `http://localhost:${ port }/statup-done`, true);
-		xhr.send(null);
-	})
-	.catch(error => {
-		const xhr = new XMLHttpRequest();
-		xhr.open('POST', `http://localhost:${ port }/statup-failed`, true);
-		xhr.send(error && (error.stack || error.message) || error);
-		throw error;
-	});
-})();

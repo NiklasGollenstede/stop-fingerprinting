@@ -38,7 +38,7 @@
 
 		"body-parser": "^1.15.1",
 		"cookie-parser": "^1.4.1",
-		"electron-prebuilt": "^1.2.0",
+		"electron-prebuilt": "^1.4.0",
 		"express": "^4.13.4",
 		"fingerprintjs2": "^1.4.0",
 		"helmet": "^2.0.0",

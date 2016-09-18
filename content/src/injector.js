@@ -16,7 +16,7 @@ for (let i = 0, errors = [ ]; i < echoPorts.length; ++i) { try {
 	const request = new XMLHttpRequest();
 	request.open('GET', `https://localhost:${ echoPorts[i] }/stop_fingerprint_get_options`, false); // sync
 	try { request.send(null); }
-	catch (error) { errors.push(error); if (i === echoPorts.length - 1) { console.error(errors); throw error; } continue; } // try next port
+	catch (error) { errors.push(error); if (i === echoPorts.length - 1) { console.error(errors); throw errors[0]; } continue; } // try next port
 
 	const { response, } = request;
 
@@ -39,12 +39,15 @@ for (let i = 0, errors = [ ]; i < echoPorts.length; ++i) { try {
 	break;
 } catch (error) {
 	if (root === self) {
-		document.documentElement && document.documentElement.remove();
-		window.stop();
 		reportError(error, 'error');
+		if (confirm('Critical error, cancel navigation?')) {
+			document.documentElement && document.documentElement.remove();
+			window.stop();
+		}
 	} else {
 		reportError(error, 'debug');
 	}
+	throw error;
 } }
 
 function inject(nonce, script, sArg0, sArg1) {
@@ -81,7 +84,6 @@ function reportError(error, level = 'error') {
 			url,
 		}, ],
 	});
-	throw error;
 }
 
 function getCallingScript() {

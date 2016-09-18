@@ -13,12 +13,4 @@ notifications.create({
 	iconUrl: icons.default[256],
 });
 
-// get initial storage for selenium tests
-const port = runtime.getManifest().seleniun_setup_port;
-if (port) {
-	const { local, sync, } = JSON.parse((yield HttpRequest(`http://localhost:${ port }/get-storage`)).response);
-	(yield Storage.local.set(local || { }));
-	(yield Storage.sync.set(sync || { }));
-}
-
 }); })();

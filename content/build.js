@@ -1,4 +1,4 @@
-'use strict'; /* globals __dirname, __filename, process, Buffer */
+'use strict'; /* globals __dirname, __filename, process, Buffer, module */
 
 const {
 	concurrent: { async, spawn, promisify, },
@@ -60,35 +60,36 @@ suffix: `
 `,
 };
 
+const _ = (s, ...a) => resolve(__dirname, String.raw({ raw: s, }, ...a));
 
-const build = async(function*() {
+const build = module.exports = async(function*() {
 
-	const globalsJs = (yield FS.readFile('./src/globals.js', 'utf8'));
+	const globalsJs = (yield FS.readFile(_`./src/globals.js`, 'utf8'));
 	const globalNames = globalsJs.split(/\r\n?|\n/g).map(line => ((/^const ([\w$]+)\s+\=/).exec(line) || [ ])[1]).filter(_=>_);
 	globalNames.push('options', 'injectedSource', 'applyingSource', 'workerOptions');
 
 
 	const injected = new SourceNode(null, null, null); {
-		addFile(injected, './src/globals.js', globalsJs);
+		addFile(injected, `src/globals.js`, globalsJs);
 		injected.add(`\n\nconst globals = ({ ${ globalNames.join(', ') }, });\n`);
-		addFile(injected, './src/context.js', (yield FS.readFile('./src/context.js', 'utf8')));
-		addFile(injected, './src/apply.js', (yield FS.readFile('./src/apply.js', 'utf8')));
+		addFile(injected, `src/context.js`, (yield FS.readFile(_`./src/context.js`, 'utf8')));
+		addFile(injected, `src/apply.js`, (yield FS.readFile(_`./src/apply.js`, 'utf8')));
 
 		injected.prepend(injectFrame.prefix);
 		injected.    add(injectFrame.suffix);
 	}
 
 	const applying = new SourceNode(null, null, null); {
-		for (let name of (yield FS.readdir('./src/fake/'))) {
-			applying.add(`{ // /content/src/fake/${ name }\n`);
-			const file = (yield FS.readFile('./src/fake/'+ name, 'utf8'));
+		for (let name of (yield FS.readdir(_`./src/fake/`))) {
+			const file = (yield FS.readFile(_`./src/fake/${ name }`, 'utf8'));
 			const match = (/\/\*\s*globals\s+([\w+$]+(?:,\s*[\w$]+)*)/).exec(file);
 			if (!match) { throw new Error(`"/content/src/fake/${ name }" does not specify its global dependencies`); }
 			const deps = match[1].split(/,\s*/g);
 			const missing = deps.find(dep => !globalNames.includes(dep));
 			if (missing) { throw new Error(`"/content/src/fake/${ name }" requires a missing global ${ missing }`); }
 
-			addFile(applying, './src/fake/'+ name, file);
+			applying.add(`{ // /content/src/fake/${ name }\n`);
+			addFile(applying, `src/fake/${ name }`, file);
 			applying.add(`}\n`);
 		}
 
@@ -110,11 +111,11 @@ const build = async(function*() {
 		injector.add('const applyingSource = String.raw`'+ code.replace('`', '\\`') +'`;\n');
 		injector.add('const applyingSourceMap = '+ JSON.stringify(map) +';\n');
 	}
-	addFile(injector, './src/injector.js', (yield FS.readFile('./src/injector.js', 'utf8')));
+	addFile(injector, 'src/injector.js', (yield FS.readFile(_`./src/injector.js`, 'utf8')));
 
 	const data = toInline(injector);
 
-	(yield FS.writeFile('./index.js', data, 'utf8'));
+	(yield FS.writeFile(_`./index.js`, data, 'utf8'));
 
 });
 
