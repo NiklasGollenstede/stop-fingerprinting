@@ -1,21 +1,21 @@
 'use strict'; /* globals process, __filename */
 
-const wsPorts = [ 8075, 29941, 35155, 61830, 63593, 23862, 47358, 47585 ];
-const echoPorts = [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ];
+const portNums = [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ];
 
 const dialog = require('dialog');
 const Path = require('path');
 const fs = require('fs');
 const writeFile = promisify(fs.writeFile);
+const accessPath = promisify(fs.access);
 require('es6lib/require');
 const { execute, } = require('es6lib/process');
 const Port = require('es6lib/port');
 const _ = String.raw;
-const folder = process.cwd();
+const folder = Path.resolve(process.argv[0].endsWith('node.exe') ? process.argv[1].endsWith('.js') ? process.argv[1] +'/..' : process.argv[1] : process.argv[0] +'/..');
 
 const args = process.argv.slice(2);
 
-if (args.length === 0) {
+if (!'ius'.includes(args[0])) {
 	const logFile = fs.createWriteStream(Path.resolve(folder, './log.txt'));
 	[ 'error', 'info', 'log', 'warn', ]
 	.forEach(level => console[level] = (...args) => logFile.write(level +': '+ args.map(_=>JSON.stringify(_)).join(', ') +'\n'));
@@ -40,10 +40,12 @@ const firefox = {
 
 const install = {
 	windows(useBat) {
+		const targetPath = Path.resolve(folder, useBat ? 'index.js' : 'native.exe');
 		const binPath = Path.resolve(folder, './native.'+ (useBat ? 'bat' : 'exe'));
 		const chromePath = Path.resolve(folder, './chrome.json');
 		const firefoxPath = Path.resolve(folder, './firefox.json');
 		return Promise.all([
+			accessPath(targetPath),
 			writeFile(chromePath,  JSON.stringify(Object.assign({ path: binPath, }, manifest, chrome),  null, '\t'), 'utf8'),
 			writeFile(firefoxPath, JSON.stringify(Object.assign({ path: binPath, }, manifest, firefox), null, '\t'), 'utf8'),
 			useBat && writeFile(binPath, _`node index.js`, 'utf8'),
@@ -62,41 +64,29 @@ const uninstall = {
 };
 
 const startServer = (permanent) => spawn(function*() {
+	const eventToPromise = require('event-to-promise'), certs = require('./cert.js');
+	const Https = require('https'), WebSocketServer = require('ws').Server;
+
 	function echo(_in, _out) {
 		console.log('bouncing', _in.headers['x-nonce']);
 		_out.end(_in.headers['x-nonce'] +';'+ _in.headers['x-options']);
 	}
 
-	const certs = require('./cert.js');
-
-	let httpsS; for (let i = 0; i < echoPorts.length; ++i) {
-		try {
-			httpsS = (yield new Promise((resolve, reject) => {
-				require('https').createServer(certs, echo)
-				.listen(echoPorts[i], function(error) { error ? reject(error) : resolve(this); });
-			}));
-			break;
-		} catch (error) {
-			if (i === echoPorts.length - 1) { throw error; }
-			console.error(error.stack || error);
-		}
-	}
-	const echoPort = httpsS.address().port;
-
-	console.log(`Https listening on ${ echoPort }`);
-
-	const WebSocketServer = promisify(require('ws').Server);
-
-	const wsSs = [ ];
-	for (let port of wsPorts) { try {
-		wsSs.push((yield new WebSocketServer({ port, })));
-	} catch(error) {
-		console.error(`Failed to open a WebSocketServer on port ${ port }`, error);
+	let httpsS; for (let port of portNums) { try {
+		const server = Https.createServer(certs, echo);
+		(yield eventToPromise(server.listen(port), 'listening'));
+		httpsS = server; break;
+	} catch (error) {
+		console.error(`Echo skipping port ${ port }`, error);
 	} }
 
-	console.log(`Opened ${ wsSs.length } WebSocketServers:`, wsSs.map(_=>_.options.port));
+	if (!httpsS) { throw new Error(`Echo server failed to listen to any port: ${ portNums }`); }
+	const echoPort = httpsS.address().port;
+	console.log(`Https listening on ${ echoPort }`);
 
-	wsSs.forEach(_=>_.on('connection', socket => addPort(socket)));
+	const wsS = new WebSocketServer({ server: httpsS, });
+
+	wsS.on('connection', socket => addPort(socket));
 
 	const ports = new Set;
 
@@ -129,15 +119,15 @@ const startServer = (permanent) => spawn(function*() {
 });
 
 spawn(function*() {
-	console.log('starting', __filename, args);
+
 	switch (args[0]) {
 		case 'i': {
 			(yield install.windows(!args.includes('-n')));
-			dialog.info('Installation successful', 'Stop Fingerprinting');
+			dialog.info(`Installation at "${ folder }" successful`, 'Stop Fingerprinting');
 		} break;
 		case 'u': {
 			(yield uninstall.windows());
-			dialog.info('Uninstallation successful', 'Stop Fingerprinting');
+			dialog.info(`Uninstallation from "${ folder }" successful`, 'Stop Fingerprinting');
 		} break;
 		default: {
 			(yield startServer(args[0] === 's'));

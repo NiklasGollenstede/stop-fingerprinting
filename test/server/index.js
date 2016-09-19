@@ -50,38 +50,36 @@ app.use('/fingerprintjs2.js', Express.static(__dirname +'./../../node_modules/fi
  ** Startup
  **/
 
-const listen = (app, port) => new Promise((resolve, reject) => {
-	app.listen(port, function(error) { error ? reject(error) : resolve(this); });
-});
+const eventToPromise = require('event-to-promise');
+const listen = (server, port) => eventToPromise(server.listen(port), 'listening');
 
 if (https) {
 	https.key = (yield https.key);
 	https.cert = (yield https.cert);
-
 	const Https = require('https');
 
 	// https
 	this.https = (yield Promise.all(httpsPorts.map(port => {
-		const listener = Https.createServer(https, app);
-		return listen(listener, port);
+		const server = Https.createServer(https, app);
+		return listen(server, port);
 	})));
 
 	// upgrade
 	this.upgrade = (yield Promise.all(Object.keys(upgradePorts).map(from => {
 		const to = upgradePorts[from];
-		const listener = Express().use((req, res) => {
+		const server = Express().use((req, res) => {
 			const target = 'https://' + req.get('host').replace(from, to) + req.url;
 			debug && console.log('redirect to', target);
 			res.redirect(target);
 		});
-		return listen(listener, from);
+		return listen(server, from);
 	})));
 }
 
 // http
 this.http = (yield Promise.all(httpPorts.map(port => {
-	const listener = app;
-	return listen(listener, port);
+	const server = app;
+	return listen(server, port);
 })));
 
 return this;

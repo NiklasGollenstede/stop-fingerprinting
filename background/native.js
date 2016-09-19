@@ -6,13 +6,12 @@
 	'common/utils': { notify, domainFromUrl, setBrowserAction, },
 }) {
 
-const connect = (port, ...ports) => new Promise((resolve, reject) => {
-	const socket = new WebSocket('ws://localhost:'+ port);
+const connect = (ports) => new Promise((resolve, reject) => {
 	let resolved = false, rejected = 0;
-	socket.onopen = () => ((resolved = true), resolve(socket));
-	socket.onerror = error => ports.forEach(port => {
-		const socket = new WebSocket('ws://localhost:'+ port);
-		socket.onerror = () => ++rejected >= ports.length && reject(error);
+	// setTimeout(() => (resolved = true) && reject(new Error('Timeout')), 300);
+	ports.forEach(port => {
+		const socket = new WebSocket('wss://localhost:'+ port);
+		socket.onerror = error => ++rejected >= ports.length && reject(error);
 		socket.onopen = () => resolved ? socket.close() : ((resolved = true), resolve(socket));
 	});
 });
@@ -29,7 +28,7 @@ class Native {
 
 	start(force) { return spawn(function*() {
 		if (this.port) { return; }
-		try { !force && (this.socket = (yield connect(...this._ports))); }
+		try { !force && (this.socket = (yield connect(this._ports))); }
 		catch (error) { force = true; }
 		if (force) {
 			console.log('starting server');
@@ -37,7 +36,7 @@ class Native {
 			(yield sleep(1000));
 			// (yield sendNativeMessage(this.appName, { }).catch(_=>_));
 			console.log('started server (or not)');
-			this.socket = (yield connect(...this._ports));
+			this.socket = (yield connect(this._ports));
 		}
 		this.port = new Port(this.socket);
 		this.socket.onclose = this.stop.bind(this);

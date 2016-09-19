@@ -19,7 +19,7 @@ window.Profiles = Profiles;
 let echoPort = 0;
 const native = new Native({
 	version: 1,
-	ports: [ 8075, 29941, 35155, 61830, 63593, 23862, 47358, 47585 ],
+	ports: [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ],
 	onStart: async(function*() {
 		echoPort = (yield this.port.request('getPort'));
 		console.log(`Native app running on https://localhost:${ echoPort }/`);
@@ -27,7 +27,7 @@ const native = new Native({
 	onStop() {
 		echoPort = 0;
 		console.error(`Native app closed, restarting ...`);
-		this.start(true);
+		this.start();
 	},
 });
 const started = native.start();
