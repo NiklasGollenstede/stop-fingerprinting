@@ -1,4 +1,4 @@
-'use strict'; /* globals describe, it, beforeEach, afterEach, before, after, __dirname */
+'use strict'; /* globals describe, it, beforeEach, afterEach, before, after, __dirname, module, global */
 
 const {
 	concurrent: { async, promisify, },
@@ -10,7 +10,7 @@ const getBody = require('raw-body');
 const chai = require('chai');
 chai.use(require('chai-as-promised'));
 chai.should();
-const { expect, } = chai;
+global.expect = chai.expect;
 
 const { Builder, By: { css: $, }, until, } = require('selenium-webdriver');
 const { Options, } = require('selenium-webdriver/chrome');
@@ -25,7 +25,7 @@ const builder = new Builder()
 
 const HttpServer = require('../server/index.js');
 
-describe('Stop Fingerprinting', (function() {
+module.exports = (name, desc) => describe(name, (function() {
 	this.timeout(15000);
 	const ctx = { };
 
@@ -58,7 +58,7 @@ describe('Stop Fingerprinting', (function() {
 		});
 	});
 
-	const build = async(function*(options = { }) {
+	ctx.build = async(function*(options = { }) {
 		ctx.storage = options.storage;
 		const done = new Promise((resolve, reject) => { ctx.hasStarted = resolve; ctx.hasNotStarted = reject; });
 		const driver = ctx.driver = (yield builder.buildAsync());
@@ -81,16 +81,9 @@ describe('Stop Fingerprinting', (function() {
 	}));
 
 	after(async(function*() {
-		(yield promisify(ctx.setUpServer.close).call(ctx.setUpServer));
-		ctx.setUpServer = null;
-		(yield ctx.httpServer.close());
-		ctx.httpServer = null;
+		ctx.setUpServer && (yield promisify(ctx.setUpServer.close).call(ctx.setUpServer)); ctx.setUpServer = null;
+		ctx.httpServer && (yield ctx.httpServer.close()); ctx.httpServer = null;
 	}));
 
-	it('start with options', async(function*() {
-		const port = ctx.httpServer.https[0].address().port;
-		const driver = (yield build({ storage: { sync: { '<default>.rules.screen.devicePixelRatio': [ 8, ], }, }, }));
-		(yield driver.get(`https://localhost:${ port }/`));
-		expect((yield driver.executeScript(() => window.devicePixelRatio))).to.equal(8);
-	}));
+	desc.call(this, ctx);
 }));

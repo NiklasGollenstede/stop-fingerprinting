@@ -25,6 +25,7 @@
 
 		"es6lib": "NiklasGollenstede/es6lib",
 		"get-tld": "NiklasGollenstede/get-tld",
+		"regexpx": "NiklasGollenstede/regexpx",
 		"web-ext-utils": "NiklasGollenstede/web-ext-utils"
 	},
 	"devDependencies": {
@@ -45,7 +46,7 @@
 		"serve-favicon": "^2.3.0"
 	},
 
-	"main": "test/server/debug.js",
+	"main": "debug.js",
 	"scripts": {
 		"start": "node test/server/debug.js",
     	"test": "mocha test/selenium",

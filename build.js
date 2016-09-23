@@ -21,10 +21,13 @@ const include = {
 			'functional.js',
 			'concurrent.js',
 			'dom.js',
-			'format.js',
+			'string.js',
 			'index.js',
 		],
 		'get-tld': [
+			'index.js',
+		],
+		'regexpx': [
 			'index.js',
 		],
 		'web-ext-utils': {
@@ -49,8 +52,6 @@ const include = {
 };
 
 const args = process.argv.length > 2 ? process.argv.slice(2) : [ '-z', '-i', '-t', '-u', '-c', ];
-
-require('es6lib/require');
 
 const {
 	concurrent: { async, spawn, promisify, },

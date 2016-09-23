@@ -1,7 +1,7 @@
 /* globals
 	options, forEach, keys, reduce, split, hasOwnProperty, defineProperty, console,
 	WeakMap_p_get, WeakMap_p_set, MutationObserver, MutationObserver_p_observe,
-	Element_p_get_tagName, HTMLIFrameElement_p_get_contentWindow, HTMLIFrameElement_p_get_contentWindow,
+	Element_p_get_tagName, HTMLIFrameElement_p_get_contentWindow,
 	querySelectorAll, document, self
 */
 /* globals
@@ -44,7 +44,7 @@ function setProps(object, props) {
 	return object;
 }
 
-function fakeAPIs(global) {
+const fakeAPIs = context.fakeAPIs = function fakeAPIs(global) {
 	const host = global.frameElement;
 
 	let fake = WeakMap_p_get(context.fakes, global);
@@ -55,7 +55,7 @@ function fakeAPIs(global) {
 	}
 	fake.apply(); // TODO: find a better solution
 	// console.log('fake.apply', host);
-}
+};
 
 function attachObserver() {
 	if (typeof MutationObserver === 'undefined') { return; } // worker
@@ -76,5 +76,5 @@ function attachObserver() {
 
 return (function main() {
 	fakeAPIs(self);
-	attachObserver();
+	attachObserver(); // TODO: check if this is needed
 })();

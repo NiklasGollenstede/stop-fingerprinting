@@ -3,16 +3,16 @@
 	HTMLCanvasElement_p_toDataURL, HTMLCanvasElement_p_toBlob, HTMLCanvasElement_p_mozGetAsFile,
 	HTMLCanvasElement_p_get_height, HTMLCanvasElement_p_get_width, HTMLCanvasElement_p_getContext, Node_p_cloneNode,
 	CanvasRenderingContext2D_p_getImageData, CanvasRenderingContext2D_p_putImageData, WebGLRenderingContext_p_readPixels, RGBA, UNSIGNED_BYTE,
-	ImageData_p_get_data, TypedArray_p_get_length
+	ImageData_p_get_data, TypedArray_p_get_length,
 */
 /* globals
-	hideCode, define, currentGlobal, context
+	hideCode, define, currentGlobal, context,
 */
 
 const { Error, } = currentGlobal;
 
 // <canvas> randomization
-if (options.canvas) {
+if (!options.canvas) { break file; }
 
 function randomizeCanvas(canvas) {
 	const width = HTMLCanvasElement_p_get_width(canvas), height = HTMLCanvasElement_p_get_height(canvas);
@@ -96,5 +96,3 @@ define('WebGLRenderingContext.prototype', {
 		randomizeTypedArray(data);
 	}), },
 });
-
-}

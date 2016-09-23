@@ -231,6 +231,7 @@ Messages.addHandler('getOptions', function() {
 });
 
 Messages.addHandler('notify', function(method, { title, message, url, }) {
+	url || (url = this.tab.url);
 	const { id: tabId, title: tabTitle, } = this.tab;
 	const domain = domainFromUrl(url);
 	const logLevel = Profiles.findStack(domain).get('logLevel');

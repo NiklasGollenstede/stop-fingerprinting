@@ -45,19 +45,20 @@ function sha256(string) {
 const iframes = window.iframes = {
 	contentWindow(url) {
 		const iframe = document.createElement('iframe');
-		url && (iframe.src = url);
+		url && (iframe.src = url || 'about:blank');
 		document.body.appendChild(iframe);
 		return (window.last = iframe.contentWindow);
 	},
 	contentDocument(url) {
 		const iframe = document.createElement('iframe');
-		url && (iframe.src = url);
+		url && (iframe.src = url || 'about:blank');
 		document.body.appendChild(iframe);
 		return (window.last = iframe.contentDocument.defaultView);
 	},
 	windowFrames(url) {
 		const iframe = document.createElement('iframe');
-		url && (iframe.src = url);
+		url && (iframe.src = url || 'about:blank');
+		iframe.sandbox = 'allow-same-origin';
 		document.body.appendChild(iframe);
 		return (window.last = window.frames[window.frames.length - 1]);
 	},
@@ -112,6 +113,8 @@ document.addEventListener('DOMContentLoaded', () => {
 	canvas.toBlob(blob =>
 		document.body.appendChild(document.createElement('img')).src = URL.createObjectURL(blob)
 	);
+
+	console.log('window.frames', Array.prototype.map.call(window.frames, cw => cw.devicePixelRatio));
 
 	Array.prototype.forEach.call(document.querySelectorAll('iframe'), frame => {
 		const cw = frame.contentWindow;

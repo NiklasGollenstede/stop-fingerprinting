@@ -1,7 +1,7 @@
 (() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/es6lib/concurrent': { async, },
 	'node_modules/es6lib/dom': { createElement, DOMContentLoaded, },
-	'node_modules/es6lib/format': { Guid },
+	'node_modules/es6lib/string': { Guid },
 	'node_modules/web-ext-utils/tabview/': TabView,
 	'node_modules/web-ext-utils/options/editor': Editor,
 	'common/options': options,

@@ -10,7 +10,6 @@ const accessPath = promisify(fs.access);
 require('es6lib/require');
 const { execute, } = require('es6lib/process');
 const Port = require('es6lib/port');
-const _ = String.raw;
 const folder = Path.resolve(process.argv[0].endsWith('node.exe') ? process.argv[1].endsWith('.js') ? process.argv[1] +'/..' : process.argv[1] : process.argv[0] +'/..');
 
 const args = process.argv.slice(2);
@@ -29,7 +28,7 @@ const manifest = {
 };
 const chrome = {
 	allowed_origins: [
-		_`chrome-extension://obebhpicmdheoacdbidiegcomljjacpm/`,
+		`chrome-extension://obebhpicmdheoacdbidiegcomljjacpm/`,
 	],
 };
 const firefox = {
@@ -48,7 +47,7 @@ const install = {
 			accessPath(targetPath),
 			writeFile(chromePath,  JSON.stringify(Object.assign({ path: binPath, }, manifest, chrome),  null, '\t'), 'utf8'),
 			writeFile(firefoxPath, JSON.stringify(Object.assign({ path: binPath, }, manifest, firefox), null, '\t'), 'utf8'),
-			useBat && writeFile(binPath, _`node index.js`, 'utf8'),
+			useBat && writeFile(binPath, `node index.js`, 'utf8'),
 			execute(`REG ADD "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${ manifest.name }" /ve /t REG_SZ /d "${ chromePath }" /f`),
 			execute(`REG ADD "HKCU\\Software\\Mozilla\\NativeMessagingHosts\\${ manifest.name }"        /ve /t REG_SZ /d "${ firefoxPath }" /f`),
 		]);
@@ -72,7 +71,7 @@ const startServer = (permanent) => spawn(function*() {
 		_out.end(_in.headers['x-nonce'] +';'+ _in.headers['x-options']);
 	}
 
-	let httpsS; for (let port of portNums) { try {
+	let httpsS; for (const port of portNums) { try {
 		const server = Https.createServer(certs, echo);
 		(yield eventToPromise(server.listen(port), 'listening'));
 		httpsS = server; break;

@@ -1,5 +1,5 @@
 (() => { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'node_modules/es6lib/format': { RegExpX, },
+	'node_modules/regexpx/': RegExpX,
 	'node_modules/es6lib/object': { deepFreeze, },
 	'node_modules/web-ext-utils/options/': Options,
 	'node_modules/web-ext-utils/chrome/': { Storage, applications: { blink, }, },

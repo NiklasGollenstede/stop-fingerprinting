@@ -1,12 +1,13 @@
 /* globals
-	self, window, worker,
+	options, self, window, worker,
 	call, dispatchEvent, clz32, forEach, keys, bind, defineProperty,
 	CustomEvent, WeakMap, Error,
 	CustomEvent_p_get_detail, WeakMap_p_set,
-	console, alert
+	console, alert,
+	injectedSource, applyingSource,
 */
 /* globals
-	location, globals, options, injectedSource, applyingSource,
+	location, globals,
 */
 const context = (() => {
 

@@ -5,44 +5,18 @@ const {
 	functional: { log, },
 	fs: { FS, },
 	process: { execute, },
+	string: { escapeForTemplateString, },
 } = require('es6lib');
 const { join, relative, resolve, dirname, basename, } = require('path');
 
 const { SourceNode, } = require('source-map');
-
-
-const injectFrame = {
-	prefix: `
-(function () { try {
-	const injectedSource = (function(options, injectedSource, applyingSource, workerOptions) {
-'use strict';
-//// start scripts
-`,
-	suffix: `
-//// end scripts
-	});
-	const options = JSON.parse(this.dataset.arg1);
-	const applyingSource = this.dataset.arg0;
-	const value = injectedSource.call(window, options, injectedSource, applyingSource);
-	this.dataset.done = true;
-	this.dataset.value = JSON.stringify(value) || 'null';
-} catch (error) {
-	console.error(error);
-	this.dataset.error = JSON.stringify(error, (key, value) => {
-		if (!value || typeof value !== 'object') { return value; }
-		if (value instanceof Error) { return '$_ERROR_$'+ JSON.stringify({ name: value.name, message: value.message, stack: value.stack, }); }
-		return value;
-	});
-} }).call(document.currentScript)
-`,
-};
 
 const applyFrame = {
 	prefix: globalNames => `
 'use strict';
 const currentGlobal = self; {
 	const { ${ globalNames.join(', ') }, } = context.globals; {
-		const { hideCode, hideAllCode, } = context;
+		const { hideCode, hideAllCode, globals, } = context;
 		const apis = { };
 
 		function define(name, object) {
@@ -65,50 +39,54 @@ const _ = (s, ...a) => resolve(__dirname, String.raw({ raw: s, }, ...a));
 const build = module.exports = async(function*() {
 
 	const globalsJs = (yield FS.readFile(_`./src/globals.js`, 'utf8'));
-	const globalNames = globalsJs.split(/\r\n?|\n/g).map(line => ((/^const ([\w$]+)\s+\=/).exec(line) || [ ])[1]).filter(_=>_);
-	globalNames.push('options', 'injectedSource', 'applyingSource', 'workerOptions');
+	const globalNames = globalsJs.split(/\r\n?|\n/g).map(line => ((/^\s*const ([\w$]+)\s+\=/).exec(line) || [ ])[1]).filter(_=>_);
+	// globalNames.push('options', 'injectedSource', 'applyingSource', 'workerOptions');
+	const unused = new Set(globalNames);
 
+	function checkDeps(path) {
+		return FS.readFile(path, 'utf8').then(file => {
+			const match = (/\/\*\s*globals\s+([\w+$]+(?:,\s*[\w$]+)*)/).exec(file);
+			if (!match) { throw new Error(`"${ path }" does not specify its global dependencies`); }
+			const deps = match[1].split(/,\s*/g);
+			const missing = deps.filter(dep => ((unused.delete(dep)), !globalNames.includes(dep)));
+			if (missing.length) { throw new Error(`"${ path }" requires a missing globals: ${ missing.join(', ') }`); }
+			return file;
+		});
+	}
 
 	const injected = new SourceNode(null, null, null); {
-		addFile(injected, `src/globals.js`, globalsJs);
+		addFile(injected, `src/globals.js`, globalsJs, { scoped: false, });
 		injected.add(`\n\nconst globals = ({ ${ globalNames.join(', ') }, });\n`);
-		addFile(injected, `src/context.js`, (yield FS.readFile(_`./src/context.js`, 'utf8')));
-		addFile(injected, `src/apply.js`, (yield FS.readFile(_`./src/apply.js`, 'utf8')));
-
-		injected.prepend(injectFrame.prefix);
-		injected.    add(injectFrame.suffix);
+		addFile(injected, `src/context.js`, (yield checkDeps(_`./src/context.js`)), { lOff: 0, scoped: false, });
+		addFile(injected, `src/apply.js`, (yield checkDeps(_`./src/apply.js`)), { lOff: -1, });
 	}
 
 	const applying = new SourceNode(null, null, null); {
 		for (let name of (yield FS.readdir(_`./src/fake/`))) {
-			const file = (yield FS.readFile(_`./src/fake/${ name }`, 'utf8'));
-			const match = (/\/\*\s*globals\s+([\w+$]+(?:,\s*[\w$]+)*)/).exec(file);
-			if (!match) { throw new Error(`"/content/src/fake/${ name }" does not specify its global dependencies`); }
-			const deps = match[1].split(/,\s*/g);
-			const missing = deps.find(dep => !globalNames.includes(dep));
-			if (missing) { throw new Error(`"/content/src/fake/${ name }" requires a missing global ${ missing }`); }
-
-			applying.add(`{ // /content/src/fake/${ name }\n`);
-			addFile(applying, `src/fake/${ name }`, file);
-			applying.add(`}\n`);
+			// applying.add(`file: { // /content/src/fake/${ name }\n`);
+			addFile(applying, `src/fake/${ name }`, (yield checkDeps(_`./src/fake/${ name }`)), { lOff: -2, }); // TODO: find correct offset ...
+			// applying.add(`} `);
 		}
 
 		applying.prepend(applyFrame.prefix(globalNames));
 		applying.    add(applyFrame.suffix);
 	}
 
+	if (unused.size) {
+		console.error(`Unused global variables :`+ Array.from(unused).join(', '));
+	}
 
 	const injector = new SourceNode(null, null, null);
 
 	injector.add(`'use strict';\n`);
 	{
 		const { code, map, } = injected.toStringWithSourceMap({ sourceRoot: '<unset>', });
-		injector.add('const injectedSource = String.raw`'+ code.replace('`', '\\`') +'`;\n');
+		injector.add('const injectedSource = (`'+ escapeForTemplateString(code) +'`);\n');
 		injector.add('const injectedSourceMap = '+ JSON.stringify(map) +';\n');
 	}
 	{
 		const { code, map, } = applying.toStringWithSourceMap({ sourceRoot: '<unset>', });
-		injector.add('const applyingSource = String.raw`'+ code.replace('`', '\\`') +'`;\n');
+		injector.add('const applyingSource = (`'+ escapeForTemplateString(code) +'`);\n');
 		injector.add('const applyingSourceMap = '+ JSON.stringify(map) +';\n');
 	}
 	addFile(injector, 'src/injector.js', (yield FS.readFile(_`./src/injector.js`, 'utf8')));
@@ -126,15 +104,19 @@ if (process.argv[1] === __filename) {
 	.catch(error => { console.error(error); process.exit(-1); });
 }
 
-function addFile(node, name, data, lOff = 0, cOff = 0) {
+function addFile(node, name, data, { lOff = 0, cOff = 0, scoped = true, } = { }) {
 	lOff += 1;
+	scoped && node.add(`file: { `);
+	node.add(`// begin file /content/${ name }\n`);
 	data.split(/\r\n?|\n/g).forEach((line, ll) => {
 		line.split(/\b/).reduce((cc, token) => {
-			node.add(new SourceNode(ll + lOff, cc + cOff, name, token));
+			node.add(new SourceNode(Math.max(1, ll + lOff), cc + cOff, name, token));
 			return cc + token.length;
 		}, 0);
 		node.add('\n');
 	});
+	scoped && node.add(`} `);
+	node.add(`// end file /content/${ name }\n`);
 }
 
 function toInline(node, options) {

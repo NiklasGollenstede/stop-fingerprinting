@@ -1,32 +1,38 @@
 // this is the same .jshintrc as in the project root, only that it does not allow any globals
-
 {
 	"indent": 1, // indent with tabs
-	"-W002": false, // Value of '{cought exception}' may be overwritten in IE 8 and earlier.
+	"-W002": false, // Value of '{caught exception}' may be overwritten in IE 8 and earlier.
 	"-W006": false, // Confusing minuses.
 	"-W030": false, // Expected an assignment or function call and instead saw an expression.
 	"-W034": false, // Unnecessary directive "use strict".
 	"-W054": false, // The Function constructor is a form of eval.
+	"-W056": false, // Bad constructor.
 	"-W058": false, // Missing '()' invoking a constructor.
 	"-W078": false, // Setter is defined without getter.
 	"-W082": false, // Function declarations should not be placed in blocks. (Not a problem in strict mode)
 
-	"curly": true,
-	"elision": true,
-	"eqeqeq": true,
-	"eqnull": true,
-	"laxbreak": true,
-	"loopfunc": true, // allow functions winthin loops
-	"newcap": false,
+	"curly": true, // always require blocks with curly braces in control flow statements
+	"elision": true, // allow empty array entries [ , , ]
+	"eqeqeq": true, // enforce === instead of ==
+	"eqnull": true, // allow `== null` and `!= null` as exception of 'eqeqeq'
+	"laxbreak": true, // allow 'possibly unsafe line breakings'
+	"loopfunc": true, // allow functions within loops
+	"newcap": false, // deprecated
+	"noyield": true, // allow generator functions without yield statements
 	"sub": true, // allow headers['DNT'] instead of headers.DNT
+	"undef": true, // warn about not-defined variables
 	"validthis": true,
 	"varstmt": true, // enforce 'let' or 'const' instead of 'var'
 
 	"esversion": 6,
-	"strict": "implied",
 	"globalstrict": true,
+	"latedef": "nofunc",
 
-	"undef": true,
+	// different entries start here
+
+	"strict": "implied",
+	"-W090": true, // '{label}' is not a statement label.
+
 	"globals": { },
 	"predef": [ // from https://github.com/jshint/jshint/blob/master/src/vars.js
 		"-Array",

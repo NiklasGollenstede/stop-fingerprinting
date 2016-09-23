@@ -7,7 +7,6 @@ const CookieParser = require('cookie-parser');
 const {
 	concurrent: { async, promisify, },
 	fs: { FS, Path, },
-	format: { RegExpX, },
 	functional: { log, },
 	network: { mimeTypes, },
 } = require('es6lib');
@@ -18,7 +17,7 @@ const Server = module.exports = async(function*({
 	host = 'localhost',
 	origins = null,
 	httpPorts = [ 80, ],
-	httpsPorts = [ 443, ],
+	httpsPorts = [ 443, 4430, 4431, 4432, 4433, ],
 	upgradePorts = { 8080: 443, },
 	certPath = './cert/test',
 	debug = true,
@@ -51,12 +50,12 @@ app.use('/fingerprintjs2.js', Express.static(__dirname +'./../../node_modules/fi
  **/
 
 const eventToPromise = require('event-to-promise');
-const listen = (server, port) => eventToPromise(server.listen(port), 'listening');
+const listen = (server, port) => eventToPromise(server.listen(port), 'listening').then(() => server);
+const Https = require('https'), Http = require('http');
 
 if (https) {
 	https.key = (yield https.key);
 	https.cert = (yield https.cert);
-	const Https = require('https');
 
 	// https
 	this.https = (yield Promise.all(httpsPorts.map(port => {
@@ -67,18 +66,18 @@ if (https) {
 	// upgrade
 	this.upgrade = (yield Promise.all(Object.keys(upgradePorts).map(from => {
 		const to = upgradePorts[from];
-		const server = Express().use((req, res) => {
+		const server = Https.createServer(Express().use((req, res) => {
 			const target = 'https://' + req.get('host').replace(from, to) + req.url;
 			debug && console.log('redirect to', target);
 			res.redirect(target);
-		});
+		}));
 		return listen(server, from);
 	})));
 }
 
 // http
 this.http = (yield Promise.all(httpPorts.map(port => {
-	const server = app;
+	const server = Https.createServer(app);
 	return listen(server, port);
 })));
 
