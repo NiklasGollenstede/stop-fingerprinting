@@ -1,41 +1,39 @@
-'use strict'; /* globals process, __filename */
+'use strict'; /* globals process, __filename, global */
 
-const portNums = [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ];
+// TODO: adjust for MAC / Linux
 
+Error.stackTraceLimit = Infinity; // get them all ...
+
+const { spawn, async, promisify, } = require('es6lib/concurrent');
+const { FS, Path, }                = require('es6lib/fs');
+const { debounce, }                = require('es6lib/functional');
+const Port                         = require('es6lib/port');
+const { execute, }                 = require('es6lib/process');
 const dialog = require('dialog');
-const Path = require('path');
 const fs = require('fs');
-const writeFile = promisify(fs.writeFile);
-const accessPath = promisify(fs.access);
-require('es6lib/require');
-const { execute, } = require('es6lib/process');
-const Port = require('es6lib/port');
-const folder = Path.resolve(process.argv[0].endsWith('node.exe') ? process.argv[1].endsWith('.js') ? process.argv[1] +'/..' : process.argv[1] : process.argv[0] +'/..');
 
+const isBinary = process.argv[0].endsWith('node.exe'); // TODO: won't work for MAC / Linux, not reliable
+
+// path of the folder that contains the current native binary, or the index.js script
+const folder = Path.resolve(isBinary ? process.argv[1].endsWith('.js') ? process.argv[1] +'/..' : process.argv[1] : process.argv[0] +'/..');
+
+// command line arguments
 const args = process.argv.slice(2);
 
-if (!'ius'.includes(args[0])) {
+// whether the program was started by a browser or not
+const startedByBrowser = args.some(arg => (/^chrome-extension:\/\/|firefox\.json$/).test(arg)); // chrome sends "chrome-extension://"... as arg, firefox the path to the manifest (firefox.json)
+
+// can't log to stdio if started by the browser ==> log to './log.txt'.
+if (startedByBrowser) {
 	const logFile = fs.createWriteStream(Path.resolve(folder, './log.txt'));
+	const console = { };
 	[ 'error', 'info', 'log', 'warn', ]
 	.forEach(level => console[level] = (...args) => logFile.write(level +': '+ args.map(_=>JSON.stringify(_)).join(', ') +'\n'));
+	Object.defineProperty(global, 'console', { get() { return console; }, });
 }
 
-const manifest = {
-	name: 'stop_fingerprint_echo_server.v1',
-	description: `http echo server to allow for synchronous requests from content scripts to the background script via XHRs`,
-	// path: 'TBD',
-	type: 'stdio',
-};
-const chrome = {
-	allowed_origins: [
-		`chrome-extension://obebhpicmdheoacdbidiegcomljjacpm/`,
-	],
-};
-const firefox = {
-	allowed_extensions: [
-		'@stop-fingerprinting',
-	],
-};
+const manifests = require('./manifests');
+const portNums = manifests.portNumbers;
 
 const install = {
 	windows(useBat) {
@@ -44,44 +42,42 @@ const install = {
 		const chromePath = Path.resolve(folder, './chrome.json');
 		const firefoxPath = Path.resolve(folder, './firefox.json');
 		return Promise.all([
-			accessPath(targetPath),
-			writeFile(chromePath,  JSON.stringify(Object.assign({ path: binPath, }, manifest, chrome),  null, '\t'), 'utf8'),
-			writeFile(firefoxPath, JSON.stringify(Object.assign({ path: binPath, }, manifest, firefox), null, '\t'), 'utf8'),
-			useBat && writeFile(binPath, `node index.js`, 'utf8'),
-			execute(`REG ADD "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${ manifest.name }" /ve /t REG_SZ /d "${ chromePath }" /f`),
-			execute(`REG ADD "HKCU\\Software\\Mozilla\\NativeMessagingHosts\\${ manifest.name }"        /ve /t REG_SZ /d "${ firefoxPath }" /f`),
+			FS.access(targetPath),
+			FS.writeFile(chromePath,  JSON.stringify(Object.assign({ path: binPath, }, manifests.general, manifests.chrome),  null, '\t'), 'utf8'),
+			FS.writeFile(firefoxPath, JSON.stringify(Object.assign({ path: binPath, }, manifests.general, manifests.firefox), null, '\t'), 'utf8'),
+			useBat && FS.writeFile(binPath, `node index.js %*`, 'utf8'),
+			execute(`REG ADD "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${ manifests.general.name }" /ve /t REG_SZ /d "${ chromePath }" /f`),
+			execute(`REG ADD "HKCU\\Software\\Mozilla\\NativeMessagingHosts\\${ manifests.general.name }"        /ve /t REG_SZ /d "${ firefoxPath }" /f`),
 		]);
-	}
+	},
+	// TODO: MAC / Linux
 };
 const uninstall = {
 	windows() {
 		return Promise.all([
-			execute(`REG ADD "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${ manifest.name }" /f`).catch(_=>_),
-			execute(`REG ADD "HKCU\\Software\\Mozilla\\NativeMessagingHosts\\${ manifest.name }"        /f`).catch(_=>_),
+			execute(`REG ADD "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${ manifests.general.name }" /f`).catch(_=>_),
+			execute(`REG ADD "HKCU\\Software\\Mozilla\\NativeMessagingHosts\\${ manifests.general.name }"        /f`).catch(_=>_),
 		]);
-	}
+	},
+	// TODO: MAC / Linux
 };
 
-const startServer = (permanent) => spawn(function*() {
+const startServer = async(function*(Handler, permanent) {
 	const eventToPromise = require('event-to-promise'), certs = require('./cert.js');
 	const Https = require('https'), WebSocketServer = require('ws').Server;
 
-	function echo(_in, _out) {
-		console.log('bouncing', _in.headers['x-nonce']);
-		_out.end(_in.headers['x-nonce'] +';'+ _in.headers['x-options']);
-	}
-
 	let httpsS; for (const port of portNums) { try {
-		const server = Https.createServer(certs, echo);
+		const server = Https.createServer(certs, function() {
+			handler.onRequest && handler.onRequest.apply(handler, arguments);
+		});
 		(yield eventToPromise(server.listen(port), 'listening'));
 		httpsS = server; break;
 	} catch (error) {
-		console.error(`Echo skipping port ${ port }`, error);
+		console.error(`Https server skipping port ${ port }`, error);
 	} }
 
-	if (!httpsS) { throw new Error(`Echo server failed to listen to any port: ${ portNums }`); }
-	const echoPort = httpsS.address().port;
-	console.log(`Https listening on ${ echoPort }`);
+	if (!httpsS) { throw new Error(`Https server failed to listen to any port: ${ portNums }`); }
+	const portNumber = httpsS.address().port;
 
 	const wsS = new WebSocketServer({ server: httpsS, });
 
@@ -90,47 +86,68 @@ const startServer = (permanent) => spawn(function*() {
 	const ports = new Set;
 
 	function addPort(socket) {
-		console.log('adding socket');
 		const port = new Port(socket);
 		ports.add(port);
-		port.addHandlers({
-			getPort() {
-				return echoPort;
-			},
-		});
-
+		handler.onConnect && handler.onConnect(port);
 		socket.on('close', removePort.bind(null, port));
 	}
 
 	function removePort(port) {
 		ports.delete(port);
-		console.log('removing port');
+		handler.onDisconnect && handler.onDisconnect(port);
 		shutdown();
 	}
 
-	const shutdown = debounce(() => {
+	const shutdown = debounce(async(function*() {
 		if (ports.size) { return; }
-		console.log('All connections closed, shutting down now');
-		!permanent && process.exit(0);
-	}, 3000);
+		let cancel = false; try {
+			if ((yield handler.onBeforeExit && handler.onBeforeExit()) === false) { cancel = true; }
+		} catch (error) { console.error(error); }
+		!cancel && process.exit(0);
+	}), 3000);
+
+	const handler = new Handler({
+		portNumber, permanent,
+		startedByBrowser, folder,
+		isBinary, args,
+	});
 
 	shutdown();
 });
 
 spawn(function*() {
 
-	switch (args[0]) {
-		case 'i': {
-			(yield install.windows(!args.includes('-n')));
-			dialog.info(`Installation at "${ folder }" successful`, 'Stop Fingerprinting');
-		} break;
-		case 'u': {
-			(yield uninstall.windows());
-			dialog.info(`Uninstallation from "${ folder }" successful`, 'Stop Fingerprinting');
-		} break;
-		default: {
-			(yield startServer(args[0] === 's'));
-			console.log('server started');
+	if (startedByBrowser) { // start server, allow to exit when all connections are closed
+		const main = (yield require('./main'));
+		(yield startServer(main, false));
+	} else {
+		if (
+			args.length === 0 // started from file system / without args
+			|| args[0] === 'install' || args[0] === 'i'
+		) {
+			const os = 'windows'; // TODO: ...
+			const dev = args.length >= 2 && args.slice(1).some(arg => arg === '-d' || arg === '--dev'); // install in dev mode
+			(yield install[os](dev));
+			dialog.info(`Installation for ${ os } at “${ folder }” successful` +(dev ? ' (dev mode)' : ''), 'Stop Fingerprinting');
+		} else if (
+			args.length >= 1 && args[0] === 'uninstall'
+		) {
+			const os = 'windows'; // TODO: ...
+			(yield uninstall[os]());
+			dialog.info(`Uninstallation for ${ os } from “${ folder }” successful`, 'Stop Fingerprinting');
+		} else if (
+			args.length >= 1 && (args[0] === 'start' || args[0] === 's')
+		) {
+			const main = (yield require('./main'));
+			(yield startServer(main,
+				args.length >= 2 && args.slice(1).some(arg => arg === '-p' || arg === '--permanent') // set ctx.permanent to true ==> allow server to keep running when all connections are closed
+			));
+		} else {
+			console.error(`
+Start without arguments or with a first arg of 'i' or 'install' to install.
+Add '-d' or '--dev' to install in development mode.
+Start with 'uninstall' to uninstall.
+			`);
 		}
 	}
 })
@@ -138,31 +155,3 @@ spawn(function*() {
 	console.error('Startup failed', error.stack || error);
 	dialog.warn(`Operation failed: ${ error.stack || error }`, 'Error: Stop Fingerprinting');
 });
-
-function spawn(generator) {
-	const iterator = generator();
-	const next = arg => handle(iterator.next(arg));
-	const _throw = arg => handle(iterator.throw(arg));
-	const handle = ({ done, value, }) => done ? Promise.resolve(value) : Promise.resolve(value).then(next, _throw);
-	return Promise.resolve().then(next);
-}
-
-function promisify(callUlater) {
-	return function wrapper(/*arguments*/) {
-		return new Promise((resolve, reject) => {
-			if (new.target) {
-				const self = new callUlater(...arguments, error => error ? reject(error) : resolve(self));
-			} else {
-				callUlater.call(this, ...arguments, function(err, res) { err ? reject(err) : resolve(res); });
-			}
-		});
-	};
-}
-
-function debounce(callback, time) {
-	let timer = null;
-	return function() {
-		clearTimeout(timer);
-		timer = setTimeout(callback, time);
-	};
-}
