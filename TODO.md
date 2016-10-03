@@ -6,6 +6,9 @@
 - write introduction/description/about/credits/... pages
 
 - spoof navigator.language(s)
+- the 'Host' header field will be different for non-ASCII names
+
+- document.referrer
 
 - handle ServiceWorkers (cache deactivation should make them de-facto useless, but they are probably still able to provide similar services as an unwrapped Shared Worker would)
 - prevent AudioContext fingerprinting (see https://audiofingerprint.openwpm.com/)

@@ -1,10 +1,11 @@
 /* globals
 	injectedSource, injectedSourceMap,
 	applyingSourceMap, applyingSource,
-	self,
+	self, browser,
 */
 
-const { btoa, confirm, Error, XMLHttpRequest, chrome, console, Object, JSON, } = self;
+const { btoa, confirm, Error, XMLHttpRequest, console, Object, JSON, } = self;
+const chrome = typeof browser !== 'undefined' ? browser : self.chrome; // 'browser' is not a property of 'window' in Firefox
 const { create, assign, } = Object;
 const { stringify, parse, } = JSON;
 
@@ -111,7 +112,7 @@ function parseError(string) {
 	});
 }
 
-function reportError(error, level = 'error') {
+function reportError(error, level = 'error') { try {
 	chrome.runtime.sendMessage({
 		post: true,
 		name: 'notify',
@@ -120,7 +121,7 @@ function reportError(error, level = 'error') {
 			message: error && error.message || error,
 		}, ],
 	});
-}
+} catch (_) { } }
 
 function getCallingScript() {
 	const stack = (new Error).stack.split(/$/m);

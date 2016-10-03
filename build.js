@@ -1,4 +1,4 @@
-'use strict'; /* globals __dirname, process */ // license: MPL-2.0
+'use strict'; /* globals __dirname, __filename, module, process */ // license: MPL-2.0
 
 // files to be included
 const include = {
@@ -72,8 +72,8 @@ const buildIcons = async(function*(...args) {
 });
 
 const buildTldJS = async(function*(...args) {
-	const { data, tlds, } = (yield require('./node_modules/get-tld/build.js')(...args));
-	console.log(`./node_modules/get-tld/index.js created/updated (${ tlds.reduce((c, s) => c + s.length, 0) } => ${ data.length } bytes)`);
+	const { data, list, } = (yield require('./node_modules/get-tld/build-node.js')(...args));
+	console.log(`./node_modules/get-tld/index.js created/updated (${ list.length } => ${ data.length } bytes)`);
 });
 
 const buildUpdate = async(function*(...args) {
@@ -98,34 +98,39 @@ const veryfyManifest = async(function*(...args) {
 	outputName = _package.title.toLowerCase().replace(/[^a-z0-9\.-]+/g, '_') +'-'+ _package.version;
 });
 
-spawn(function*() {
+const build = async(function*() {
 
-(yield Promise.all([
-	args.includes('-c') && buildContent(),
-	args.includes('-i') && buildIcons(),
-	args.includes('-t') && buildTldJS(),
-	args.includes('-u') && buildUpdate(),
-	args.includes('-z') && veryfyManifest(),
-]));
+	(yield Promise.all([
+		args.includes('-c') && buildContent(),
+		args.includes('-i') && buildIcons(),
+		args.includes('-t') && buildTldJS(),
+		args.includes('-u') && buildUpdate(),
+		args.includes('-z') && veryfyManifest(),
+	]));
 
-if (args.includes('-z')) {
-	const paths = [ ];
-	function addPaths(prefix, module) {
-		if (Array.isArray(module)) { return paths.push(...module.map(file => join(prefix, file))); }
-		Object.keys(module).forEach(key => addPaths(join(prefix, key), module[key]));
+	if (args.includes('-z')) {
+		const paths = [ ];
+		function addPaths(prefix, module) {
+			if (Array.isArray(module)) { return paths.push(...module.map(file => join(prefix, file))); }
+			Object.keys(module).forEach(key => addPaths(join(prefix, key), module[key]));
+		}
+
+		addPaths('.', include);
+
+		const copy = promisify(require('fs-extra').copy);
+		const remove = promisify(require('fs-extra').remove);
+		(yield Promise.all(paths.map(path => copy(path, join('build', path)).catch(error => console.error('Skipping missing file/folder "'+ path +'"')))));
+
+		(yield promisify(require('zip-dir'))('./build', { filter: path => !(/\.(?:zip|xpi)$/).test(path), saveTo: `./build/${ outputName }.zip`, }));
+
+		console.log(`Saved package to ./build/${ outputName }.zip`);
 	}
 
-	addPaths('.', include);
+});
 
-	const copy = promisify(require('fs-extra').copy);
-	const remove = promisify(require('fs-extra').remove);
-	(yield Promise.all(paths.map(path => copy(path, join('build', path)).catch(error => console.error('Skipping missing file/folder "'+ path +'"')))));
 
-	(yield promisify(require('zip-dir'))('./build', { filter: path => !(/\.(?:zip|xpi)$/).test(path), saveTo: `./build/${ outputName }.zip`, }));
-
-	console.log(`Saved package to ./build/${ outputName }.zip`);
+if (require.main === module) {
+	module.exports = build()
+	.then(() => console.log('Build done'))
+	.catch(error => { console.error(error); throw error; });
 }
-
-})
-.then(() => console.log('Build done'))
-.catch(error => console.error('Error during build', error.stack || error) === process.exit(-1));

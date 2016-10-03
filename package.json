@@ -40,18 +40,19 @@
 		"body-parser": "^1.15.1",
 		"cookie-parser": "^1.4.1",
 		"electron-prebuilt": "^1.4.0",
+		"event-to-promise": "0.7.0",
 		"express": "^4.13.4",
 		"fingerprintjs2": "^1.4.0",
 		"helmet": "^2.0.0",
 		"serve-favicon": "^2.3.0"
 	},
 
-	"main": "debug.js",
+	"main": "build.js",
 	"scripts": {
-		"start": "node test/server/debug.js",
+		"start": "node-dwe test/server",
     	"test": "mocha test/selenium",
 		"build": "node build",
 		"build-native": "nexe -i ./native/index.js -o ./native/native.exe -f",
-		"postinstall": "node build.js"
+		"postinstall": "node build"
 	}
 }

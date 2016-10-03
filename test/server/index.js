@@ -95,12 +95,11 @@ function joinHeaders(raw) {
 	return '\n'+ raw.map((s, i) => (i % 2 ? '' : '\t') + s + (i % 2 ? '\n' : '=')).join('');
 }
 
-if (process.argv[1] === __filename) {
-	('electron' in process.versions) && (global.require = require);
+if (require.main === module) {
 	global.Server = Server;
-	new Server()
-	.then(server => console.log('Started server: ', global.server = server))
-	.catch(error => { console.error(error); });
+	module.exports = new Server()
+	.then(server => (console.log('Started server'), server))
+	.catch(error => { console.error(error); throw error; });
 }
 
 })();
