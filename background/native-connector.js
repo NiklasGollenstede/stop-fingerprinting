@@ -9,10 +9,15 @@
 const connect = (ports) => new Promise((resolve, reject) => {
 	let resolved = false, rejected = 0;
 	// setTimeout(() => (resolved = true) && reject(new Error('Timeout')), 300);
-	ports.forEach(port => {
-		const socket = new WebSocket('wss://localhost:'+ port);
+	const sockets = ports.map(port => new WebSocket('wss://localhost:'+ port));
+	sockets.forEach(socket => {
 		socket.onerror = error => ++rejected >= ports.length && reject(error);
-		socket.onopen = () => resolved ? socket.close() : ((resolved = true), resolve(socket));
+		socket.onopen = () => {
+			if (resolved) { return; }
+			sockets.filter(_=>_!==socket).forEach(_=>_.close());
+			resolve(socket);
+			resolved = true;
+		};
 	});
 });
 

@@ -8,7 +8,7 @@
 
 const port = runtime.getManifest().seleniun_setup_port;
 if (!port || (yield Storage.local.get([ '__update__.local.version', ]))['__update__.local.version']) {
-	return require('background/index'); // not selenium test after all, this script should not have been included
+	return require.async('background/index'); // not selenium test after all, this script should not have been included
 }
 
 // report possible error during startup
@@ -21,14 +21,14 @@ require('./selenium').catch(error => {
 let storage; try {
 	storage = (yield HttpRequest(`http://localhost:${ port }/get-storage`)).response;
 } catch (error) {
-	return require('background/index'); // not selenium test after all, this script should not have been included
+	return require.async('background/index'); // not selenium test after all, this script should not have been included
 }
 const { local, sync, } = JSON.parse(storage);
 (yield Storage.local.set(local || { }));
 (yield Storage.sync.set(sync || { }));
 
 // start extension
-(yield require('background/index'));
+(yield require.async('background/index'));
 
 // report success
 (yield HttpRequest(`http://localhost:${ port }/statup-done`));

@@ -13,6 +13,7 @@
 
 	"dependencies": {
 		"bufferutil": "1.2.1",
+		"console-stamp": "0.2.3",
 		"dialog": "0.1.8",
 		"fs-extra": "0.30.0",
 		"imagemin": "5.2.1",

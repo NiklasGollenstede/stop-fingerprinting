@@ -2,35 +2,37 @@
 	'node_modules/web-ext-utils/update/': updated,
 	'node_modules/es6lib/concurrent': { sleep, async, },
 	'node_modules/es6lib/functional': { throttle, },
-	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, Runtime: { sendNativeMessage, }, browsingData, webRequest, },
+	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, browsingData, webRequest, applications: { gecko, } },
 	'node_modules/web-ext-utils/utils': { showExtensionTab, },
 	'common/utils': { notify, domainFromUrl, setBrowserAction, },
 	'common/options': options,
 	'icons/urls': icons,
 	RequestListener, RequestListener: { ignore, reset, },
 	Profiles,
-	Native,
+	NativeConnector,
 }) {
 console.log('Ran updates', updated);
 
 window.options = options;
 window.Profiles = Profiles;
 
-let echoPort = 0;
-const native = new Native({
-	version: 1,
-	ports: [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ],
-	onStart: async(function*() {
-		echoPort = (yield this.port.request('getPort'));
-		console.log(`Native app running on https://localhost:${ echoPort }/`);
-	}),
-	onStop() {
-		echoPort = 0;
-		console.error(`Native app closed, restarting ...`);
-		this.start();
-	},
-});
-const started = native.start();
+let echoPort = 0, started = true;
+if (!gecko) {
+	const native = new NativeConnector({
+		version: 1,
+		ports: [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ],
+		onStart: async(function*() {
+			echoPort = (yield this.port.request('getPort'));
+			console.log(`Native app running on https://localhost:${ echoPort }/`);
+		}),
+		onStop() {
+			echoPort = 0;
+			console.error(`Native app closed, restarting ...`);
+			this.start();
+		},
+	});
+	started = native.start();
+}
 
 const getOptionsUrl = (/^https\:\/\/localhost\:(\d+)\/stop_fingerprint_get_options$/);
 
@@ -45,13 +47,13 @@ new RequestListener({
 }, class {
 	constructor({ requestId, url, tabId, type, }) {
 		this.requestId = requestId; this.url = url; this.type = type, this.tabId = tabId;
-		console.log('request start', this);
+		// console.log('request start', this);
 		const domain = this.domain = domainFromUrl(url);
 		const profile = this.profile = type === 'main_frame' ? Profiles.create({ requestId, domain, tabId, }) : Profiles.get({ tabId, domain, });
 		if (profile.disabled) { return ignore; }
 	}
 	destroy() {
-		console.log('request end', this.requestId);
+		// console.log('request end', this.requestId);
 	}
 
 	onBeforeRequest() {
@@ -190,13 +192,13 @@ new RequestListener({
 		+ 'child-src '+ childSrc.join(' ') +'; '
 		+ 'frame-src '+ frameSrc.join(' ') +'; '
 		+ others.join('; ');
-		console.log('build CSP\n', header.value);
+		// console.log('build CSP\n', header.value);
 		return true;
 	}
 
 	removeHSTS(header) {
 		header.value = header.value.replace(/max-age=\d+/gi, () => 'max-age=0');
-		console.log('HSTS header removed', this.domain, header);
+		// console.log('HSTS header removed', this.domain, header);
 		return true;
 	}
 });

@@ -132,5 +132,5 @@ const build = async(function*() {
 if (require.main === module) {
 	module.exports = build()
 	.then(() => console.log('Build done'))
-	.catch(error => { console.error(error); throw error; });
+	.catch(error => { console.error(error); process.exitCode = 1; throw error; });
 }

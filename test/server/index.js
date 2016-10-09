@@ -99,7 +99,7 @@ if (require.main === module) {
 	global.Server = Server;
 	module.exports = new Server()
 	.then(server => (console.log('Started server'), server))
-	.catch(error => { console.error(error); throw error; });
+	.catch(error => { console.error(error); process.exitCode = 1; throw error; });
 }
 
 })();

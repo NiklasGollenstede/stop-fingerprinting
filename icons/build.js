@@ -73,7 +73,7 @@ const build = module.exports = async(function*(names = Object.keys(icons)) {
 	const template = relative('template.svg');
 	(yield Promise.all(names.map(writeSvg)));
 
-	(yield FS.writeFile(relative('urls.js'), `define('icons/urls', () => {
+	(yield FS.writeFile(relative('urls.js'), `define(() => {
 		const rootUrl = chrome.extension.getURL('icons/');
 		const urls = { };`+
 		Object.keys(icons).map(name => `\n\t\t{

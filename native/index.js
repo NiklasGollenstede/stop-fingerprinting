@@ -1,4 +1,4 @@
-'use strict'; /* globals process, __filename, global */
+'use strict'; /* globals process, __filename, global, Buffer */
 
 // TODO: adjust for MAC / Linux
 
@@ -24,12 +24,17 @@ const args = process.argv.slice(2);
 const startedByBrowser = args.some(arg => (/^chrome-extension:\/\/|firefox\.json$/).test(arg)); // chrome sends "chrome-extension://"... as arg, firefox the path to the manifest (firefox.json)
 
 // can't log to stdio if started by the browser ==> log to './log.txt'.
-if (startedByBrowser) {
+if (startedByBrowser || true) {
 	const logFile = fs.createWriteStream(Path.resolve(folder, './log.txt'));
-	const console = { };
-	[ 'error', 'info', 'log', 'warn', ]
-	.forEach(level => console[level] = (...args) => logFile.write(level +': '+ args.map(_=>JSON.stringify(_)).join(', ') +'\n'));
+	process.stdout._write = process.stderr._write = logFile._write.bind(logFile);
+	const console = new (require('console').Console)(logFile, logFile);
+	require('console-stamp')(console, {
+		pattern: 'yyyy-mm-dd HH:MM:ss.l',
+		label: true,
+	});
 	Object.defineProperty(global, 'console', { get() { return console; }, });
+	Object.defineProperty(process, 'stdout', { get() { return logFile; }, });
+	Object.defineProperty(process, 'stderr', { get() { return logFile; }, });
 }
 
 const manifests = require('./manifests');
@@ -120,6 +125,8 @@ spawn(function*() {
 	if (startedByBrowser) { // start server, allow to exit when all connections are closed
 		const main = (yield require('./main'));
 		(yield startServer(main, false));
+		// process.stdout.write(new Buffer(4).fill(0));
+		// process.stdout.write(Buffer.concat([ new Buffer([4,0,0,0]), new Buffer('null'), ]));
 	} else {
 		if (
 			args.length === 0 // started from file system / without args
