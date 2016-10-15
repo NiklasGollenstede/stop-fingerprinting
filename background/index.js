@@ -9,29 +9,32 @@
 	'icons/urls': icons,
 	RequestListener, RequestListener: { ignore, reset, },
 	Profiles,
-	NativeConnector,
+	require,
 }) {
 console.log('Ran updates', updated);
 
 window.options = options;
 window.Profiles = Profiles;
 
-let echoPort = 0, started = true;
-if (!gecko) {
-	const native = new NativeConnector({
+let echoPortNum = 0, started = true, native, sdk;
+if (gecko) {
+	sdk = (yield require.async('./sdk-conection'));
+} else {
+	started = require.async('./native-connector').then(_ => new _({
 		version: 1,
 		ports: [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ],
 		onStart: async(function*() {
-			echoPort = (yield this.port.request('getPort'));
-			console.log(`Native app running on https://localhost:${ echoPort }/`);
+			native = this;
+			echoPortNum = (yield this.port.request('getPort'));
+			console.log(`Native app running on https://localhost:${ echoPortNum }/`);
 		}),
 		onStop() {
-			echoPort = 0;
+			native = null;
+			echoPortNum = 0;
 			console.error(`Native app closed, restarting ...`);
 			this.start();
 		},
-	});
-	started = native.start();
+	}).start()).then(() => true);
 }
 
 const getOptionsUrl = (/^https\:\/\/localhost\:(\d+)\/stop_fingerprint_get_options$/);
@@ -59,7 +62,7 @@ new RequestListener({
 	onBeforeRequest() {
 		const match = getOptionsUrl.exec(this.url);
 		// TODO: it seems that sync XHRs are not sent here by firefox
-		if (match && +match[1] !== echoPort) { // get-options request to wrong port
+		if (match && +match[1] !== echoPortNum) { // get-options request to wrong port
 			console.log('cancel getOptions request on port', +match[1]);
 			return { cancel: true, };
 		}

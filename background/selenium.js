@@ -2,6 +2,7 @@
 	'node_modules/web-ext-utils/chrome/': { notifications, runtime, Storage, applications: { current, gecko, }, },
 	'node_modules/es6lib/network': { HttpRequest, },
 	require,
+	module,
 }) {
 
 // for selenium tests this script needs to be required as the root script instead of ./index.js
@@ -11,8 +12,13 @@ if (!port || (yield Storage.local.get([ '__update__.local.version', ]))['__updat
 	return require.async('background/index'); // not selenium test after all, this script should not have been included
 }
 
+// load the sdk-conection to prevent timeout; no need to wait for it, though
+gecko && require.async('./sdk-conection');
+
 // report possible error during startup
-require('./selenium').catch(error => {
+require.cache[module.id].promise
+// .then(() => console.log('selenium bootstrap done'))
+.catch(error => {
 	HttpRequest(`http://localhost:${ port }/statup-failed`, { method: 'post', body: error && (error.stack || error.message) || error, });
 	throw error;
 });

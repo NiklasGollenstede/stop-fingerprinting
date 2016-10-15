@@ -2,7 +2,6 @@
 	'node_modules/es6lib/concurrent': { async, sleep, spawn, },
 	'node_modules/es6lib/port': Port,
 	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, Runtime: { sendNativeMessage, }, },
-	'node_modules/web-ext-utils/utils': { showExtensionTab, },
 	'common/utils': { notify, domainFromUrl, setBrowserAction, },
 }) {
 
