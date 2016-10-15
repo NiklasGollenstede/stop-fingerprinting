@@ -2,7 +2,7 @@
 	"manifest_version": 2,
 	"name": "Stop Fingerprinting",
 	"short_name": "Stop Fingerprinting",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"author": "Niklas Gollenstede",
 	"license": "MPL-2.0",
 
@@ -27,7 +27,6 @@
 	},
 
 	"permissions": [
-		"experiments.renderer",
 		"browsingData",
 		"notifications",
 		"nativeMessaging",

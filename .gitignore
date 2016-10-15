@@ -3,6 +3,7 @@ tmp/
 *.xpi
 log.txt
 npm-debug.log
+debug.log
 
 /build/
 /content/index.js
@@ -11,3 +12,5 @@ npm-debug.log
 /native/native.*
 /native/*.json
 /update/*/versions.json
+/sdk/webextension/
+/sdk/package.json
