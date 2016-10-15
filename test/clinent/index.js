@@ -1,5 +1,7 @@
 'use strict';
 
+// console.log(`eval('2 + 3')`, eval('2 + 3'));
+
 test(window, 'top window');
 
 function test(window, message) {

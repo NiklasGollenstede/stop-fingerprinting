@@ -1,10 +1,10 @@
 /* globals
 	injectedSource, injectedSourceMap,
 	applyingSourceMap, applyingSource,
-	self, browser,
+	window, browser,
 */
 
-const { btoa, confirm, Error, XMLHttpRequest, console, Object, JSON, } = self;
+const { self, btoa, confirm, Error, XMLHttpRequest, console, Object, JSON, } = window;
 const chrome = typeof browser !== 'undefined' ? browser : self.chrome; // 'browser' is not a property of 'window' in Firefox
 const { create, assign, } = Object;
 const { stringify, parse, } = JSON;
@@ -49,7 +49,7 @@ try {
 } catch (error) {
 	if (root === self) {
 		reportError(error, 'error');
-		if (confirm('Critical error, cancel navigation?')) {
+		if (confirm.call(self, 'Critical error, cancel navigation?')) {
 			self.document.documentElement && self.document.documentElement.remove();
 			self.stop();
 		}

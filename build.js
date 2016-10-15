@@ -15,14 +15,16 @@ const include = {
 	],
 	node_modules: {
 		es6lib: [
-			'require.js',
-			'namespace.js',
-			'object.js',
-			'functional.js',
 			'concurrent.js',
 			'dom.js',
-			'string.js',
+			'functional.js',
 			'index.js',
+			'namespace.js',
+			'network.js',
+			'object.js',
+			'port.js',
+			'require.js',
+			'string.js',
 		],
 		'get-tld': [
 			'index.js',
@@ -50,8 +52,6 @@ const include = {
 		},
 	},
 };
-
-const args = process.argv.length > 2 ? process.argv.slice(2) : [ '-z', '-i', '-t', '-u', '-c', ];
 
 const {
 	concurrent: { async, spawn, promisify, },
@@ -98,17 +98,17 @@ const veryfyManifest = async(function*(...args) {
 	outputName = _package.title.toLowerCase().replace(/[^a-z0-9\.-]+/g, '_') +'-'+ _package.version;
 });
 
-const build = async(function*() {
+const build = module.exports = async(function*(args = [ ]) {
 
 	(yield Promise.all([
-		args.includes('-c') && buildContent(),
-		args.includes('-i') && buildIcons(),
-		args.includes('-t') && buildTldJS(),
-		args.includes('-u') && buildUpdate(),
-		args.includes('-z') && veryfyManifest(),
+		!args.includes('-C') && buildContent(),
+		!args.includes('-I') && buildIcons(),
+		!args.includes('-T') && buildTldJS(),
+		!args.includes('-U') && buildUpdate(),
+		!args.includes('-Z') && veryfyManifest(),
 	]));
 
-	if (args.includes('-z')) {
+	if (!args.includes('-Z')) {
 		const paths = [ ];
 		function addPaths(prefix, module) {
 			if (Array.isArray(module)) { return paths.push(...module.map(file => join(prefix, file))); }
@@ -119,6 +119,7 @@ const build = async(function*() {
 
 		const copy = promisify(require('fs-extra').copy);
 		const remove = promisify(require('fs-extra').remove);
+		(yield remove(resolve(__dirname, './build')));
 		(yield Promise.all(paths.map(path => copy(path, join('build', path)).catch(error => console.error('Skipping missing file/folder "'+ path +'"')))));
 
 		(yield promisify(require('zip-dir'))('./build', { filter: path => !(/\.(?:zip|xpi)$/).test(path), saveTo: `./build/${ outputName }.zip`, }));
@@ -130,7 +131,7 @@ const build = async(function*() {
 
 
 if (require.main === module) {
-	module.exports = build()
+	module.exports = build(process.argv.slice(2))
 	.then(() => console.log('Build done'))
 	.catch(error => { console.error(error); process.exitCode = 1; throw error; });
 }

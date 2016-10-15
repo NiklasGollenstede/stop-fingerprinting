@@ -2,6 +2,7 @@
 - add prompt to ether accept cert -or- enable chrome://flags/#allow-insecure-localhost -or- FireFox -> Options -> Advanced -> Certificates -> View Certificates -> Servers -> Add Exception
 
 - test data: or blob: as main_frame URLs
+- documents served from the same "base domain" (but different sub domains) may mutually decide to step out of sub domains and thus become same origin (see: https://developer.mozilla.org/en-US/docs/Web/API/Document/domain)
 
 - write introduction/description/about/credits/... pages
 

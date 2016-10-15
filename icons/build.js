@@ -101,8 +101,8 @@ const build = module.exports = async(function*(names = Object.keys(icons)) {
 	}
 });
 
-if (process.argv[1] === __filename) {
-	build(process.argv.length > 2 ? process.argv.slice(2) : Object.keys(icons))
-	.then(names => console.log('icons created: "'+ names.join('", "') +'"'))
-	.catch(error => { console.error(error); process.exit(-1); });
+if (require.main === module) {
+	module.exports = build(process.argv.length > 2 ? process.argv.slice(2) : Object.keys(icons))
+	.then(names => (console.log('icons created: "'+ names.join('", "') +'"'), names))
+	.catch(error => { console.error(error); process.exitCode = 1; throw error; });
 }

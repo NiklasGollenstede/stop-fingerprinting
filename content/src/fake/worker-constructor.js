@@ -22,6 +22,8 @@ forEach([ '', 'Shared', ], shared => {
 		}
 
 		console.log('caught worker construction');
+
+		// XXX: changing the workers source to blob: changes it's CSP: https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers#Content_security_policy
 		const blob = new Blob([ `(() => {
 			(`+ ((options, injectedSource, applyingSource, workerOptions) => {
 				injectedSource.call(self, options, injectedSource, applyingSource);

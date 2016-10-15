@@ -31,6 +31,7 @@ if (startedByBrowser || true) {
 	require('console-stamp')(console, {
 		pattern: 'yyyy-mm-dd HH:MM:ss.l',
 		label: true,
+		stdout: logFile, stderr: logFile,
 	});
 	Object.defineProperty(global, 'console', { get() { return console; }, });
 	Object.defineProperty(process, 'stdout', { get() { return logFile; }, });
