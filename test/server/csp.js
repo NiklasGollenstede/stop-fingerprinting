@@ -36,7 +36,7 @@ const CSP = module.exports = function CSP(app, {
 			// manifestSrc: [ ],
 			// mediaSrc: [ ],
 			// objectSrc: [ ],
-			// scriptSrc: self(),
+			scriptSrc: self("'unsafe-inline'"),
 			// styleSrc: self(),
 
 			// referrer

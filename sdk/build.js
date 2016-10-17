@@ -1,4 +1,4 @@
-'use strict'; /* globals __dirname, __filename, process, module */ // license: MPL-2.0
+'use strict'; /* globals __dirname, __filename, process, module */  // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 const {
 	concurrent: { async, spawn, promisify, },
@@ -40,7 +40,13 @@ const build = module.exports = async(function*(args) {
 	(yield FS.writeFile(resolve(__dirname, './package.json'), JSON.stringify(_package, null, '\t', 'utf8')));
 	{
 		const _manifest = require('./webextension/manifest.json');
-		delete _manifest.content_scripts;
+		_manifest.content_scripts = [ {
+			matches: [ '<all_urls>', ],
+			match_about_blank: true,
+			all_frames: false,
+			run_at: 'document_start',
+			js: [ 'content/get-tab-id.js', ],
+		}, ];
 		(yield FS.writeFile(resolve(__dirname, './webextension/manifest.json'), JSON.stringify(_manifest, null, '\t', 'utf8')));
 	}
 

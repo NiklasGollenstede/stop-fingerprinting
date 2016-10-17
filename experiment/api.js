@@ -34,10 +34,11 @@ class API extends ExtensionAPI {
 }
 
 class ProcessScript {
-	constructor(sandbox, extension, { process, frame, namespace, handlers, }) {
+	constructor(cw, extension, { process, frame, namespace, handlers, }) {
+		this.ucw = Cu.waiveXrays(cw);
 		const id = extension.id.replace(/@/g, '');
-		this.processSrc = `resource://${ id }/webextension${ new URL(process, sandbox.location).pathname }`;
-		this.frameSrc   = `resource://${ id }/webextension${ new URL(frame, sandbox.location).pathname }`;
+		this.processSrc = `resource://${ id }/webextension${ new URL(process, cw.location).pathname }`;
+		this.frameSrc   = `resource://${ id }/webextension${ new URL(frame, cw.location).pathname }`;
 		this.prefix = id +'-'+ namespace +':';
 		this.handlers = Object.assign({ }, Cu.waiveXrays(handlers));
 		gppmm.loadProcessScript(this.processSrc, true);
@@ -68,6 +69,15 @@ class ProcessScript {
 			};
 		} catch (error) {
 			console.error(`request "${ name }" handler threw`, error);
+			try {
+				if (error !== null && typeof error === 'object' && (
+					error instanceof this.sandbox.Error
+					|| typeof error.constructor && error.constructor.name === 'string' && (/^[A-Z]\w+Error$/).test(error.constructor.name)
+				)) {
+					console.log('serializing error', error);
+					error = '$_ERROR_$'+ JSON.stringify({ name: error.name, message: error.message, stack: error.stack, });
+				}
+			} catch (_) { }
 			return { threw: true, error, };
 		}
 	}

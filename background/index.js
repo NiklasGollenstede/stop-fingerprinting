@@ -21,7 +21,6 @@ let echoPortNum = 0; // chrome only: the port number the native echo server runs
 let started = true; // may be set to a promise that must resolve for this module to load successfully
 let sdk; // firefox only, object of functions that communicate with the sdk add-on
 const openMainFrameRequests = new Map; // tabId ==> Requests with .type === 'main_frame' that are currently active
-const navigatingTabs = new Set; // tabId of tabs that are currently navigating
 
 // start sync connection to content script
 if (gecko) {
@@ -33,14 +32,6 @@ if (gecko) {
 		frame: '/content/frame.js',
 		namespace: 'content',
 		handlers: {
-			getNavigatingTab() {
-				if (navigatingTabs.size === 1) {
-					const tabId = navigatingTabs.values().next().value;
-					navigatingTabs.delete(tabId);
-					return tabId;
-				}
-				throw new Error(`Unable to determine navigatingTab`);
-			},
 			getOptions(tabId) {
 				const profile = Profiles.get({ tabId, });
 				return profile.toJSON();
@@ -51,10 +42,10 @@ if (gecko) {
 	// stop those scripts on unload
 	window.addEventListener('beforeunload', event => stop(), { once: true, });
 
-	// track the navigatingTabs
-	webNavigation.onCommitted       .addListener(({ tabId, }) => navigatingTabs.add(tabId));
-	webNavigation.onDOMContentLoaded.addListener(({ tabId, }) => navigatingTabs.delete(tabId));
-	webNavigation.onErrorOccurred   .addListener(({ tabId, }) => navigatingTabs.delete(tabId));
+	// echo the current tab to the frame scripts (via a content script)
+	Messages.addHandler('getSenderTabId', function() {
+		return this.tab.id;
+	});
 
 	// start connection to sdk add-on
 	sdk = (yield require.async('./sdk-conection'));
@@ -85,8 +76,8 @@ const getOptionsUrl = !gecko && (/^https\:\/\/localhost\:(\d+)\/stop_fingerprint
 // TODO: do cached pages from the tab history pose a problem?
 // TODO: it seems that sync XHRs are not sent here by firefox
 new RequestListener({
-	urls: [ '*://*/*', ],
-	// urls: [ '<all_urls>', ],
+	// urls: [ '*://*/*', ],
+	urls: [ '<all_urls>', ],
 }, {
 	onBeforeRequest: [ 'blocking', ],
 	onBeforeSendHeaders: [ 'blocking', 'requestHeaders', ],

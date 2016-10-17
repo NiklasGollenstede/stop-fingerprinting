@@ -1,4 +1,4 @@
-'use strict'; /* globals setTimeout: true, */
+'use strict'; /* globals setTimeout: true, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 const { async, spawn, } = require('webextension/node_modules/es6lib/concurrent.js');
 const Port = require('webextension/node_modules/es6lib/port.js');
@@ -67,7 +67,7 @@ start()
 		} break;
 
 		default: {
-			console.error('WebExtension failed with unknown error');
+			console.error('WebExtension failed with unknown error:', code);
 		}
 	}
 })
