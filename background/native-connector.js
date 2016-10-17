@@ -1,8 +1,7 @@
 (() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/es6lib/concurrent': { async, sleep, spawn, },
 	'node_modules/es6lib/port': Port,
-	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, Runtime: { sendNativeMessage, }, },
-	'common/utils': { notify, domainFromUrl, setBrowserAction, },
+	'node_modules/web-ext-utils/chrome/': { Runtime: { sendNativeMessage, }, },
 }) {
 
 const connect = (ports) => new Promise((resolve, reject) => {

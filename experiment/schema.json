@@ -1,35 +1,16 @@
 [
 	{
-		"namespace": "renderer",
-		"allowedContexts": ["content"],
+		"namespace": "content",
 		"description": "Hello world",
-		"permissions": ["experiments.renderer"],
+		"permissions": [ "experiments.content" ],
 		"functions": [
 			{
-				"name": "pauseWhile",
+				"name": "start",
 				"type": "function",
-				"allowedContexts": ["content"],
-				"description": "Pauses the current renderer while the Promise is pending",
-				"parameters": [],
-				"returns": {
-					"type": "string",
-					"description": "The input Promise"
-				}
-			}
-		],
-		"events": [
-			{
-				"name": "onGlobalObjectCreated",
-				"type": "function",
-				"description": "Fired when a global object is created in the context of this renderer.",
 				"parameters": [
-					{"name": "global", "type": "object", "description": "The new global object"}
+					{ "type": "any" }
 				],
-				"returns": {
-					"type": "boolean",
-					"optional": true,
-					"description": ""
-				}
+				"returns": { "type": "any" }
 			}
 		]
 	}

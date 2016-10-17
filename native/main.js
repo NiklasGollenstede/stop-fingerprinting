@@ -9,6 +9,7 @@ module.exports = class Handler {
 	}
 	/// called for https requests to portNumber
 	onRequest(request, reply) {
+		// TODO: reject if path isn't === '/stop_fingerprint_get_options'
 		console.log('bouncing', request.headers['x-nonce']);
 		reply.end(request.headers['x-nonce'] +';'+ request.headers['x-options']);
 	}

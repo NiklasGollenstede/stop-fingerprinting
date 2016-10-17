@@ -370,6 +370,7 @@ class ProfileScope {
 		if (this.disabled) { return false; }
 		const json = { };
 		ProfileScope.keys.forEach(key => json[key] = this[key]);
+		this.navigator && (json.navigator = this.navigator.toJSON());
 		return (this.json = json);
 	}
 }

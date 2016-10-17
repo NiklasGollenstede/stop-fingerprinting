@@ -2,32 +2,78 @@ const API = (function(global) { 'use strict'; // This Source Code Form is subjec
 /* globals ExtensionAPI, Components */
 const { classes: Cc, interfaces: Ci, utils: Cu, } = Components;
 Cu.import("resource://gre/modules/Console.jsm");
+Cu.import("resource://gre/modules/Services.jsm"); /* global Services */
+Cu.importGlobalProperties([ 'URL', ]); /* globals URL */
+const { ppmm: gppmm, mm: gfmm, } = Services;
 
 console.log('api.js', global);
-
-// There is no way to run this in the content process (yet), so this does not work.
 
 class API extends ExtensionAPI {
 	constructor(extension) {
 		super(...arguments);
-		console.log('new API', this);
+		// console.log('new API', this);
 	}
 
 	getAPI(context) {
 		console.log('getAPI', this, context);
 
-		return { renderer: {
-			pauseWhile() {
-				console.log('pauseWhile', this, context, ...arguments);
-
-				// http://stackoverflow.com/questions/28484107/block-script-execution-in-firefox-extension
-				// https://developer.mozilla.org/en-US/docs/Mozilla/Tech/XPCOM/Reference/Interface/nsIDOMWindowUtils
-
-				// utils = Services.wm.getMostRecentWindow('navigator:browser').QueryInterface(Components.interfaces.nsIInterfaceRequestor).getInterface(Components.interfaces.nsIDOMWindowUtils);
-
-				return "Hello, world!";
-			},
+		return { content: {
+			start: this.start.bind(this, context),
 		}, };
+	}
+
+	start({ contentWindow, }, options) {
+		const script  = new ProcessScript(contentWindow, this.extension, options);
+		const destroy = Cu.exportFunction(script.destroy, contentWindow, { allowCrossOriginArguments: true, });
+		console.log('destroy function', destroy);
+		return destroy;
+	}
+
+	// resource://stop-fingerprinting/webextension/content/index.js
+
+}
+
+class ProcessScript {
+	constructor(sandbox, extension, { process, frame, namespace, handlers, }) {
+		const id = extension.id.replace(/@/g, '');
+		this.processSrc = `resource://${ id }/webextension${ new URL(process, sandbox.location).pathname }`;
+		this.frameSrc   = `resource://${ id }/webextension${ new URL(frame, sandbox.location).pathname }`;
+		this.prefix = id +'-'+ namespace +':';
+		this.handlers = Object.assign({ }, Cu.waiveXrays(handlers));
+		gppmm.loadProcessScript(this.processSrc, true);
+		gfmm.loadFrameScript(this.frameSrc, true);
+		this.onRequest = this.onRequest.bind(this);
+		gfmm.addMessageListener(this.prefix +'request', this.onRequest);
+		console.log('created ProcessScript', this);
+		this.destroy = this.destroy.bind(this);
+		this.destroyed = false;
+	}
+
+	destroy() {
+		if (this.destroyed) { return; }
+		this.destroyed = true;
+
+		console.log('destroying ProcessScript', this);
+		this.post('destroy');
+		gppmm.removeDelayedProcessScript(this.processSrc);
+		gfmm.removeDelayedFrameScript(this.frameSrc, true);
+		gfmm.removeMessageListener(this.prefix +'request', this.onRequest);
+	}
+
+	onRequest({ data: { name, args, }, }) {
+		console.log('onRequest', name, args);
+		try {
+			return {
+				value: this.handlers[name](...args),
+			};
+		} catch (error) {
+			console.error(`request "${ name }" handler threw`, error);
+			return { threw: true, error, };
+		}
+	}
+
+	post(name, message) {
+		gppmm.broadcastAsyncMessage(this.prefix + name, message);
 	}
 }
 
