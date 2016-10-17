@@ -3,7 +3,7 @@
      xmlns:em="http://www.mozilla.org/2004/em-rdf#">
 
   <Description about="urn:mozilla:install-manifest"
-               em:id="renderer@experiments.addons.mozilla.org"
+               em:id="content@experiments.addons.mozilla.org"
                em:name="Experimental API"
                em:type="256"
                em:version="0.1"

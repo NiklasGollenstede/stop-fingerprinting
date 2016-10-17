@@ -27,6 +27,7 @@
 	},
 
 	"permissions": [
+		"experiments.content",
 		"browsingData",
 		"notifications",
 		"nativeMessaging",
@@ -34,6 +35,7 @@
 		"tabs",
 		"webRequest",
 		"webRequestBlocking",
+		"webNavigation",
 		"*://*/*"
 	],
 	"optional_permissions": [

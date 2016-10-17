@@ -52,8 +52,8 @@
 
 	"main": "build.js",
 	"scripts": {
-		"start": "node-dwe test/server",
-    	"test": "mocha test/selenium",
+		"start": "node-dwe --detach test/server && node-dwe --detach sdk/build.js -I -T -p",
+		"test": "mocha test/selenium",
 		"build": "node build",
 		"build-native": "nexe -i ./native/index.js -o ./native/native.exe -f",
 		"postinstall": "node build"

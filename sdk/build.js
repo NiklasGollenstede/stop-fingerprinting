@@ -27,7 +27,6 @@ const _package = {
 	permissions: {
 		multiprocess: true,
 		'private-browsing': true,
-		'unsafe-content-script': true, // TODO: remove (?)
 	},
 	hasEmbeddedWebExtension: true,
 };
@@ -39,6 +38,11 @@ const build = module.exports = async(function*(args) {
 	(yield remove(resolve(__dirname, './webextension')));
 	(yield copy(resolve(__dirname, '../build/'), resolve(__dirname, './webextension')));
 	(yield FS.writeFile(resolve(__dirname, './package.json'), JSON.stringify(_package, null, '\t', 'utf8')));
+	{
+		const _manifest = require('./webextension/manifest.json');
+		delete _manifest.content_scripts;
+		(yield FS.writeFile(resolve(__dirname, './webextension/manifest.json'), JSON.stringify(_manifest, null, '\t', 'utf8')));
+	}
 
 	if (args.includes('-x')) {
 		console.log((yield execute(

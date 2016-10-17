@@ -2,82 +2,146 @@
 	'node_modules/web-ext-utils/update/': updated,
 	'node_modules/es6lib/concurrent': { sleep, async, },
 	'node_modules/es6lib/functional': { throttle, },
-	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, browsingData, webRequest, applications: { gecko, } },
+	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, browsingData, webNavigation, webRequest, applications: { gecko, }, content, },
 	'node_modules/web-ext-utils/utils': { showExtensionTab, },
 	'common/utils': { notify, domainFromUrl, setBrowserAction, },
 	'common/options': options,
 	'icons/urls': icons,
 	RequestListener, RequestListener: { ignore, reset, },
 	Profiles,
-	NativeConnector,
+	require,
 }) {
 console.log('Ran updates', updated);
 
 window.options = options;
 window.Profiles = Profiles;
 
-let echoPort = 0, started = true;
-if (!gecko) {
-	const native = new NativeConnector({
+let native; // chrome only: NativeConnector instance while it runs, null while it is down
+let echoPortNum = 0; // chrome only: the port number the native echo server runs at
+let started = true; // may be set to a promise that must resolve for this module to load successfully
+let sdk; // firefox only, object of functions that communicate with the sdk add-on
+const openMainFrameRequests = new Map; // tabId ==> Requests with .type === 'main_frame' that are currently active
+const navigatingTabs = new Set; // tabId of tabs that are currently navigating
+
+// start sync connection to content script
+if (gecko) {
+	// firefox frame scripts can send synchronous messages, so they are used instead of a content script
+
+	// attach the frame/precess scripts
+	const stop = content.start({
+		process: '/content/process.js',
+		frame: '/content/frame.js',
+		namespace: 'content',
+		handlers: {
+			getNavigatingTab() {
+				if (navigatingTabs.size === 1) {
+					const tabId = navigatingTabs.values().next().value;
+					navigatingTabs.delete(tabId);
+					return tabId;
+				}
+				throw new Error(`Unable to determine navigatingTab`);
+			},
+			getOptions(tabId) {
+				const profile = Profiles.get({ tabId, });
+				return profile.toJSON();
+			},
+		},
+	});
+
+	// stop those scripts on unload
+	window.addEventListener('beforeunload', event => stop(), { once: true, });
+
+	// track the navigatingTabs
+	webNavigation.onCommitted       .addListener(({ tabId, }) => navigatingTabs.add(tabId));
+	webNavigation.onDOMContentLoaded.addListener(({ tabId, }) => navigatingTabs.delete(tabId));
+	webNavigation.onErrorOccurred   .addListener(({ tabId, }) => navigatingTabs.delete(tabId));
+
+	// start connection to sdk add-on
+	sdk = (yield require.async('./sdk-conection'));
+} else {
+	// in chrome the only way to send a synchronous message (from the content script to the background)
+	// is to set request headers to a sync XHR and have a local http server 'echo' those headers into the response
+
+	started = require.async('./native-connector').then(_ => new _({
 		version: 1,
 		ports: [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ],
 		onStart: async(function*() {
-			echoPort = (yield this.port.request('getPort'));
-			console.log(`Native app running on https://localhost:${ echoPort }/`);
+			native = this;
+			echoPortNum = (yield this.port.request('getPort'));
+			console.log(`Native app running on https://localhost:${ echoPortNum }/`);
 		}),
 		onStop() {
-			echoPort = 0;
+			native = null;
+			echoPortNum = 0;
 			console.error(`Native app closed, restarting ...`);
 			this.start();
 		},
-	});
-	started = native.start();
+	}).start()).then(() => true);
 }
 
-const getOptionsUrl = (/^https\:\/\/localhost\:(\d+)\/stop_fingerprint_get_options$/);
+// chrome only: this url (with the correct port) is used to load the options. But only while the main_frame is loading
+const getOptionsUrl = !gecko && (/^https\:\/\/localhost\:(\d+)\/stop_fingerprint_get_options$/);
 
-// TODO: do cached pages from the history pose a problem?
+// TODO: do cached pages from the tab history pose a problem?
+// TODO: it seems that sync XHRs are not sent here by firefox
 new RequestListener({
 	urls: [ '*://*/*', ],
 	// urls: [ '<all_urls>', ],
 }, {
 	onBeforeRequest: [ 'blocking', ],
 	onBeforeSendHeaders: [ 'blocking', 'requestHeaders', ],
-	onHeadersReceived: [ 'blocking', 'responseHeaders', ],
-}, class {
+	onHeadersReceived: [ 'blocking', 'responseHeaders', ], // not needed in firefox (?)
+}, class Request {
 	constructor({ requestId, url, tabId, type, }) {
 		this.requestId = requestId; this.url = url; this.type = type, this.tabId = tabId;
 		// console.log('request start', this);
+		this.isMainFrame = type === 'main_frame';
+		this.isMainFrame && openMainFrameRequests.set(this.id, this);
+		this.isOptionsRequest = false; // chrome only
+
 		const domain = this.domain = domainFromUrl(url);
-		const profile = this.profile = type === 'main_frame' ? Profiles.create({ requestId, domain, tabId, }) : Profiles.get({ tabId, domain, });
+		const profile = this.profile = this.isMainFrame
+		? Profiles.create({ requestId, domain, tabId, })
+		: Profiles.get({ tabId, domain, });
+
 		if (profile.disabled) { return ignore; }
 	}
 	destroy() {
 		// console.log('request end', this.requestId);
+		this.isMainFrame && openMainFrameRequests.delete(this.id);
 	}
 
-	onBeforeRequest() {
+	// chrome only: filter requests to the echo server
+	[!gecko && 'onBeforeRequest']() {
 		const match = getOptionsUrl.exec(this.url);
-		// TODO: it seems that sync XHRs are not sent here by firefox
-		if (match && +match[1] !== echoPort) { // get-options request to wrong port
-			console.log('cancel getOptions request on port', +match[1]);
+		if (!match) { return; }
+		if (+match[1] !== echoPortNum) { // cancel if port is wrong, the content script will try the next port
+			console.log('cancel getOptions request on wrong port', +match[1]);
 			return { cancel: true, };
 		}
+		if (false && !openMainFrameRequests.has(this.tabId)) { // cancel if the tabs main_frame isn't pending (to prevent the content from reading the options)
+			// TODO: this doesn't work yet
+			console.log(`cancel getOptions request made while the main_frame isn't pending`);
+			return { cancel: true, };
+		}
+		this.isOptionsRequest = true;
+	}
+
+	[!gecko && 'getEchoOptions']() {
+		if (!this.isOptionsRequest) { return null; }
+		return {
+			ignore,
+			requestHeaders: [
+				{ name: 'x-options', value: JSON.stringify(this.profile), },
+				{ name: 'x-nonce', value: this.profile.nonce, },
+			],
+		};
 	}
 
 	// TODO: (only?) firefox: this is not called for the favicon
 	onBeforeSendHeaders({ requestHeaders, }) {
-		if (getOptionsUrl.test(this.url)) {
-			// TODO: only allow this once per frame
-			this.profile.misc.main_frame = this.type === 'main_frame';
-			return {
-				ignore,
-				requestHeaders: [
-					{ name: 'x-options', value: JSON.stringify(this.profile), },
-					{ name: 'x-nonce', value: this.profile.nonce, },
-				],
-			};
-		}
+		const options = !gecko && this.getEchoOptions();
+		if (options) { return options; }
 
 		if (!this.profile.navigator) { return; }
 
@@ -94,10 +158,14 @@ new RequestListener({
 
 	onHeadersReceived({ responseHeaders, }) {
 		let changed = false;
-		changed |= (this.type === 'main_frame' || this.type === 'sub_frame') && responseHeaders.some(header => {
+
+		// not firefox: modify CSP to allow script injection
+		changed |= !gecko && (this.type === 'main_frame' || this.type === 'sub_frame') && responseHeaders.some(header => {
 			if ((/^(?:Content-Security-Policy)$/i).test(header.name) && header.value) { return this.injectCSP(header); }
 		});
-		changed |= this.profile.hstsDisabled && responseHeaders.some(header => {
+
+		// not firefox: disable HSTS header (has no effect in firefox)
+		changed |= !gecko && this.profile.hstsDisabled && responseHeaders.some(header => {
 			if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return this.removeHSTS(header); }
 		});
 
@@ -203,7 +271,7 @@ new RequestListener({
 	}
 });
 
-// clear cache on requests
+// chrome only: clear cache on requests
 let clearCacheWhat = null, clearCacheWhere = null;
 const clearCache = throttle(() => browsingData.remove({ since: 0, originTypes: clearCacheWhere, }, clearCacheWhat), 3000);
 options.children.clearCache.children.what.whenChange(value => clearCacheWhat = ({
@@ -217,21 +285,11 @@ options.children.clearCache.children.where.whenChange(value => clearCacheWhere =
 	extension:       { unprotectedWeb: true, protectedWeb: true, extension: true, },
 })[value]);
 options.children.clearCache.children.where.when({
-	false: () => webRequest.onHeadersReceived.removeListener(clearCache),
+	false: () => webRequest.onHeadersReceived.removeListener(clearCache), // is always false in firefox
 	true: () => webRequest.onHeadersReceived.addListener(clearCache, { urls: [ '*://*/*', ], }, [ ]),
 });
 
-Messages.addHandler('getOptions', function() {
-	const tabId = this.tab.id;
-	const domain = domainFromUrl(this.tab.url);
-	const profile = Profiles.get({ tabId, domain, });
-	console.log('getOptions', domain, profile);
-	return /*sleep(300).then(() => (*/{
-		nonce: profile.nonce,
-		options: JSON.stringify(profile),
-	}/*))*/;
-});
-
+// let other views, and in chrome the content, post notifications
 Messages.addHandler('notify', function(method, { title, message, url, }) {
 	url || (url = this.tab.url);
 	const { id: tabId, title: tabTitle, } = this.tab;
