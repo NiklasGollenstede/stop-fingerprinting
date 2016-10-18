@@ -1,22 +1,16 @@
 
-	const options        = arguments[0];
-	const values         = arguments[0];
-	const injectedSource = arguments[1];
-	const applyingSource = arguments[2];
-	const workerOptions  = arguments[3];
-
-	const self = this;
-	let   _ = self;
-	const window = self.constructor.name === 'Window' ? self : null;
-	const worker = window ? null : self;
-	const document = self.document;
- //	const documentElement = document.documentElement;
+	const global = this;
+	let   _ = global;
+	const window = global.constructor.name === 'Window' ? global : null;
+	const worker = window ? null : global;
+	const document = window && window.document;
+ //	const documentElement = document && document.documentElement;
 
 /**
  * Constructors / Functions
  */
 	const alert                        = _.alert;
- //	const Array                        = _.Array;
+	const Array                        = _.Array;
 	const ArrayBuffer                  = _.ArrayBuffer;
 	const Blob                         = _.Blob;
  //	const clearTimeout                 = _.clearTimeout;
@@ -36,6 +30,7 @@
 	const setInterval                  = _.setInterval;
 	const setImmediate                 = _.setImmediate;
 	const SharedWorker                 = _.SharedWorker; // no SharedWorker within workers
+	const TypeError                    = _.TypeError;
 	const Uint8Array                   = _.Uint8Array;
 	const URL                          = _.URL;
 	const WeakMap                      = _.WeakMap;
@@ -147,12 +142,6 @@
  //	const Set_p_get_size                                    = window     && _call.bind(getGetter(_.Set                        .prototype,   'size'));
 
 
-const console = (console => {
-	let   clone = { };
-	forEach([ 'log', 'trace', 'error', 'info', ], key => clone[key] = bind(console[key], console));
-	return clone;
-})(_.console);
-
 /*const notImplemented = */function notImplemented() {
 	throw new Error('not implemented');
 }
@@ -165,3 +154,31 @@ function getGetter(proto, prop) {
 	let   desc = getOwnPropertyDescriptor(proto, prop);
 	return desc && desc.get || function() { return this[prop]; };
 }
+
+
+let   hiddenFunctions = new WeakMap;
+
+// fake function+'' => [native code]
+const hideCode = function hideCode(name, func) {
+	if (!func) {
+		func = name;
+		name = func.name;
+	} else {
+		defineProperty(func, 'name', { value: name, });
+	}
+	WeakMap_p_set(hiddenFunctions, func, name || '');
+	profile.debug && (func.isFaked = true);
+	return func;
+};
+
+const hideAllCode = function hideAllCode(object) {
+	forEach(keys(object), key => typeof object[key] === 'function' && hideCode(object[key]));
+	return object;
+};
+
+let   apis = { };
+const define = function define(name, object) {
+	const current = apis[name] || { };
+	if (typeof object === 'function') { object = object(current); }
+	return (apis[name] = assign(current, object));
+};

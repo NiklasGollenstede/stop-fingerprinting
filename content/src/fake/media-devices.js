@@ -1,16 +1,14 @@
 /* globals
-	options, resolve, MediaStreamTrack_p_getSources, call
-*/
-/* globals
-	define, currentGlobal, hideCode
+	hideCode, define, resolve, MediaStreamTrack_p_getSources, call, Array,
 */
 
 // navigator.mediaDevices.enumerateDevices
-if (options.devices.hideAll) {
-	define('MediaDevices.prototype', {
-		enumerateDevices: { value: hideCode(function enumerateDevices() { return resolve([ ]); }), },
-	});
-	define('MediaStreamTrack', {
-		getSources: { value: hideCode(function getSources(cb) { MediaStreamTrack_p_getSources(this, function() { call(cb, this, [ ]); }); }), },
-	});
-}
+if (!profile.devices) { break file; }
+
+define('MediaDevices.prototype', {
+	enumerateDevices: { value: hideCode(function enumerateDevices() { return resolve([ ]); }), },
+});
+define('MediaStreamTrack', {
+	getSources: { value: hideCode(function getSources(cb) { MediaStreamTrack_p_getSources(this, function() { call(cb, this, new Array); }); }), },
+});
+

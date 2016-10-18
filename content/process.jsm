@@ -1,6 +1,8 @@
 'use strict'; /* globals Components, frames: true, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-const prefix = 'stop-fingerprinting-content:';
 const EXPORTED_SYMBOLS = [ 'init', 'reload', 'addFrame', ];
+const prefix = 'stop-fingerprinting-content:';
+const __dirname = 'resource://stop-fingerprinting/webextension/content';
+const __fielname = __dirname +'/process.jsm';
 
 const global = this;
 const { classes: Cc, interfaces: Ci, utils: Cu, } = Components;
@@ -15,13 +17,16 @@ const resolved = Promise.resolve();
 const allUrls = new MatchPattern('<all_urls>');
 const amoUrl  = new MatchPattern('https://addons.mozilla.org/*');
 
+try { Cu.unload(__dirname +'/files.jsm', { }); } catch (_) { }
+const { files, } = Cu.import(__dirname+ '/files.jsm', { });
+
 console.log('process.jsm loading', this);
 
 const messageHandler = {
 	destroy() {
 		console.log('process script destroy');
 		try { // try to unload, if it fails the process.js will unload the next it loads
-			Cu.unload('resource://stop-fingerprinting/webextension/content/process.jsm');
+			Cu.unload(__fielname);
 		} catch (error) { needsReload = true; } // see https://bugzilla.mozilla.org/show_bug.cgi?id=1195689
 
 		// remove all listeners and the MessageManager
@@ -53,7 +58,7 @@ function init(_cpmm) {
 }
 
 function reload() { // this is called by process.js to ensure that it gets a fresh module
-	needsReload && Cu.unload('resource://stop-fingerprinting/webextension/content/process.jsm');
+	needsReload && Cu.unload(__fielname);
 }
 
 function addFrame(cfmm) {
@@ -68,10 +73,10 @@ class Frame {
 		this.cfmm = cfmm;
 		this.cfmm.addEventListener('DOMWindowCreated', this);
 		this.cfmm.addEventListener('unload', this);
-		this.tabId = null;
-		this.profile = null;
-		this.top = null;
-		this.utils = null;
+		this.tabId = null; // the WebExtension tabId of this frame
+		this.profile = null; // the profile of the top level page, if any
+		this.top = null; // the top level window, if its url isScriptable
+		this.utils = null; // nsIDOMWindowUtils of .top
 		console.log('created Frame', this);
 	}
 
@@ -113,15 +118,17 @@ class Frame {
 		return promise;
 	}
 
-	handleCriticalError(error, message = (error && error.message || '') + '') {
+	handleCriticalError(error, message, rethrow) {
+		message || (message = (error && error.message || '') + '');
 		const resume = this.top.confirm(message.replace(/[!?.]$/, _=>_ || '.') +`\nResume navigation?`);
 		if (resume) {
-			console.error(message, error);
-		} else {
 			this.top.stop();
+			this.utils.suppressEventHandling(true);
+			this.utils.suspendTimeouts();
 			this.top.document.documentElement && this.top.document.documentElement.remove();
-			throw error;
+			if (rethrow) { throw error; }
 		}
+		console.error(message, error);
 	}
 
 	onDOMWindowCreated(event) {
@@ -140,9 +147,10 @@ class Frame {
 		this.top = cw;
 		this.utils = cw.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
 
-		if (!isScriptable(this.top.location.href)) { console.log('skipping non-content tab', this); return; }
+		if (!isScriptable(this.top)) { console.log('skipping non-content tab', this); return; }
 
 		this.profile = null;
+
 		if (this.tabId == null) {
 			this.loadTabId().then(() => {
 				this.loadProfile();
@@ -164,7 +172,7 @@ class Frame {
 			console.log('got tabId', tabId);
 			this.tabId = tabId;
 		})
-		.catch(error => this.handleCriticalError(parseError(error), `Failed to get the tab id`))
+		.catch(error => this.handleCriticalError(parseError(error), `Failed to get the tab id`, true))
 	); }
 
 	loadProfile() {
@@ -176,24 +184,48 @@ class Frame {
 		console.log('got profile', this.profile);
 	}
 
-	injectInto(cw) {
+	injectInto(cw) { try {
 		const ucw = Cu.waiveXrays(cw);
 		if (!this.profile) { return; }
 
-		ucw.profile = Cu.cloneInto(this.profile, ucw);
+		this.cws.push(Cu.getWeakReference(cw));
 
-		const sandbox = Cu.Sandbox(ucw, {
-			sameZoneAs: cw,
+		const sandbox = cw.sandbox = Cu.Sandbox(ucw, {
+			sameZoneAs: ucw,
 			sandboxPrototype: ucw,
 			wantXrays: false,
 		});
 
+		sandbox.console = Cu.cloneInto(console, ucw, { cloneFunctions: true, });
+		sandbox.handleCriticalError = Cu.exportFunction(
+			this.handleCriticalError.bind(this),
+			ucw, { allowCrossOriginArguments: true, }
+		);
+		sandbox.profile = Cu.cloneInto(this.profile, ucw);
+		sandbox.isMainFrame = cw === this.top;
+
+		function exec({ content, name, offset, }) {
+			return Cu.evalInSandbox(content, sandbox, 'latest', __dirname +'/'+ name, offset + 1);
+		}
+
 		Cu.evalInSandbox(`
+			const x = 42;
 			window.a1 = new window.Array;
-			console.log('sandbox', this);
-			console.log('window', window);
+			devicePixelRatio = 2;
 		`, sandbox);
-	}
+		Cu.evalInSandbox(`
+			window.y = x;
+		`, sandbox);
+
+		exec(files['globals.js']);
+		Object.keys(files.fake).forEach(key => exec(files.fake[key]));
+		exec(files['apply.js']);
+
+		ucw.profile = Cu.cloneInto(this.profile, ucw); // TODO: remove
+		console.log('injection done');
+	} catch (error) {
+		this.handleCriticalError(error, `Failed to inject code`);
+	} }
 
 }
 
@@ -205,15 +237,15 @@ function parseError(string) {
 	return error;
 }
 
-function isScriptable(url) {
-	if (url == null) { console.warn('isScriptable called with null url'); return false; }
+function isScriptable(cw) {
 	try {
-		const _url = url +'';
-		if (_url.length === 0) { console.warn('isScriptable called with empty url'); return false; }
-		const nsIURI = BrowserUtils.makeURI(_url);
+		const url = cw.document.URL;
+		if (url == null) { console.warn('isScriptable called with null url'); return false; }
+		if (url.length === 0) { console.warn('isScriptable called with empty url'); return false; }
+		const nsIURI = BrowserUtils.makeURI(url);
 		return allUrls.matches(nsIURI) && !amoUrl.matches(nsIURI);
 	} catch (error) {
-		console.error('isScriptable ', url, ' threw', error);
+		console.error('isScriptable ', cw, ' threw', error);
 		return false;
 	}
 }

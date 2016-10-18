@@ -1,20 +1,17 @@
 /* globals
-	options, call, round, ceil, log2, pow, random, MAX_SAFE_INTEGER,
+	hideCode, define, call, round, ceil, log2, pow, random, MAX_SAFE_INTEGER,
 	Element_p_get_clientHeight,
 	Element_p_get_clientWidth,
 	HTMLElement_p_get_offsetHeight,
-	HTMLElement_p_get_offsetWidth
-*/
-/* globals
-	hideCode, define, currentGlobal
+	HTMLElement_p_get_offsetWidth,
 */
 
 // Element.offsetWith/Height randomization
-if (options.fonts) {
+if (!profile.fonts) { break file; }
 
 const randomFontFactor = (() => {
-	if (!options.fonts) { return null; }
-	const dispersion = options.fonts.dispersion / 100;
+	if (!profile.fonts) { return null; }
+	const dispersion = profile.fonts.dispersion / 100;
 	const offset = 1 - dispersion;
 	const factor = 2 * dispersion / (256 * 256);
 	const rand = new Random(256 * 256);
@@ -63,6 +60,4 @@ function Random(n) { // TODO: test
 		if (index >= buffer.length) { get(); }
 		return buffer[index++];
 	};
-}
-
 }

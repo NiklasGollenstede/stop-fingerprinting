@@ -12,6 +12,8 @@ class API extends ExtensionAPI {
 	constructor(extension) {
 		super(...arguments);
 		// console.log('new API', this);
+
+		// TODO: does Cu.getGlobalForObject(extension. ...) give access to the `TabManager` in https://dxr.mozilla.org/mozilla-central/source/browser/components/extensions/ext-utils.js#754 ?
 	}
 
 	getAPI(context) {
@@ -37,6 +39,8 @@ class ProcessScript {
 	constructor(cw, extension, { process, frame, namespace, handlers, }) {
 		this.ucw = Cu.waiveXrays(cw);
 		const id = extension.id.replace(/@/g, '');
+		// TODO: this wotks, but the caching issue of frame scrips is still open: https://bugzilla.mozilla.org/show_bug.cgi?id=1051238
+		// maybe this behaviour changes when e10s is enabled
 		this.processSrc = `resource://${ id }/webextension${ new URL(process, cw.location).pathname }`;
 		this.frameSrc   = `resource://${ id }/webextension${ new URL(frame, cw.location).pathname }`;
 		this.prefix = id +'-'+ namespace +':';

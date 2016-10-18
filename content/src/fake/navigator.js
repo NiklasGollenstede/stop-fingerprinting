@@ -1,24 +1,19 @@
 /* globals
-	options, forEach, keys, values, assign, defineProperties, iterator, toStringTag, create
+	hideCode, hideAllCode, define, forEach, keys, assign, defineProperties, iterator, toStringTag, create, TypeError,
 */
-/* globals
-	hideCode, hideAllCode, define, currentGlobal, context
-*/
-
-const { TypeError, } = currentGlobal;
 
 // everything that changes the navigator object
 const navigator = { };
 
 // navigator string values
-if (options.navigator) {
-	forEach(keys(values.navigator), prop => navigator[prop] = { get: hideCode(function() { return values.navigator[prop]; }), enumerable: true, configurable: true, add: true, });
-	forEach(keys(values.navigator.undefinedValues), prop => navigator[prop] = { delete: true, });
+if (profile.navigator) {
+	forEach(keys(profile.navigator), prop => navigator[prop] = { get: hideCode(function() { return profile.navigator[prop]; }), enumerable: true, configurable: true, add: true, });
+	forEach(keys(profile.navigator.undefinedValues), prop => navigator[prop] = { delete: true, });
 	delete navigator.undefinedValues;
 }
 
 // navigator.plugins
-if (options.plugins.hideAll) {
+if (profile.plugins.hideAll) {
 	const PluginArray = hideCode(function PluginArray() { throw new TypeError('Illegal constructor'); });
 	assign(PluginArray.prototype, hideAllCode({
 		item() { return null; },

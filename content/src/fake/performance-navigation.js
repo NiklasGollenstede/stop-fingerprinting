@@ -1,8 +1,5 @@
 /* globals
-	options, window
-*/
-/* globals
-	define, currentGlobal, hideCode
+	define, hideCode,
 */
 
 // performance.navigation

@@ -1,8 +1,5 @@
 /* globals
-	options
-*/
-/* globals
-	define, currentGlobal, hideCode
+	define, hideCode,
 */
 
 // BroadcastChannel (firefox only)

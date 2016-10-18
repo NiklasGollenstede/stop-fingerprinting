@@ -122,7 +122,7 @@ const build = module.exports = async(function*(args = [ ]) {
 		(yield remove(resolve(__dirname, './build')));
 		(yield Promise.all(paths.map(path => copy(path, join('build', path)).catch(error => console.error('Skipping missing file/folder "'+ path +'"')))));
 
-		(yield promisify(require('zip-dir'))('./build', { filter: path => !(/\.(?:zip|xpi)$/).test(path), saveTo: `./build/${ outputName }.zip`, }));
+		// (yield promisify(require('zip-dir'))('./build', { filter: path => !(/\.(?:zip|xpi)$/).test(path), saveTo: `./build/${ outputName }.zip`, }));
 
 		console.log(`Saved package to ./build/${ outputName }.zip`);
 	}

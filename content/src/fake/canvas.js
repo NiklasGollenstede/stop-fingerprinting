@@ -1,18 +1,14 @@
 /* globals
-	options, clz32, ImageData, Uint8Array, ArrayBuffer, getRandomValues, min, console, apply,
+	hideCode, define, clz32, ImageData, Uint8Array, ArrayBuffer, getRandomValues, min, apply,
 	HTMLCanvasElement_p_toDataURL, HTMLCanvasElement_p_toBlob, HTMLCanvasElement_p_mozGetAsFile,
 	HTMLCanvasElement_p_get_height, HTMLCanvasElement_p_get_width, HTMLCanvasElement_p_getContext, Node_p_cloneNode,
 	CanvasRenderingContext2D_p_getImageData, CanvasRenderingContext2D_p_putImageData, WebGLRenderingContext_p_readPixels, RGBA, UNSIGNED_BYTE,
 	ImageData_p_get_data, TypedArray_p_get_length,
+	Error,
 */
-/* globals
-	hideCode, define, currentGlobal, context,
-*/
-
-const { Error, } = currentGlobal;
 
 // <canvas> randomization
-if (!options.canvas) { break file; }
+if (!profile.canvas) { break file; }
 
 function randomizeCanvas(canvas) {
 	const width = HTMLCanvasElement_p_get_width(canvas), height = HTMLCanvasElement_p_get_height(canvas);

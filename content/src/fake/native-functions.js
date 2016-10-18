@@ -1,15 +1,12 @@
 /* globals
-	options, WeakMap_p_has, WeakMap_p_get, Function_p_toString
+	hideCode, define, WeakMap_p_has, WeakMap_p_get, Function_p_toString,
 */
-/* globals
-	hideCode, define, currentGlobal, context
-*/
+/* globals hiddenFunctions, */
 
-const { hiddenFunctions, } = context;
-
-const nativeFunctionBody = options.misc.browser === 'firefox' ? '() {\n    [native code]\n}' : '() { [native code] }';
+const nativeFunctionBody = true /* firefox */ ? '() {\n    [native code]\n}' : '() { [native code] }'; // TODO: check the line endings on different OSs
 
 const makeToString = () => hideCode(function toString() {
+	// TODO: test bound functions
 	if (WeakMap_p_has(hiddenFunctions, this)) {
 		return 'function '+ WeakMap_p_get(hiddenFunctions, this) + nativeFunctionBody;
 	}

@@ -3,10 +3,11 @@ tmp/
 *.xpi
 log.txt
 npm-debug.log
+npm-debug.log.*
 debug.log
 
 /build/
-/content/index.js
+/content/files.jsm
 /icons/*/*.png
 /icons/urls.js
 /native/native.*

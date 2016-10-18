@@ -1,12 +1,12 @@
 /* globals
-	options, window
-*/
-/* globals
-	define, currentGlobal
+	define,
 */
 
-// remove window.name
-if (options.windowName && options.misc.main_frame === true && currentGlobal === window) { // TODO: test
+/**
+ * reset `window.name` of the main frame
+ */
+
+if (profile.windowName && isMainFrame) { // TODO: test
 	define('self', {
 		name: { value: '', },
 	});
