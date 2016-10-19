@@ -1,5 +1,6 @@
 /* globals
-	hideCode, define, call, round, ceil, log2, pow, random, MAX_SAFE_INTEGER,
+	define, makeGetter,
+	call, round, ceil, log2, pow, random, MAX_SAFE_INTEGER,
 	Element_p_get_clientHeight,
 	Element_p_get_clientWidth,
 	HTMLElement_p_get_offsetHeight,
@@ -9,14 +10,12 @@
 // Element.offsetWith/Height randomization
 if (!profile.fonts) { break file; }
 
-const randomFontFactor = (() => {
-	if (!profile.fonts) { return null; }
-	const dispersion = profile.fonts.dispersion / 100;
-	const offset = 1 - dispersion;
-	const factor = 2 * dispersion / (256 * 256);
-	const rand = new Random(256 * 256);
-	return () => offset + rand() * factor;
-})();
+const dispersion = profile.fonts.dispersion / 100;
+const offset = 1 - dispersion;
+const factor = 2 * dispersion / (256 * 256);
+const rand = new Random(256 * 256);
+const randomFontFactor = () => offset + rand() * factor; // returns a random number between 1 +- dispersion
+
 
 function getOffsetSize(client, offset, element) {
 	const correct = offset(element);
@@ -27,10 +26,10 @@ function getOffsetSize(client, offset, element) {
 
 
 define('HTMLElement.prototype', {
-	offsetWidth: { get: hideCode('get offsetWidth', function() {
+	offsetWidth: { get: makeGetter(function offsetWidth() {
 		return getOffsetSize(Element_p_get_clientWidth, HTMLElement_p_get_offsetWidth, this);
 	}), },
-	offsetHeight: { get: hideCode('get offsetHeight', function() {
+	offsetHeight: { get: makeGetter(function offsetHeight() {
 		return getOffsetSize(Element_p_get_clientHeight, HTMLElement_p_get_offsetHeight, this);
 	}), },
 });

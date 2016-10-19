@@ -1,9 +1,9 @@
 /* globals
 	define, makeGetter, makeSetter, makeNamedMethod,
-	WeakMap_p_has, WeakMap_p_get, WeakMap_p_set,
+	WeakMap_p_has, WeakMap_p_get, WeakMap_p_set, WeakMap,
 	Function_p_toString,
 	Error_p_get_stack, Error_p_set_stack,
-	RegExp_p_$split, test,
+	RegExp_p_$split, test, RegExp,
 */
 /* globals hiddenFunctions, */
 
@@ -25,15 +25,16 @@ define('Function.prototype', {
 
 const assignedStcks = new WeakMap; // TODO: this may need to be a tab global variable
 
+// const frameFilter = new RegExp(raw`@resource:\/\/stop-fingerprinting\/webextension\/content\/src\/(:?fake\/)?[\w-]+(:?\.js)?(:?${ profile.nonce })(:?:\d+)(:?:\d+)$`, 'm');
+const frameFilter = new RegExp(profile.nonce); // this will only match frames within the add-on code. And since the page doesn't know the nonce, it can't fake those (e.g with source maps)
+
 define('Error.prototype', {
 	stack: {
-		get: makeGetter(function stack() { // TODO: with source maps a page script can create stacks that would be modified, so catching and rethrowning new Errors is saver
+		get: makeGetter(function stack() {
 			if (WeakMap_p_has(assignedStcks, this)) { return WeakMap_p_get(assignedStcks, this); }
 			const stack = RegExp_p_$split((/^/gm), Error_p_get_stack(this));
 
-			const filtered = stack.filter(line => !test((
-				(/@resource:\/\/stop-fingerprinting\/webextension\/content\/src\/(:?fake\/)?[\w-]+(:?\.js)?(:?:\d+)(:?:\d+)$/m)
-			), line)).join('');
+			const filtered = stack.filter(line => !test(frameFilter, line)).join('');
 
 			console.log('filtered stack', stack.join(''), 'to', filtered);
 

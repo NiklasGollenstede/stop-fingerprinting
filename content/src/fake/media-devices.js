@@ -1,14 +1,16 @@
 /* globals
-	hideCode, define, resolve, MediaStreamTrack_p_getSources, call, Array,
+	define, makeMethod,
+	Promise_resolve, MediaStreamTrack_p_getSources, call, Array,
 */
+/* globals cloneInto, */
 
-// navigator.mediaDevices.enumerateDevices
 if (!profile.devices) { break file; }
 
+// navigator.mediaDevices.enumerateDevices
 define('MediaDevices.prototype', {
-	enumerateDevices: { value: makeMethod(function enumerateDevices() { return resolve([ ]); }, x => x), }, // TODO: check the returned Promise
+	enumerateDevices: { value: makeMethod(function enumerateDevices() { return Promise_resolve(cloneInto([ ])); }), },
 });
 define('MediaStreamTrack', {
-	getSources: { value: hideCode(function getSources(cb) { MediaStreamTrack_p_getSources(this, function() { call(cb, this, new Array); }); }), },
+	getSources: { value: makeMethod(function getSources(cb) { MediaStreamTrack_p_getSources(this, function() { call(cb, this, cloneInto([ ])); }); }), }, // chrome only
 });
 

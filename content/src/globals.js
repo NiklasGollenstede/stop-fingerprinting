@@ -26,6 +26,7 @@
  //	const Map                          = _.Map;
 	let   Object                       = _.Object; // used in this file
 	const Promise                      = _.Promise;
+	const RegExp                       = _.RegExp;
  //	const Set                          = _.Set;
 	const setTimeout                   = _.setTimeout;
 	const setInterval                  = _.setInterval;
@@ -74,8 +75,6 @@
 	const $iterator                    = _.Symbol                     .iterator;
 	const $toStringTag                 = _.Symbol                     .toStringTag;
 	const $split                       = _.Symbol                     .split;
-// Promise
-	const resolve                      = _.Promise                    .resolve;
 // URL
 	const createObjectURL              = _.URL                        .createObjectURL;
 	const revokeObjectURL              = _.URL                        .revokeObjectURL;
@@ -123,6 +122,8 @@
 	const WorkerGlobalScope_p_importScripts                 = worker     && _call.bind(          _.WorkerGlobalScope          .prototype    .importScripts);
 	const XMLHttpRequest_p_open                             =               _call.bind(          _.XMLHttpRequest             .prototype    .open);
 
+	const Promise_resolve                                   = _.Promise.resolve.bind(_.Promise);
+
 /**
  * Getters
  */
@@ -164,37 +165,46 @@ function getSetter(proto, prop) {
 }
 
 
-let   hiddenFunctions = new WeakMap;
+let hiddenFunctions = new WeakMap;
 
-const makeMethod      = function(      func, finisher = cloneInto) { return makeFunction(func, func.name,         func.name, func.length, false,   false, finisher); };
-const makeNamedMethod = function(name, func, finisher = cloneInto) { return makeFunction(func,      name,              name, func.length, false,   false, finisher); };
-const makeGetter      = function(      func, finisher = cloneInto) { return makeFunction(func, func.name, 'get '+ func.name, func.length, false,   false, finisher); };
-const makeNamedGetter = function(name, func, finisher = cloneInto) { return makeFunction(func,      name, 'get '+      name, func.length, false,   false, finisher); };
-const makeSetter      = function(      func, finisher = cloneInto) { return makeFunction(func, func.name, 'set '+ func.name, func.length, false,   false, finisher); };
-const makeNamedSetter = function(name, func, finisher = cloneInto) { return makeFunction(func,      name, 'set '+      name, func.length, false,   false, finisher); };
-const makeCtor        = function(      func, finisher, isClass)    { return makeFunction(func, func.name,         func.name, func.length,  true, isClass, finisher); };
-const makeIlligalCtor = function(name)                             { return makeFunction(null,      name,              name,           0, false,    true,     null); };
+const makeMethod      = function(      func)    { return makeFunction(func, func.name,         func.name, func.length, false,   false); };
+const makeNamedMethod = function(name, func)    { return makeFunction(func,      name,              name, func.length, false,   false); };
+const makeGetter      = function(      func)    { return makeFunction(func, func.name, 'get '+ func.name, func.length, false,   false); };
+const makeNamedGetter = function(name, func)    { return makeFunction(func,      name, 'get '+      name, func.length, false,   false); };
+const makeSetter      = function(      func)    { return makeFunction(func, func.name, 'set '+ func.name, func.length, false,   false); };
+const makeNamedSetter = function(name, func)    { return makeFunction(func,      name, 'set '+      name, func.length, false,   false); };
+const makeCtor        = function(func, isClass) { return makeFunction(func, func.name,         func.name, func.length,  true, isClass); };
+const makeIlligalCtor = function(name)          { return makeFunction(null,      name,              name,           0, false,    true); };
 
-const hideCode = (n, f) => f ? makeNamedMethod(n, f) : makeMethod(n); // TODO: this is incorrect and nedds to be removed
+// TODO: what about arguments.caller in page callbacks in non-strict mode?
 
-function makeFunction(body, name, fullName, length, isCtor, isClass, finisher) {
+// ALL functions that are exposed to the page must pass through here AND must make sure to clone their return values into the page context
+function makeFunction(body, name, fullName, length, isCtor, isClass) {
 	if (typeof body !== 'function' && !(!isCtor && isClass)) { throw new TypeError('The function body must be a function'); }
 
-	const wrapper = exportFunction(isCtor
+	let wrapper = exportFunction(isCtor
 		? function() {
 			if (!new.target) {
 				if (isClass) { throw new TypeError('class constructors must be invoked with |new|'); }
 				// else: the construct call will throw the correct error
 			}
-			// if the wrapper is called with new, new.target is the body (this would set the wrong .__proto__)
-			const result = construct(body, arguments, new.target === body ? wrapper : new.target); // TODO: needs to catch and rethrow all Errors to convert them to cw.Error instances
-			return finisher(result);
+			// if the wrapper is called with new, new.target is the body (this would set the wrong .__proto__ and thus expose the inner function to the page)
+			try {
+				return construct(body, arguments, new.target === body ? wrapper : new.target);
+			} catch (error) {
+				throw cloneError(error);
+			}
 		}
 		: !isClass
 		? function() {
-			if (new.target) { throw new TypeError(name +' is not a constructor'); }
-			const result = apply(body, this, arguments); // TODO: needs to catch and rethrow all Errors to convert them to cw.Error instances
-			return finisher(result);
+			if (new.target) {
+				throw new TypeError(name +' is not a constructor'); // TODO: instead if `name` this actually needs to be the local identifier of wrapper at it's call site
+			}
+			try {
+				return apply(body, this, arguments);
+			} catch (error) {
+				throw cloneError(error);
+			}
 		}
 		: function () { // not a ctor but a class? Can't be called
 			throw new TypeError('Illegal constructor');
@@ -214,17 +224,29 @@ function makeFunction(body, name, fullName, length, isCtor, isClass, finisher) {
 	defineProperty(wrapper, 'length', { value: length,   writable: false, enumerable: false, configurable: true, });
 	defineProperty(wrapper, 'name',   { value: fullName, writable: false, enumerable: false, configurable: true, });
 
-	// ensure the correct string representation as 'function <bound >* <get |set >?<name> { [natove code] }'
+	// ensure the correct string representation as 'function <bound >* <get |set >?<name> { [native code] }'
 	WeakMap_p_set(hiddenFunctions, wrapper, fullName);
 
 	// set debug info
-	profile.debug && (wrapper.isFaked = { body, name, fullName, length, isCtor, isClass, finisher, });
+	profile.debug && (wrapper.isFaked = { body, name, fullName, length, isCtor, isClass, });
 	return wrapper;
 }
 
-let   apis = { };
+let errorMap = new WeakMap(
+	[ 'Error', 'EvalError', 'InternalError', 'RangeError', 'ReferenceError', 'SyntaxError', 'TypeError', 'URIError', ]
+	.map(name => [ sandbox[name], global[name], ])
+);
+
+function cloneError(error) { // TODO: test
+	if (!needsCloning(error)) { return error; }
+	console.log('cloning Error', error);
+	const Ctor = errorMap.get(error.constructor) || Error;
+	return new Ctor(error.message); // this constructs page objects, so it _should_ be safe
+}
+
+let apis = { };
 const define = function define(name, object) {
-	const current = apis[name] || { };
+	let current = apis[name] || { };
 	if (typeof object === 'function') { object = object(current); }
 	return (apis[name] = assign(current, object));
 };

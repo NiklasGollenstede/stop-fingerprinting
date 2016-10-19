@@ -1,5 +1,6 @@
 /* globals
-	hideCode, define, clz32, ImageData, Uint8Array, ArrayBuffer, getRandomValues, min, apply,
+	define, makeMethod,
+	clz32, ImageData, Uint8Array, ArrayBuffer, getRandomValues, min, apply,
 	HTMLCanvasElement_p_toDataURL, HTMLCanvasElement_p_toBlob, HTMLCanvasElement_p_mozGetAsFile,
 	HTMLCanvasElement_p_get_height, HTMLCanvasElement_p_get_width, HTMLCanvasElement_p_getContext, Node_p_cloneNode,
 	CanvasRenderingContext2D_p_getImageData, CanvasRenderingContext2D_p_putImageData, WebGLRenderingContext_p_readPixels, RGBA, UNSIGNED_BYTE,
@@ -20,7 +21,7 @@ function randomizeCanvas(canvas) {
 		ctx
 		=  HTMLCanvasElement_p_getContext(canvas, 'webgl') || HTMLCanvasElement_p_getContext(canvas, 'experimental-webgl')
 		|| HTMLCanvasElement_p_getContext(canvas, 'webgl2') || HTMLCanvasElement_p_getContext(canvas, 'experimental-webgl2');
-		if (!ctx) { return context.error(new Error('Could not get drawing context from canvas')); }
+		if (!ctx) { return handleCriticalError(new Error('Could not get drawing context from canvas')) ? canvas : null; }
 		imageData = new ImageData(width, height);
 		data = new Uint8Array(TypedArray_p_get_length(ImageData_p_get_data(imageData)));
 		WebGLRenderingContext_p_readPixels(
@@ -45,7 +46,7 @@ function getRandomBytes(length) {
 }
 
 function randomizeUInt8Array(source, target = source) {
-	context.notify('info', { title: 'Randomized Canvas', message: 'Spoiled possible fingerprinting', });
+	// context.notify('info', { title: 'Randomized Canvas', message: 'Spoiled possible fingerprinting', }); TODO: reimplement notify
 	const l = TypedArray_p_get_length(source), rnd = getRandomBytes(l);
 	let w = 0, mask = 0;
 	for (let i = 0; i < l; ++i) {
@@ -64,22 +65,22 @@ function randomizeTypedArray(array) {
 
 
 define('HTMLCanvasElement.prototype', {
-	toDataURL: { value: hideCode(function toDataURL() {
+	toDataURL: { value: makeMethod(function toDataURL() {
 		console.log('HTMLCanvasElement.prototype.toDataURL');
 		return HTMLCanvasElement_p_toDataURL(randomizeCanvas(this), ...arguments);
 	}), },
-	toBlob: { value: hideCode(function toBlob() {
+	toBlob: { value: makeMethod(function toBlob() {
 		console.log('HTMLCanvasElement.prototype.toBlob');
 		return HTMLCanvasElement_p_toBlob(randomizeCanvas(this), ...arguments);
 	}), },
-	mozGetAsFile: { value: hideCode(function mozGetAsFile() {
+	mozGetAsFile: { value: makeMethod(function mozGetAsFile() {
 		console.log('HTMLCanvasElement.prototype.mozGetAsFile');
 		return HTMLCanvasElement_p_mozGetAsFile(randomizeCanvas(this), ...arguments);
 	}), },
 });
 
 define('CanvasRenderingContext2D.prototype', {
-	getImageData: { value: hideCode(function getImageData(a, b, c, d) {
+	getImageData: { value: makeMethod(function getImageData(a, b, c, d) {
 		const data = CanvasRenderingContext2D_p_getImageData(this, ...arguments);
 		randomizeUInt8Array(data.data);
 		return data;
@@ -87,7 +88,8 @@ define('CanvasRenderingContext2D.prototype', {
 });
 
 define('WebGLRenderingContext.prototype', {
-	readPixels: { value: hideCode(function readPixels(a, b, c, d, e, f, data) {
+	readPixels: { value: makeMethod(function readPixels(a, b, c, d, e, f, data) {
+		// TODO: can accessors on `data`recieve the pixel values?
 		apply(WebGLRenderingContext_p_readPixels, this, arguments);
 		randomizeTypedArray(data);
 	}), },

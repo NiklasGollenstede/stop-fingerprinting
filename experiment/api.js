@@ -27,12 +27,8 @@ class API extends ExtensionAPI {
 	start({ contentWindow, }, options) {
 		const script  = new ProcessScript(contentWindow, this.extension, options);
 		const destroy = Cu.exportFunction(script.destroy, contentWindow, { allowCrossOriginArguments: true, });
-		console.log('destroy function', destroy);
 		return destroy;
 	}
-
-	// resource://stop-fingerprinting/webextension/content/index.js
-
 }
 
 class ProcessScript {

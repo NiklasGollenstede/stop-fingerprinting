@@ -129,6 +129,7 @@ class Frame {
 			if (rethrow) { throw error; }
 		}
 		console.error(message, error);
+		return resume;
 	}
 
 	onDOMWindowCreated(event) {
@@ -195,7 +196,8 @@ class Frame {
 		});
 
 		const exportFunction = func => Cu.exportFunction(func, ucw, { allowCrossOriginArguments: true, });
-		const cloneInto = obj => Cu.cloneInto(obj, ucw, { cloneFunctions: false, });
+		const cloneInto = obj => Cu.cloneInto(obj, ucw, { cloneFunctions: false, }); // expose functions only explicitly through exportFunction
+		const needsCloning = obj => obj !== null && typeof obj === 'object' && Cu.getGlobalForObject(obj) !== ucw; // TODO: test
 
 		sandbox.console = Cu.cloneInto(console, ucw, { cloneFunctions: true, });
 		sandbox.handleCriticalError = exportFunction(this.handleCriticalError.bind(this));
@@ -203,11 +205,15 @@ class Frame {
 		sandbox.isMainFrame = cw === this.top;
 		sandbox.exportFunction = exportFunction(exportFunction);
 		sandbox.cloneInto = exportFunction(cloneInto);
+		sandbox.needsCloning = exportFunction(needsCloning);
+		sandbox.sandbox = sandbox;
 		sandbox.ucw = ucw;
 
-		function exec({ content, name, offset, }) {
-			return Cu.evalInSandbox(content, sandbox, 'latest', __dirname +'/'+ name, offset + 1);
-		}
+		const exec = ({ content, name, offset, }) => Cu.evalInSandbox(
+			content, sandbox, 'latest',
+			__dirname +'/'+ name +'?'+ this.profile.nonce, // the nonce is needed to create unpredictable error stack fames that can be filtered
+			offset + 1
+		);
 /*
 		Cu.evalInSandbox(`
 			const x = 42;

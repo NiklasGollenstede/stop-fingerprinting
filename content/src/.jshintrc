@@ -39,7 +39,9 @@
 		"exportFunction": true,
 		"handleCriticalError": true,
 		"isMainFrame": true,
-		"profile": true
+		"needsCloning": true,
+		"profile": true,
+		"sandbox": true
 	},
 	"predef": [ // from https://github.com/jshint/jshint/blob/master/src/vars.js
 		"-Array",

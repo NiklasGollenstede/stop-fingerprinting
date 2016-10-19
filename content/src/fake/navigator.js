@@ -27,7 +27,7 @@ if (profile.plugins.hideAll) {
 	// navigator.plugins
 	const PluginArray = makeIlligalCtor('PluginArray');
 	defineProperties(PluginArray.prototype, { // TODO: fix the .length of thse:
-		item:           { value: makeMethod(function item()      { throw new Erorr('YOLO'); }),            writable: true,  enumerable: true,  configurable: true, },
+		item:           { value: makeMethod(function item()      { return null; }),            writable: true,  enumerable: true,  configurable: true, },
 		namedItem:      { value: makeMethod(function namedItem() { return null; }),            writable: true,  enumerable: true,  configurable: true, },
 		refresh:        { value: makeMethod(function refresh()   { return; }),                 writable: true,  enumerable: true,  configurable: true, },
 		length:         {   get: makeGetter(function length()    { return 0; }),                                enumerable: true,  configurable: true, },
@@ -35,7 +35,7 @@ if (profile.plugins.hideAll) {
 		[$toStringTag]: { value: 'PluginArray',                                                writable: true,  enumerable: true,  configurable: true, },
 	});
 	const pluginArrayInstance = create(PluginArray.prototype);
-	navigator.plugins = { get: makeGetter(function plugins() { return pluginArrayInstance; }, x => x), };
+	navigator.plugins = { get: makeGetter(function plugins() { return pluginArrayInstance; }), };
 	define('self', { PluginArray: { value: PluginArray, }, });
 
 	// navigator.mimeTypes
@@ -48,7 +48,7 @@ if (profile.plugins.hideAll) {
 		[$toStringTag]: { value: 'MimeTypeArray',                                              writable: true,  enumerable: true,  configurable: true, },
 	});
 	const mimeTypeArrayInstance = create(MimeTypeArray.prototype);
-	navigator.mimeTypes = { get: makeGetter(function mimeTypes() { return mimeTypeArrayInstance; }, x => x), };
+	navigator.mimeTypes = { get: makeGetter(function mimeTypes() { return mimeTypeArrayInstance; }), };
 	define('self', { MimeTypeArray: { value: MimeTypeArray, }, });
 }
 

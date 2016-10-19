@@ -1,15 +1,16 @@
 /* globals
-	define, hideCode,
+	define, makeMethod,
 */
 
 // BroadcastChannel (firefox only)
 define('BroadcastChannel.prototype', { // TODO: make it optional
-	postMessage: { value: hideCode(function postMessage(a) {
+	postMessage: { value: makeMethod(function postMessage(a) {
 		// TODO: arguments/this error handling
 	}), },
 });
-/*
+/* // for testing only
 define('self', {
-	blub: { value: hideCode(function blob(a) { return { a, b: [ ], p: Promise.resolve(42), }; }), add: true, },
+	blub: { value: makeMethod(function blub(a) { return { a, b: [ ], }; }), add: true, },
+	blob: { value: makeMethod(function blob(a) { (null).blob; }), add: true, },
 });
 */
