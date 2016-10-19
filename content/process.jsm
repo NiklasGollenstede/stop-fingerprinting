@@ -188,26 +188,27 @@ class Frame {
 		const ucw = Cu.waiveXrays(cw);
 		if (!this.profile) { return; }
 
-		this.cws.push(Cu.getWeakReference(cw));
-
 		const sandbox = cw.sandbox = Cu.Sandbox(ucw, {
 			sameZoneAs: ucw,
 			sandboxPrototype: ucw,
 			wantXrays: false,
 		});
 
+		const exportFunction = func => Cu.exportFunction(func, ucw, { allowCrossOriginArguments: true, });
+		const cloneInto = obj => Cu.cloneInto(obj, ucw, { cloneFunctions: false, });
+
 		sandbox.console = Cu.cloneInto(console, ucw, { cloneFunctions: true, });
-		sandbox.handleCriticalError = Cu.exportFunction(
-			this.handleCriticalError.bind(this),
-			ucw, { allowCrossOriginArguments: true, }
-		);
+		sandbox.handleCriticalError = exportFunction(this.handleCriticalError.bind(this));
 		sandbox.profile = Cu.cloneInto(this.profile, ucw);
 		sandbox.isMainFrame = cw === this.top;
+		sandbox.exportFunction = exportFunction(exportFunction);
+		sandbox.cloneInto = exportFunction(cloneInto);
+		sandbox.ucw = ucw;
 
 		function exec({ content, name, offset, }) {
 			return Cu.evalInSandbox(content, sandbox, 'latest', __dirname +'/'+ name, offset + 1);
 		}
-
+/*
 		Cu.evalInSandbox(`
 			const x = 42;
 			window.a1 = new window.Array;
@@ -216,7 +217,7 @@ class Frame {
 		Cu.evalInSandbox(`
 			window.y = x;
 		`, sandbox);
-
+*/
 		exec(files['globals.js']);
 		Object.keys(files.fake).forEach(key => exec(files.fake[key]));
 		exec(files['apply.js']);

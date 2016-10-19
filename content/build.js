@@ -38,8 +38,11 @@ const build = module.exports = async(function*() {
 			const missing = deps.filter(dep => ((unused.delete(dep)), !globalNames.includes(dep)));
 			if (missing.length) { throw new Error(`"${ path }" requires a missing globals: ${ missing.join(', ') }`); }
 			return {
-				content: `'use strict'; file: {`+ file.slice(match[0].length) +'}',
-				offset: match[0].split(/\r?\n|\r/m).length - 1,
+				content: `'use strict'; file: {`
+					+ match[0].replace(/.*/gm, '') // strip leading comments
+					+ file.slice(match[0].length)
+				+'}',
+				offset: 0, // if the offset is > 0, firefox produces correct stack traces but messes up the line numbers in the debugger
 				name: relative(__dirname, path).split(sep).join('/'),
 			};
 		});
@@ -51,7 +54,7 @@ const build = module.exports = async(function*() {
 	for (let name of (yield FS.readdir(_`./src/fake/`))) {
 		files.fake[name] = (yield checkDeps(_`./src/fake/${ name }`));
 	}
-	files['apply.js']   = { content: (yield FS.readFile(_`./src/apply.js`, 'utf8')), offset: 0, name: 'src/apply.js', };
+	files['apply.js'] = (yield checkDeps(_`./src/apply.js`));
 
 	if (unused.size) {
 		console.warn(`Unused global variables: `+ Array.from(unused).join(', '));

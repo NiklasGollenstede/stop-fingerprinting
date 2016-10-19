@@ -1,5 +1,5 @@
 
-	const global = this;
+	const global = this.ucw;
 	let   _ = global;
 	const window = global.constructor.name === 'Window' ? global : null;
 	const worker = window ? null : global;
@@ -24,7 +24,8 @@
 	const ImageData                    = _.ImageData;
 	const MutationObserver             = _.MutationObserver;
  //	const Map                          = _.Map;
- //	const Promise                      = _.Promise;
+	let   Object                       = _.Object; // used in this file
+	const Promise                      = _.Promise;
  //	const Set                          = _.Set;
 	const setTimeout                   = _.setTimeout;
 	const setInterval                  = _.setInterval;
@@ -70,8 +71,10 @@
 // String
  //	const raw                          = _.String                     .raw;
 // Symbol
-	const iterator                     = _.Symbol                     .iterator;
-	const toStringTag                  = _.Symbol                     .toStringTag;
+	const $iterator                    = _.Symbol                     .iterator;
+	const $toStringTag                 = _.Symbol                     .toStringTag;
+	const $split                       = _.Symbol                     .split;
+// Promise
 	const resolve                      = _.Promise                    .resolve;
 // URL
 	const createObjectURL              = _.URL                        .createObjectURL;
@@ -93,12 +96,11 @@
 	const map                                               =               _call.bind(          _.Array                      .prototype    .map);
 	const reduce                                            =               _call.bind(          _.Array                      .prototype    .reduce);
  //	const join                                              =               _call.bind(          _.Array                      .prototype    .join);
-	const split                                             =               _call.bind(          _.String                     .prototype    .split);
- //	const replace                                           =               _call.bind(          _.String                     .prototype    .replace);
 	const test                                              =               _call.bind(          _.RegExp                     .prototype    .test);
 	const hasOwnProperty                                    =               _call.bind(          _.Object                     .prototype    .hasOwnProperty);
  //	const querySelector                                     = window     && _call.bind(          _.Element                    .prototype    .querySelector);
 	const querySelectorAll                                  = window     && _call.bind(          _.Element                    .prototype    .querySelectorAll);
+	const startsWith                                        =               _call.bind(          _.String                     .prototype    .startsWith);
 
 	const CanvasRenderingContext2D_p_getImageData           =               _call.bind(          _.CanvasRenderingContext2D   .prototype    .getImageData);
 	const CanvasRenderingContext2D_p_putImageData           =               _call.bind(          _.CanvasRenderingContext2D   .prototype    .putImageData);
@@ -112,6 +114,7 @@
 	const MediaStreamTrack_p_getSources                     =               _call.bind(          _.MediaStreamTrack           .prototype    .getSources);
 	const Node_p_cloneNode                                  = window     && _call.bind(          _.Node                       .prototype    .cloneNode);
  //	const Node_p_insertBefore                               = window     && _call.bind(          _.Node                       .prototype    .insertBefore);
+	const RegExp_p_$split                                   =               _call.bind(          _.RegExp                     .prototype    [$split]); // don't use String_p_split, for RegExp as split arg it can be overwritten by this
  //	const Set_p_has                                         =               _call.bind(          _.Set                        .prototype    .has);
 	const WeakMap_p_get                                     =               _call.bind(          _.WeakMap                    .prototype    .get);
 	const WeakMap_p_has                                     =               _call.bind(          _.WeakMap                    .prototype    .has);
@@ -129,7 +132,8 @@
 	const Element_p_get_clientHeight                        = window     && _call.bind(getGetter(_.Element                    .prototype,   'clientHeight'));
 	const Element_p_get_clientWidth                         = window     && _call.bind(getGetter(_.Element                    .prototype,   'clientWidth'));
 	const Element_p_get_tagName                             = window     && _call.bind(getGetter(_.Element                    .prototype,   'tagName'));
- //	const Error_p_get_stack                                 =               _call.bind(getGetter(_.Error                      .prototype,   'stack')); // TODO: the stack trace creation in chrome is much more complex than a simple getter
+	const Error_p_get_stack                                 =               _call.bind(getGetter(_.Error                      .prototype,   'stack')); // firefox only, the stack trace creation in chrome is much more complex than a simple getter
+	const Error_p_set_stack                                 =               _call.bind(getSetter(_.Error                      .prototype,   'stack'));
 	const HTMLCanvasElement_p_get_height                    = window     && _call.bind(getGetter(_.HTMLCanvasElement          .prototype,   'height'));
 	const HTMLCanvasElement_p_get_width                     = window     && _call.bind(getGetter(_.HTMLCanvasElement          .prototype,   'width'));
 	const HTMLElement_p_get_offsetHeight                    = window     && _call.bind(getGetter(_.HTMLElement                .prototype,   'offsetHeight'));
@@ -154,27 +158,69 @@ function getGetter(proto, prop) {
 	let   desc = getOwnPropertyDescriptor(proto, prop);
 	return desc && desc.get || function() { return this[prop]; };
 }
+function getSetter(proto, prop) {
+	let   desc = getOwnPropertyDescriptor(proto, prop);
+	return desc && desc.set || function(v) { this[prop] = v; };
+}
 
 
 let   hiddenFunctions = new WeakMap;
 
-// fake function+'' => [native code]
-const hideCode = function hideCode(name, func) {
-	if (!func) {
-		func = name;
-		name = func.name;
-	} else {
-		defineProperty(func, 'name', { value: name, });
-	}
-	WeakMap_p_set(hiddenFunctions, func, name || '');
-	profile.debug && (func.isFaked = true);
-	return func;
-};
+const makeMethod      = function(      func, finisher = cloneInto) { return makeFunction(func, func.name,         func.name, func.length, false,   false, finisher); };
+const makeNamedMethod = function(name, func, finisher = cloneInto) { return makeFunction(func,      name,              name, func.length, false,   false, finisher); };
+const makeGetter      = function(      func, finisher = cloneInto) { return makeFunction(func, func.name, 'get '+ func.name, func.length, false,   false, finisher); };
+const makeNamedGetter = function(name, func, finisher = cloneInto) { return makeFunction(func,      name, 'get '+      name, func.length, false,   false, finisher); };
+const makeSetter      = function(      func, finisher = cloneInto) { return makeFunction(func, func.name, 'set '+ func.name, func.length, false,   false, finisher); };
+const makeNamedSetter = function(name, func, finisher = cloneInto) { return makeFunction(func,      name, 'set '+      name, func.length, false,   false, finisher); };
+const makeCtor        = function(      func, finisher, isClass)    { return makeFunction(func, func.name,         func.name, func.length,  true, isClass, finisher); };
+const makeIlligalCtor = function(name)                             { return makeFunction(null,      name,              name,           0, false,    true,     null); };
 
-const hideAllCode = function hideAllCode(object) {
-	forEach(keys(object), key => typeof object[key] === 'function' && hideCode(object[key]));
-	return object;
-};
+const hideCode = (n, f) => f ? makeNamedMethod(n, f) : makeMethod(n); // TODO: this is incorrect and nedds to be removed
+
+function makeFunction(body, name, fullName, length, isCtor, isClass, finisher) {
+	if (typeof body !== 'function' && !(!isCtor && isClass)) { throw new TypeError('The function body must be a function'); }
+
+	const wrapper = exportFunction(isCtor
+		? function() {
+			if (!new.target) {
+				if (isClass) { throw new TypeError('class constructors must be invoked with |new|'); }
+				// else: the construct call will throw the correct error
+			}
+			// if the wrapper is called with new, new.target is the body (this would set the wrong .__proto__)
+			const result = construct(body, arguments, new.target === body ? wrapper : new.target); // TODO: needs to catch and rethrow all Errors to convert them to cw.Error instances
+			return finisher(result);
+		}
+		: !isClass
+		? function() {
+			if (new.target) { throw new TypeError(name +' is not a constructor'); }
+			const result = apply(body, this, arguments); // TODO: needs to catch and rethrow all Errors to convert them to cw.Error instances
+			return finisher(result);
+		}
+		: function () { // not a ctor but a class? Can't be called
+			throw new TypeError('Illegal constructor');
+		}
+	);
+
+	// create prototype
+	(isCtor || isClass) && defineProperty(wrapper, 'prototype', {
+		value: defineProperty(new Object, 'constructor', {
+			value: wrapper,
+			writable: true, enumerable: false, configurable: true,
+		}),
+		writable: !isClass, enumerable: false, configurable: false,
+	});
+
+	// set .name and .length
+	defineProperty(wrapper, 'length', { value: length,   writable: false, enumerable: false, configurable: true, });
+	defineProperty(wrapper, 'name',   { value: fullName, writable: false, enumerable: false, configurable: true, });
+
+	// ensure the correct string representation as 'function <bound >* <get |set >?<name> { [natove code] }'
+	WeakMap_p_set(hiddenFunctions, wrapper, fullName);
+
+	// set debug info
+	profile.debug && (wrapper.isFaked = { body, name, fullName, length, isCtor, isClass, finisher, });
+	return wrapper;
+}
 
 let   apis = { };
 const define = function define(name, object) {

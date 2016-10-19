@@ -1,5 +1,5 @@
 /* globals
-	global, forEach, keys, reduce, split, hasOwnProperty, defineProperty,
+	global, forEach, keys, reduce, RegExp_p_$split, hasOwnProperty, defineProperty, assign,
 */
 /* globals
 	apis
@@ -10,16 +10,33 @@
  */
 
 forEach(keys(apis), key => {
-	const target = reduce(split(key, '.'), (object, key) => object && object[key], global);
+	const target = reduce(
+		RegExp_p_$split(/\./g, key),
+		(object, key) => object && object[key],
+		global
+	);
 	target && setProps(target, apis[key]);
 });
 
-function setProps(object, props) {
-	keys(props).forEach(key => {
-		const prop = props[key];
-		if (!prop.add && !hasOwnProperty(object, key)) { return; }
-		if (prop.delete) { return delete object[key]; }
-		defineProperty(object, key, prop);
+function setProps(object, descs) {
+	keys(descs).forEach(key => {
+		const desc = descs[key];
+		if (!hasOwnProperty(object, key)) {
+			if (desc.add) {
+				assign(desc, desc.add);
+			} else{
+				return;
+			}
+		}
+		if (desc.delete) {
+			if (!delete object[key]) { console.log('failed to delete "', key, '" from', object); }
+			return;
+		}
+		defineProperty(object, key, desc);
 	});
 	return object;
 }
+
+global.apis = apis;
+
+console.log('global', global, apis);

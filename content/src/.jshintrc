@@ -34,7 +34,9 @@
 	"-W090": true, // '{label}' is not a statement label.
 
 	"globals": {
+		"cloneInto": true,
 		"console": true,
+		"exportFunction": true,
 		"handleCriticalError": true,
 		"isMainFrame": true,
 		"profile": true

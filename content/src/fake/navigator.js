@@ -1,52 +1,59 @@
 /* globals
-	hideCode, hideAllCode, define, forEach, keys, assign, defineProperties, iterator, toStringTag, create, TypeError,
+	define, makeIlligalCtor, makeGetter, makeMethod,
+	forEach, keys, assign, defineProperties, create, TypeError,
+	$iterator, $toStringTag,
 */
 
-// everything that changes the navigator object
+/**
+ * This file contains all modifications to the window.navigator object and related .prototypes.
+ */
+
 const navigator = { };
 
 // navigator string values
 if (profile.navigator) {
-	forEach(keys(profile.navigator), prop => navigator[prop] = { get: hideCode(function() { return profile.navigator[prop]; }), enumerable: true, configurable: true, add: true, });
+	forEach(keys(profile.navigator), prop => navigator[prop] = {
+		get: makeGetter(function() { return profile.navigator[prop]; }),
+		add: true, // add if non-existing
+		enumerable: true, configurable: true, // needs to set enumerable and configurable when adding
+	});
 	forEach(keys(profile.navigator.undefinedValues), prop => navigator[prop] = { delete: true, });
 	delete navigator.undefinedValues;
 }
 
-// navigator.plugins
 if (profile.plugins.hideAll) {
-	const PluginArray = hideCode(function PluginArray() { throw new TypeError('Illegal constructor'); });
-	assign(PluginArray.prototype, hideAllCode({
-		item() { return null; },
-		namedItem() { return null; },
-		refresh() { return; },
-	}));
-	defineProperties(PluginArray.prototype, {
-		length: { get: hideCode(function() { return 0; }), enumerable: true, configurable: true, },
-		[iterator]: { value: hideCode(function values() { return [][iterator](); }), writable: true, enumerable: false, configurable: true, },
-		[toStringTag]: { value: 'PluginArray', writable: false, enumerable: false, configurable: true, },
+	// modifying the existsing instances doesn't work because it has non-deletable (numberical) properties
+
+	// navigator.plugins
+	const PluginArray = makeIlligalCtor('PluginArray');
+	defineProperties(PluginArray.prototype, { // TODO: fix the .length of thse:
+		item:           { value: makeMethod(function item()      { throw new Erorr('YOLO'); }),            writable: true,  enumerable: true,  configurable: true, },
+		namedItem:      { value: makeMethod(function namedItem() { return null; }),            writable: true,  enumerable: true,  configurable: true, },
+		refresh:        { value: makeMethod(function refresh()   { return; }),                 writable: true,  enumerable: true,  configurable: true, },
+		length:         {   get: makeGetter(function length()    { return 0; }),                                enumerable: true,  configurable: true, },
+		[$iterator]:    { value: makeMethod(function values()    { return [][$iterator](); }), writable: true,  enumerable: true,  configurable: true, }, // TODO: Array_p_$iterator(newArray)
+		[$toStringTag]: { value: 'PluginArray',                                                writable: true,  enumerable: true,  configurable: true, },
 	});
 	const pluginArrayInstance = create(PluginArray.prototype);
-	navigator.plugins = { get: hideCode('get plugins', function() { return pluginArrayInstance; }), };
+	navigator.plugins = { get: makeGetter(function plugins() { return pluginArrayInstance; }, x => x), };
 	define('self', { PluginArray: { value: PluginArray, }, });
 
 	// navigator.mimeTypes
-	const MimeTypeArray = hideCode(function MimeTypeArray() { throw new TypeError('Illegal constructor'); });
-	assign(MimeTypeArray.prototype, hideAllCode({
-		item() { return null; },
-		namedItem() { return null; },
-	}));
+	const MimeTypeArray = makeIlligalCtor('MimeTypeArray');
 	defineProperties(MimeTypeArray.prototype, {
-		length: { get: hideCode(function() { return 0; }), enumerable: true, configurable: true, },
-		[iterator]: { value: hideCode(function values() { return [][iterator](); }), writable: true, enumerable: false, configurable: true, },
-		[toStringTag]: { value: 'MimeTypeArray', writable: false, enumerable: false, configurable: true, },
+		item:           { value: makeMethod(function item()      { return null; }),            writable: true,  enumerable: true,  configurable: true, },
+		namedItem:      { value: makeMethod(function namedItem() { return null; }),            writable: true,  enumerable: true,  configurable: true, },
+		length:         {   get: makeGetter(function length()    { return 0; }),                                enumerable: true,  configurable: true, },
+		[$iterator]:    { value: makeMethod(function values()    { return [][$iterator](); }), writable: true,  enumerable: true,  configurable: true, }, // TODO: Array_p_$iterator(newArray)
+		[$toStringTag]: { value: 'MimeTypeArray',                                              writable: true,  enumerable: true,  configurable: true, },
 	});
 	const mimeTypeArrayInstance = create(MimeTypeArray.prototype);
-	navigator.mimeTypes = { get: hideCode('get mimeTypes', function() { return mimeTypeArrayInstance; }), };
+	navigator.mimeTypes = { get: makeGetter(function mimeTypes() { return mimeTypeArrayInstance; }, x => x), };
 	define('self', { MimeTypeArray: { value: MimeTypeArray, }, });
 }
 
 // navigator.sendBeacon
-navigator.sendBeacon = { value: hideCode(function sendBeacon(arg) {
+navigator.sendBeacon = { value: makeMethod(function sendBeacon(arg) {
 	if (!arguments.length) { throw new TypeError('Not enough arguments to Navigator.sendBeacon.'); }
 	return true;
 }), };
