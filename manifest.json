@@ -27,7 +27,6 @@
 	},
 
 	"permissions": [
-		"experiments.content",
 		"browsingData",
 		"notifications",
 		"nativeMessaging",

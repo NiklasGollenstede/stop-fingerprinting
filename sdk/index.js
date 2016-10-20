@@ -1,4 +1,4 @@
-'use strict'; /* globals setTimeout: true, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+'use strict'; /* globals exports, setTimeout: true, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 const { async, spawn, } = require('webextension/node_modules/es6lib/concurrent.js');
 const Port = require('webextension/node_modules/es6lib/port.js');
@@ -6,13 +6,22 @@ const webExtension = require('sdk/webextension');
 const { setTimeout, } = require('sdk/timers');
 const Prefs = require('sdk/simple-prefs');
 
+// attach the frame/process scripts
+const processScript = new (require('./attach.js'))({
+	process:   'content/process.js',
+	frame:     'content/frame.js',
+	namespace: 'content',
+	handlers: {
+	},
+});
+
 const webExtHandlers = { // handlers for the actions specified in /background/sdk-connection.js
 	getPref(name) {
 		return Prefs.prefs[name];
 	},
 };
 
-const start = async(function*() {
+const startWebExt = async(function*() {
 
 	// load the WebExtension
 	let extension;
@@ -31,7 +40,7 @@ const start = async(function*() {
 				if (_port.name !== 'sdk') { return; }
 				resolve(new Port(_port, Port.web_ext_Port));
 			});
-			setTimeout(reject, 2000);
+			setTimeout(reject, 10000);
 		}));
 	} catch (_) {
 		return 2;
@@ -50,7 +59,7 @@ const start = async(function*() {
 	return 0;
 });
 
-start()
+startWebExt()
 .then(code => {
 	switch (code) {
 		case 0: { // all good
@@ -72,3 +81,10 @@ start()
 	}
 })
 .catch(error => console.error('Startup failed', error));
+
+
+// respond to unload, unless its because of 'shutdown' (performance)
+exports.onUnload = reason => {
+	if (reason === 'shutdown') { return; }
+	processScript.destroy();
+};

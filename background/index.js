@@ -25,24 +25,6 @@ const openMainFrameRequests = new Map; // tabId ==> Requests with .type === 'mai
 
 // start sync connection to content script
 if (gecko) {
-
-	// attach the frame/precess scripts
-	const stop = content.start({
-		process: '/content/process.js',
-		frame: '/content/frame.js',
-		namespace: 'content',
-		handlers: {
-			getOptions(tabId) {
-				const profile = Profiles.get({ tabId, });
-				return profile.toJSON();
-			},
-		},
-	});
-
-	// stop those scripts on unload
-	window.addEventListener('beforeunload', event => stop(), { once: true, });
-
-	// echo the current tab to the frame scripts (via a content script)
 	Messages.addHandler('getSenderProfile', function() {
 		const tabId = this.tab.id;
 		const profile = Profiles.get({ tabId, }).toJSON();
