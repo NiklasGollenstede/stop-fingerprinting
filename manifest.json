@@ -47,10 +47,15 @@
 	"content_scripts": [
 		{
 			"matches": [ "<all_urls>" ],
-			"match_about_blank": true,
-			"all_frames": true,
+			"match_about_blank": false,
+			"all_frames": false,
 			"run_at": "document_start",
-			"js": [ "content/index.js" ]
+			"js": [
+				"content/get-api.js",
+				"node_modules/es6lib/port.js",
+				"content/files.js",
+				"content/index.js"
+			]
 		}
 	],
 	"browser_action": {

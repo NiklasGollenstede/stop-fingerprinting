@@ -38,17 +38,6 @@ const build = module.exports = async(function*(args) {
 	(yield remove(resolve(__dirname, './webextension')));
 	(yield copy(resolve(__dirname, '../build/'), resolve(__dirname, './webextension')));
 	(yield FS.writeFile(resolve(__dirname, './package.json'), JSON.stringify(_package, null, '\t', 'utf8')));
-	{
-		const _manifest = require('./webextension/manifest.json');
-		_manifest.content_scripts = [ {
-			matches: [ '<all_urls>', ],
-			match_about_blank: true,
-			all_frames: false,
-			run_at: 'document_start',
-			js: [ 'content/get-tab-id.js', ],
-		}, ];
-		(yield FS.writeFile(resolve(__dirname, './webextension/manifest.json'), JSON.stringify(_manifest, null, '\t', 'utf8')));
-	}
 
 	if (args.includes('-x')) {
 		console.log((yield execute(

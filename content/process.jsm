@@ -17,9 +17,6 @@ const resolved = Promise.resolve();
 const allUrls = new MatchPattern('<all_urls>');
 const amoUrl  = new MatchPattern('https://addons.mozilla.org/*');
 
-try { Cu.unload(__dirname +'/files.jsm', { }); } catch (_) { }
-const { files, } = Cu.import(__dirname+ '/files.jsm', { });
-
 console.log('process.jsm loading', this);
 
 const messageHandler = {
@@ -73,8 +70,6 @@ class Frame {
 		this.cfmm = cfmm;
 		this.cfmm.addEventListener('DOMWindowCreated', this);
 		this.cfmm.addEventListener('unload', this);
-		this.tabId = null; // the WebExtension tabId of this frame
-		this.profile = null; // the profile of the top level page, if any
 		this.top = null; // the top level window, if its url isScriptable
 		this.utils = null; // nsIDOMWindowUtils of .top
 		console.log('created Frame', this);
@@ -104,136 +99,109 @@ class Frame {
 		return result[0].value;
 	}
 
-	pauseWhile(promise) {
-		console.log('pausing', this);
-		this.utils.suppressEventHandling(true);
-		this.utils.suspendTimeouts();
-
-		resolved.then(() => promise).then(() => {
-			console.log('resuming', this);
-			this.utils.suppressEventHandling(false);
-			this.utils.resumeTimeouts();
-		});
-
-		return promise;
-	}
-
-	handleCriticalError(error, message, rethrow) {
-		message || (message = (error && error.message || '') + '');
-		const resume = this.top.confirm(message.replace(/[!?.]$/, _=>_ || '.') +`\nResume navigation?`);
-		if (resume) {
-			this.top.stop();
-			this.utils.suppressEventHandling(true);
-			this.utils.suspendTimeouts();
-			this.top.document.documentElement && this.top.document.documentElement.remove();
-			if (rethrow) { throw error; }
-		}
-		console.error(message, error);
-		return resume;
-	}
-
 	onDOMWindowCreated(event) {
-		console.log('onDOMWindowCreated', event);
-
 		const cw = event.target.defaultView;
 
 		if (cw.top === cw) { // TODO: verify that this is true exactly iff cw is the tabs top level frame
 			return this.topWindowCreated(cw);
 		}
-
-		this.injectInto(cw);
 	}
 
 	topWindowCreated(cw) {
+		console.log('topWindowCreated', cw);
+		this.top = null;
+		this.utils = null;
+
+		if (!isScriptable(cw)) { console.log('skipping non-content tab', this); return; }
+
 		this.top = cw;
 		this.utils = cw.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-
-		if (!isScriptable(this.top)) { console.log('skipping non-content tab', this); return; }
-
-		this.profile = null;
-
-		if (this.tabId == null) {
-			this.loadTabId().then(() => {
-				this.loadProfile();
-				this.injectInto(cw);
-			}).catch(ErrorLogger);
-		} else {
-			this.loadProfile();
-			this.injectInto(cw);
-		}
-	}
-
-	loadTabId() { return this.pauseWhile(
-		new Promise((resolve, reject) => {
-			const ucw = Cu.waiveXrays(this.top);
-			ucw.loadedTabId = Cu.cloneInto({ resolve, reject, }, ucw, { cloneFunctions: true, });
-			setTimeout(reject, 1000, new Error('Timeout'));
-		})
-		.then(tabId => {
-			console.log('got tabId', tabId);
-			this.tabId = tabId;
-		})
-		.catch(error => this.handleCriticalError(parseError(error), `Failed to get the tab id`, true))
-	); }
-
-	loadProfile() {
-		try {
-			this.profile = this.request('getOptions', this.tabId);
-		} catch (error) {
-			this.handleCriticalError(parseError(error), `Failed to load the profile`);
-		}
-		console.log('got profile', this.profile);
-	}
-
-	injectInto(cw) { try {
 		const ucw = Cu.waiveXrays(cw);
-		if (!this.profile) { return; }
 
-		const sandbox = cw.sandbox = Cu.Sandbox(ucw, {
-			sameZoneAs: ucw,
-			sandboxPrototype: ucw,
-			wantXrays: false,
+		ucw.getPageUtils = Cu.exportFunction(caller => {
+			delete ucw.getPageUtils;
+			return PageUtils(this.cfmm, caller, this.top, this.utils);
+		}, Cu.waiveXrays(cw), { allowCrossOriginArguments: true, });
+
+	}
+}
+
+function PageUtils(cfmm, caller, top, utils) {
+
+	const pausing = new Set;
+	const onDOMWindowCreatedListeners = new Set;
+
+	function onDOMWindowCreatedDispatcher(event) {
+		const cw = Cu.cloneInto(event.target.defaultView, caller);
+		onDOMWindowCreatedListeners.forEach(listener => {
+			try { listener(cw); }
+			catch (error) { console.error('onDOMWindowCreated listener threw', error); }
 		});
+	}
 
-		const exportFunction = func => Cu.exportFunction(func, ucw, { allowCrossOriginArguments: true, });
-		const cloneInto = obj => Cu.cloneInto(obj, ucw, { cloneFunctions: false, }); // expose functions only explicitly through exportFunction
-		const needsCloning = obj => obj !== null && typeof obj === 'object' && Cu.getGlobalForObject(obj) !== ucw; // TODO: test
+	const api = ({
+		pause() {
+			if (pausing.size === 0) {
+				console.log('pausing now');
+				utils.suppressEventHandling(true);
+				utils.suspendTimeouts();
+			}
+			const token = Math.round(Math.random() * Number.MAX_SAFE_INTEGER);
+			pausing.add(token);
+			// console.log('pausing', pausing.size);
+			return token;
+		},
+		resume(token) {
+			const removed = pausing.delete(token);
+			if (pausing.size === 0) {
+				console.log('resuming now');
+				utils.suppressEventHandling(false);
+				utils.resumeTimeouts();
+			}
+			// console.log('resuming', pausing.size);
+			return removed;
+		},
+		onDOMWindowCreated: {
+			addListener(func) {
+				checkType(func, 'function');
+				if (onDOMWindowCreatedListeners.size === 0) {
+					cfmm.addEventListener('DOMWindowCreated', onDOMWindowCreatedDispatcher);
+				}
+				onDOMWindowCreatedListeners.add(func);
+			},
+			removeListener(func) {
+				const removed = onDOMWindowCreatedListeners.delete(func);
+				if (onDOMWindowCreatedListeners.size === 0) {
+					cfmm.removeEventListener('DOMWindowCreated', onDOMWindowCreatedDispatcher);
+				}
+				return removed;
+			}
+		},
+		utils: {
+			makeSandboxFor(cw) {
+				checkType(cw, 'object', 'context');
+				const ucw = Cu.waiveXrays(cw);
+				return Cu.Sandbox(ucw, {
+					sameZoneAs: ucw,
+					sandboxPrototype: ucw,
+					wantXrays: false,
+				});
+			},
+			evalInSandbox: Cu.evalInSandbox,
+			waiveXrays: Cu.waiveXrays,
+			getGlobalForObject: Cu.getGlobalForObject,
+		},
+		timers: {
+			setTimeout, clearTimeout,
+			setInterval, clearInterval,
+		},
+	});
 
-		sandbox.console = Cu.cloneInto(console, ucw, { cloneFunctions: true, });
-		sandbox.handleCriticalError = exportFunction(this.handleCriticalError.bind(this));
-		sandbox.profile = Cu.cloneInto(this.profile, ucw);
-		sandbox.isMainFrame = cw === this.top;
-		sandbox.exportFunction = exportFunction(exportFunction);
-		sandbox.cloneInto = exportFunction(cloneInto);
-		sandbox.needsCloning = exportFunction(needsCloning);
-		sandbox.sandbox = sandbox;
-		sandbox.ucw = ucw;
+	function checkType(value, type, name = 'argument') {
+		if (typeof value !== type) { throw new caller.TypeError(`"${ name }" must be a ${ type } (?)`); }
+	}
 
-		const exec = ({ content, name, offset, }) => Cu.evalInSandbox(
-			content, sandbox, 'latest',
-			__dirname +'/'+ name +'?'+ this.profile.nonce, // the nonce is needed to create unpredictable error stack fames that can be filtered
-			offset + 1
-		);
-/*
-		Cu.evalInSandbox(`
-			const x = 42;
-			window.a1 = new window.Array;
-			devicePixelRatio = 2;
-		`, sandbox);
-		Cu.evalInSandbox(`
-			window.y = x;
-		`, sandbox);
-*/
-		exec(files['globals.js']);
-		Object.keys(files.fake).forEach(key => exec(files.fake[key]));
-		exec(files['apply.js']);
-
-		ucw.profile = Cu.cloneInto(this.profile, ucw); // TODO: remove
-		console.log('injection done');
-	} catch (error) {
-		this.handleCriticalError(error, `Failed to inject code`);
-	} }
-
+	return Cu.cloneInto(api, caller, { cloneFunctions: true, });
 }
 
 function parseError(string) {

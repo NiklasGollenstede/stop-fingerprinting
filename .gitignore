@@ -7,7 +7,7 @@ npm-debug.log.*
 debug.log
 
 /build/
-/content/files.jsm
+/content/files.js
 /icons/*/*.png
 /icons/urls.js
 /native/native.*

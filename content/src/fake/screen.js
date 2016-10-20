@@ -1,5 +1,5 @@
 /* globals
-	define, makeNamedGetter, makeNamedSetter,
+	define, makeNamedGetter, makeGetter, makeSetter,
 	forEach,
 */
 
@@ -16,8 +16,8 @@ define('Screen.prototype', screen => forEach(props,
 
 define('self', {
 	devicePixelRatio: {
-		get: makeNamedGetter('devicePixelRatio', function( ) { return profile.screen.devicePixelRatio; }),
-		set: makeNamedSetter('devicePixelRatio', function(v) { }), // TODO: let it be set but (optionally ?) overwrite it when the tabs zoom changes
+		get: makeGetter(function devicePixelRatio( ) { return profile.screen.devicePixelRatio; }),
+		set: makeSetter(function devicePixelRatio(v) { }), // TODO: let it be set but (optionally ?) overwrite it when the tabs zoom changes
 	},
 });
 // TODO: make window.outerWidth/height match .inner...

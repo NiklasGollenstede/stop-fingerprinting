@@ -2,11 +2,13 @@
 	'node_modules/web-ext-utils/update/': updated,
 	'node_modules/es6lib/concurrent': { sleep, async, },
 	'node_modules/es6lib/functional': { throttle, },
+	'node_modules/es6lib/port': for_chrome_Messages,
 	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, browsingData, webNavigation, webRequest, applications: { gecko, }, content, },
 	'node_modules/web-ext-utils/utils': { showExtensionTab, },
 	'common/utils': { notify, domainFromUrl, setBrowserAction, },
 	'common/options': options,
 	'icons/urls': icons,
+	sdkConection,
 	RequestListener, RequestListener: { ignore, reset, },
 	Profiles,
 	require,
@@ -16,15 +18,13 @@ console.log('Ran updates', updated);
 window.options = options;
 window.Profiles = Profiles;
 
-let native; // chrome only: NativeConnector instance while it runs, null while it is down
+let nativeConnector; // chrome only: NativeConnector instance while it runs, null while it is down
 let echoPortNum = 0; // chrome only: the port number the native echo server runs at
 let started = true; // may be set to a promise that must resolve for this module to load successfully
-let sdk; // firefox only, object of functions that communicate with the sdk add-on
 const openMainFrameRequests = new Map; // tabId ==> Requests with .type === 'main_frame' that are currently active
 
 // start sync connection to content script
 if (gecko) {
-	// firefox frame scripts can send synchronous messages, so they are used instead of a content script
 
 	// attach the frame/precess scripts
 	const stop = content.start({
@@ -43,12 +43,12 @@ if (gecko) {
 	window.addEventListener('beforeunload', event => stop(), { once: true, });
 
 	// echo the current tab to the frame scripts (via a content script)
-	Messages.addHandler('getSenderTabId', function() {
-		return this.tab.id;
+	Messages.addHandler('getSenderProfile', function() {
+		const tabId = this.tab.id;
+		const profile = Profiles.get({ tabId, }).toJSON();
+		profile.tabId = tabId;
+		return profile;
 	});
-
-	// start connection to sdk add-on
-	sdk = (yield require.async('./sdk-conection'));
 } else {
 	// in chrome the only way to send a synchronous message (from the content script to the background)
 	// is to set request headers to a sync XHR and have a local http server 'echo' those headers into the response
@@ -57,12 +57,12 @@ if (gecko) {
 		version: 1,
 		ports: [ 46344, 35863, 34549, 40765, 48934, 47452, 10100, 5528 ],
 		onStart: async(function*() {
-			native = this;
+			nativeConnector = this;
 			echoPortNum = (yield this.port.request('getPort'));
 			console.log(`Native app running on https://localhost:${ echoPortNum }/`);
 		}),
 		onStop() {
-			native = null;
+			nativeConnector = null;
 			echoPortNum = 0;
 			console.error(`Native app closed, restarting ...`);
 			this.start();
