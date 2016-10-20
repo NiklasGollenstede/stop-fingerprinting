@@ -67,8 +67,8 @@ const build = module.exports = async(function*() {
 });
 
 
-if (process.argv[1] === __filename) {
-	build()
-	.then(() => console.log('/content/index.js created'))
-	.catch(error => { console.error(error); process.exit(-1); });
+if (require.main === module) {
+	module.exports = build(require('json5').parse(process.argv[2]))
+	.then(() => console.log('Build done'))
+	.catch(error => { console.error(error); process.exitCode = 1; throw error; });
 }

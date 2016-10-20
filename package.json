@@ -20,6 +20,7 @@
 		"imagemin": "5.2.1",
 		"imagemin-pngquant": "5.0.0",
 		"jpm": "1.2.2",
+		"json5": "0.5.0",
 		"svgexport": "0.3.2",
 		"utf-8-validate": "1.2.1",
 		"winreg": "1.2.2",
@@ -52,7 +53,7 @@
 
 	"main": "build.js",
 	"scripts": {
-		"start": "node-dwe --detach test/server && node-dwe --detach sdk/build.js -I -T -p",
+		"start": "node-dwe --detach test/server && node-dwe --detach build.js {icons:0,tld:0,post:1}",
 		"test": "mocha test/selenium",
 		"build": "node build",
 		"build-native": "nexe -i ./native/index.js -o ./native/native.exe -f",

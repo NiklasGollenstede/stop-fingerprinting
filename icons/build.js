@@ -68,7 +68,8 @@ const convert = promisify(require('svgexport').render);
 const imagemin = require('imagemin');
 const imageminPngquant = require('imagemin-pngquant');
 
-const build = module.exports = async(function*(names = Object.keys(icons)) {
+const build = module.exports = async(function*({ include, exclude, } = { }) {
+	const names = include ? include : Object.keys(icons).filter(name => !exclude || !exclude.includes(name));
 
 	const template = relative('template.svg');
 	(yield Promise.all(names.map(writeSvg)));
@@ -101,8 +102,9 @@ const build = module.exports = async(function*(names = Object.keys(icons)) {
 	}
 });
 
+
 if (require.main === module) {
-	module.exports = build(process.argv.length > 2 ? process.argv.slice(2) : Object.keys(icons))
+	module.exports = build(require('json5').parse(process.argv[2]))
 	.then(names => (console.log('icons created: "'+ names.join('", "') +'"'), names))
 	.catch(error => { console.error(error); process.exitCode = 1; throw error; });
 }
