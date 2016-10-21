@@ -153,7 +153,7 @@ const sdkPackageJson = {
 
 const {
 	concurrent: { async, spawn, promisify, },
-	functional: { log, },
+	functional,
 	fs: { FS, },
 	process: { execute, },
 } = require('es6lib');
@@ -164,19 +164,21 @@ const copy = promisify(fsExtra.copy);
 const remove = promisify(fsExtra.remove);
 const writeFile = promisify(fsExtra.outputFile);
 
+let log = function() { return arguments[arguments.length - 1]; };
+
 const buildContent = async(function*(options) {
 	(yield require('./content/build.js')(options));
-	console.log('/content/index.js created');
+	log('/content/index.js created');
 });
 
 const buildIcons = async(function*(options) {
 	const iconNames = (yield require('./icons/build.js')(options));
-	console.log('created icons: "'+ iconNames.join('", "') +'"');
+	log('created icons: "'+ iconNames.join('", "') +'"');
 });
 
 const buildTldJS = async(function*(options) {
 	const { data, list, } = (yield require('./node_modules/get-tld/build-node.js')(options));
-	console.log(`./node_modules/get-tld/index.js created/updated (${ list.length } => ${ data.length } bytes)`);
+	log(`./node_modules/get-tld/index.js created/updated (${ list.length } => ${ data.length } bytes)`);
 });
 
 const buildUpdate = async(function*(options) {
@@ -187,7 +189,7 @@ const buildUpdate = async(function*(options) {
 		.map(path => basename(path).slice(0, -3));
 		(yield outputJson(resolve(__dirname, `update/${ component }/versions.json`), names));
 	}
-	console.log('wrote version info');
+	log('wrote version info');
 });
 
 const copyFiles = async(function*(files, from, to) {
@@ -198,13 +200,14 @@ const copyFiles = async(function*(files, from, to) {
 	})('.', files);
 
 	(yield Promise.all(paths.map(path =>
-		copy(join(from, path), join('build', to, path))
-		.catch(error => console.warn('Skipping missing file/folder "'+ path +'"'))
+		copy(join(from, path), join(to, path))
+		.catch(error => console.warn('Skipping missing file/folder "'+ path +'"', error))
 	)));
 });
 
 const build = module.exports = async(function*(options) {
 	const outputName = packageJson.title.toLowerCase().replace(/[^a-z0-9\.-]+/g, '_') +'-'+ packageJson.version;
+	const outDir = options.outDir || resolve(__dirname, './build');
 
 	const trueisch = value => value === undefined || value;
 
@@ -213,7 +216,7 @@ const build = module.exports = async(function*(options) {
 		trueisch(options.icons)   &&   buildIcons(options.icons   || { }),
 		trueisch(options.tld)     &&   buildTldJS(options.tld     || { }),
 		trueisch(options.update)  &&  buildUpdate(options.update  || { }),
-		(yield remove(resolve(__dirname, './build'))),
+		(!options.outDir || options.clearOutDir) && (yield remove(outDir)),
 	]));
 
 	// write all resolutions of the default icon
@@ -224,37 +227,40 @@ const build = module.exports = async(function*(options) {
 	options.selenium && (webExtManifestJson.seleniun_setup_port = options.selenium.setupPort);
 
 	(yield Promise.all([
-		copyFiles(webExtFiles, '.', 'webextension'),
-		copyFiles(sdkRootFiles, '.', '.'),
-		copyFiles(sdkFiles, 'sdk', '.'),
-		writeFile(resolve(__dirname, './build/package.json'), JSON.stringify(sdkPackageJson, null, '\t', 'utf8')),
-		writeFile(resolve(__dirname, './build/webextension/manifest.json'), JSON.stringify(webExtManifestJson, null, '\t', 'utf8')),
+		copyFiles(webExtFiles, '.', join(outDir, 'webextension')),
+		copyFiles(sdkRootFiles, '.', join(outDir, '.')),
+		copyFiles(sdkFiles, 'sdk', join(outDir, '.')),
+		writeFile(join(outDir, 'package.json'), JSON.stringify(sdkPackageJson, null, '\t', 'utf8')),
+		writeFile(join(outDir, 'webextension/manifest.json'), JSON.stringify(webExtManifestJson, null, '\t', 'utf8')),
 	]));
 
 	if (options.selenium) { // change the main module for selenium tests
-		const path = resolve(__dirname, './build/webextension/background/index.html');
+		const path = join(outDir, 'webextension/background/index.html');
 		const main = (yield writeFile(path, (yield FS.readFile(path, 'utf8')).replace(/data-main="\.\/"/g, 'data-main="./selenium"')));
 	}
 
-	const jpm = 'node "'+ resolve(__dirname, './node_modules/jpm/bin/jpm') +'"';
-	const run = command => execute(command, { cwd: __dirname +'/build', });
+	const jpm = 'node "'+ resolve(__dirname, 'node_modules/jpm/bin/jpm') +'"';
+	const run = command => execute(command, { cwd: outDir, });
 
 	if (options.xpi || (!options.run && !options.post && !options.zip)) {
-		console.log((yield run(jpm +' xpi')).replace(packageJson.name, outputName));
-		(yield FS.rename(`./build/${ packageJson.name }.xpi`, `./build/${ outputName }.xpi`));
+		log((yield run(jpm +' xpi')).replace(packageJson.name, outputName));
+		(yield FS.rename(join(outDir, packageJson.name +'.xpi'), join(outDir, outputName +'.xpi')));
 	}
 	if (options.run) {
-		console.log((yield run(jpm +' run'+ (options.run.bin ? ' -b "'+ options.run.bin  +'"' : ''))));
+		log((yield run(jpm +' run'+ (options.run.bin ? ' -b "'+ options.run.bin  +'"' : ''))));
 	}
 	if (options.post) {
-		console.log((yield run(jpm +' post --post-url "'+ (options.post.url || 'http://localhost:8888/') +'"')));
+		const url = options.post.url
+		? typeof options.post.url === 'number' ? 'http://localhost:'+ options.post.url +'/' : options.post.url
+		: 'http://localhost:8888/';
+		log((yield run(jpm +' post --post-url "'+ url +'"')));
 	}
 	if (options.zip) {
 		(yield promisify(require('zip-dir'))('./build/webextension', {
 			filter: path => !(/\.(?:zip|xpi)$/).test(path),
-			saveTo: `./build/${ outputName }.zip`,
+			saveTo: join(outDir, outputName +'.zip'),
 		}));
-		console.log('wrote WebExtension zip to', `./build/${ outputName }.zip`);
+		log('wrote WebExtension zip to', join(outDir, outputName +'.zip'));
 	}
 
 	return outputName;
@@ -262,7 +268,8 @@ const build = module.exports = async(function*(options) {
 
 
 if (require.main === module) {
+	log = functional.log; // enable logging
 	module.exports = build(require('json5').parse(process.argv[2] || '{ }'))
-	.then(name => (console.log('Build done:', name), name))
+	.then(name => log('Build done:', name))
 	.catch(error => { console.error(error); process.exitCode = 1; throw error; });
 }

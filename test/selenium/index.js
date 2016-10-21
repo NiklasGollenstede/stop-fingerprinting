@@ -12,9 +12,8 @@ const {
 
 const HttpServer = require('../server/index.js');
 const buildExt = require('../../build.js');
-const extDir = Path.resolve(__dirname, '../../build');
 
-// const makeTempDir = promisify(require('temp')/*.track()*/.mkdir);
+const makeTempDir = promisify(require('temp').mkdir);
 const eventToPromise = require('event-to-promise');
 const Https = require('https'), Http = require('http');
 const getBody = require('raw-body');
@@ -22,81 +21,105 @@ const getBody = require('raw-body');
 const { Builder, } = require('selenium-webdriver');
 const Chrome = require('selenium-webdriver/chrome');
 const Firefox = require('selenium-webdriver/firefox');
+const { Key, } = require('selenium-webdriver/lib/input');
 
 
 const TestPrototype = {
 
-	// create profile folder, start setup server, build add-on
 	constructor: async(function*() {
-		(yield this._startSetupServer());
+		// start a web server which the extension will contact during startup
+		this.setupServer = new Http.Server(this._onSetupRequest.bind(this));
+		(yield eventToPromise(this.setupServer.listen(0), 'listening'));
+		this.setupServer.close = promisify(this.setupServer.close);
+		this.setupPort = this.setupServer.address().port;
 
+		// build add-on and create a firefox builder with it
+		this.tempDir = (yield makeTempDir('add-on-build'));
 		this.extName = (yield buildExt({
 			icons: false, tld: false, // no need to rebuild these every time
 			selenium: { setupPort: this.setupPort, },
 			xpi: true,
+			outDir: this.tempDir,
 		}));
-		this.extPath = Path.join(extDir, this.extName +'.xpi');
+		this.extPath = Path.join(this.tempDir, this.extName +'.xpi');
+		this._makeBuilder();
 
-		this.httpServer = null;
-		this.pendingStartUp = null;
-		this.browser = null;
-		return this;
-	}),
-
-	// start HTTP server
-	init: async(function*() {
-		if (this.httpServer) { throw new Error('HTTP server already started'); }
-
-		this.httpServer = (yield new HttpServer({
+		const log = this.serverLogs = [ ];
+		this.server = (yield new HttpServer({
 			httpPorts: [ 0, ],
 			httpsPorts: [ 0, ],
 			upgradePorts: { },
+			log(header) { log.push(header); },
+			serveFromFS: false,
+			favicon: 'ignore',
 		}));
 
-		(yield this._makeBuilder());
+		this.pendingStartUp = null; // holds a PromiseCapability with additional options while the browser is starting
+		this.browser = null; // reference to the browser driver, while it runs
+		return this;
 	}),
 
-	// start browser with config, clear server logs
+	// start browser with config, wait for the add-on to have started, clear server logs
 	start: async(function*({ storage, }) {
 		if (this.browser || this.pendingStartUp) { throw new Error('Browser already started'); }
 
 		const ctx = this.pendingStartUp = { storage, };
-		const done = new Promise((y, n) => { ctx.resolve = y; ctx.reject = n; });
+		const done = ctx.promise = new Promise((y, n) => { ctx.resolve = y; ctx.reject = n; });
 		this.browser = (yield this.builder.buildAsync());
 		(yield done);
 		this.pendingStartUp = null;
-
+		this.takeLogs();
 		return this.browser;
 	}),
 
 	// close browser, clear server logs
-	stop: async(function*() {
-		if (this.pendingStartUp) { } // ???
-		if (!this.browser) { return; }
-
+	stop: async(function*() { // TODO: add 'force' option
+		this.pendingStartUp && (yield this.pendingStartUp.promise);
 		this.browser && (yield this.browser.quit());
 		this.browser = null;
+		this.takeLogs();
 	}),
 
-	// stop HTTP server, calls stop()
-	uninit: async(function*() {
-		(yield this.stop());
-		this.httpServer && (yield this.httpServer.close());
-		this.httpServer = null;
+	// stop servers, calls .stop(true)
+	destroy: async(function*() {
+		(yield this.stop(true));
+		this.server && (yield this.server.close());
+		this.server = null;
+		this.setupServer && (yield this.setupServer.close());
+		this.setupServer = null;
 		// TODO: destroy builder
 		this.builder = null;
 	}),
 
-	// undo constructor();
-	destroy: async(function*() {
-		(yield this.uninit());
-		this.setUpServer && (yield this.setUpServer.close());
-		this.setUpServer = null;
+	takeLogs() {
+		return this.serverLogs.splice(0, Infinity);
+	},
+	peekLogs() {
+		return this.serverLogs.slice(0, Infinity);
+	},
+/*
+	openTab: async(function*(url) {
+		(yield this.browser.executeScript('window.open()')); console.log('opened');
+		// TODO: wait?
+		(yield this.focusTab()); console.log('focused');
+		url != null && (yield this.browser.get(url)); console.log('navigated');
 	}),
-
-	_makeBuilder: async(function*() {
+	focusTab: async(function*(index) {
+		const tabs = (yield this.browser.getAllWindowHandles()); console.log('tabs', tabs);
+		index = index == null ? tabs.length - 1 : index < 0 ? tabs.length - 1 + length : length;
+		index = Math.max(0, Math.min(index, tabs.length - 1)); console.log('index', index);
+		(yield this.browser.switchTo().window(tabs[index]));
+	}),
+	closeTab: async(function*(index) {
+		index != null && (yield this.focusTab(index));
+		(yield this.browser.close());
+		// (yield this.browser.executeScript('window.close()'));
+		(yield this.focusTab(0));
+	}),
+*/
+	_makeBuilder: (function() {
 		const chromeOpts = new Chrome.Options();
-		chromeOpts.addArguments(`load-extension=${ extDir }/webextension`);
+		chromeOpts.addArguments(`load-extension=${ this.tempDir }/webextension`);
 
 		const ffProfile = new Firefox.Profile();
 		ffProfile.setPreference('extensions.@stop-fingerprinting.sdk.console.logLevel', 'all');
@@ -104,6 +127,10 @@ const TestPrototype = {
 		ffProfile.setPreference('extensions.checkCompatibility.51.0a', false); // FF51 devEdition
 		ffProfile.setPreference('extensions.checkCompatibility.51.0b', false); // FF51 beta
 		ffProfile.addExtension(this.extPath);
+
+		// these don't seem to work
+		ffProfile.setAcceptUntrustedCerts(true);
+		ffProfile.setAssumeUntrustedCertIssuer(true);
 
 		const ffOpts = new Firefox.Options();
 		// ffOpts.setBinary(new Firefox.Binary().useDevEdition(true));
@@ -118,19 +145,11 @@ const TestPrototype = {
 		;
 	}),
 
-	// start a web server which the extension will contact during startup
-	_startSetupServer: async(function*() {
-		this.setupServer = new Http.Server(this._onSetupRequest.bind(this));
-		(yield eventToPromise(this.setupServer.listen(0), 'listening'));
-		this.setupServer.close = promisify(this.setupServer.close);
-		this.setupPort = this.setupServer.address().port;
-	}),
 	_onSetupRequest({ url, body, }, out) {
 		const ctx = this.pendingStartUp;
 		switch (url.slice(1)) {
 			case 'get-storage': {
 				out.write(JSON.stringify(ctx.storage || { }));
-				console.log('get-storage', ctx.storage);
 			} break;
 			case 'statup-done': {
 				ctx.resolve();
@@ -158,7 +177,6 @@ Test.register = function(options) {
 
 	before(async(function*() {
 		test = (yield new Test);
-		(yield test.init());
 		options.created(test);
 	}));
 

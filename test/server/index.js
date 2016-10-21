@@ -1,5 +1,4 @@
-(() => { 'use strict';
-/* globals __dirname, __filename, module, exports, process, global */
+(() => { 'use strict'; /* globals __dirname, __filename, module, exports, process, global, Buffer, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 const Express = require('express');
 const BodyParser = require('body-parser');
@@ -20,8 +19,12 @@ const Server = module.exports = async(function*({
 	httpsPorts = [ 443, 4430, 4431, 4432, 4433, ],
 	upgradePorts = { 8080: 443, },
 	certPath = './cert/test',
-	debug = true,
+	log: logger = console.log,
+	serveFromFS = true,
+	favicon = true,
 } = { }) {
+
+this.serveFromFS = serveFromFS;
 
 const https = httpsPorts.length && {
 	key: FS.readFile(Path.resolve(__dirname, certPath +'.key'), 'utf8'),
@@ -30,20 +33,45 @@ const https = httpsPorts.length && {
 
 const app = Express();
 
-// log
-debug && app.all('/*', (r, x, n) => (console.log(r.method, r.url +' '+ r.protocol.toUpperCase() +'/'+ r.httpVersion, r.xhr ? ' xhr' : '', joinHeaders(r.rawHeaders)), n()));
-
-// serve favicon
-app.use(require('serve-favicon')(__dirname + './../../icons/default/32.png'));
-
 // employ CSP
 CSP(app, { origins, });
 
+// handle favicons before the logging to ignore them
+favicon === 'ignore' && app.use(require('serve-favicon')(__dirname + './../../icons/default/32.png'));
+
+// log
+app.all('/*', (r, _, next) => {
+	logger(
+		r.method +' '+ r.url +' '
+		+ r.protocol.toUpperCase() +'/'+ r.httpVersion + (r.xhr ? ' xhr' : '')
+		+ joinHeaders(r.rawHeaders)
+	);
+	next();
+});
+
+// by default log favicons after logging them
+favicon && app.use(require('serve-favicon')(__dirname + './../../icons/default/32.png'));
+
+app.get('/', ({ url, }, reply, next) => {
+	url === '/' && (url = '/index.html');
+
+	const file = this.files && this.files[url.slice(1)];
+	if (typeof file !== 'string' && !(file instanceof Buffer)) { return next(); }
+
+	const mimeType = mimeTypes[url.match((/\.[^\\\/]{1,20}$/) || [ ])[0]];
+	reply.writeHead(200, mimeType && {
+		'content-type': mimeType,
+	});
+	reply.end(file);
+});
+
 // serve files
-app.use(Express.static(__dirname +'./../clinent/'));
-app.use('/fingerprintjs2.js', Express.static(__dirname +'./../../node_modules/fingerprintjs2/fingerprint2.js'));
-
-
+const ifFiles = handler => (a, b, next) => {
+	if (this.serveFromFS) { return handler(a, b, next); }
+	next();
+};
+app.use(ifFiles(Express.static(__dirname +'./../clinent/')));
+app.use('/fingerprintjs2.js', ifFiles(Express.static(__dirname +'./../../node_modules/fingerprintjs2/fingerprint2.js')));
 
 /**
  ** Startup
@@ -68,7 +96,7 @@ if (https) {
 		const to = upgradePorts[from];
 		const server = Http.createServer(Express().use((req, res) => {
 			const target = 'https://' + req.get('host').replace(from, to) + req.url;
-			debug && console.log('redirect to', target);
+			// console.log('redirect to', target);
 			res.redirect(target);
 		}));
 		return listen(server, from);
@@ -97,7 +125,7 @@ function joinHeaders(raw) {
 
 if (require.main === module) {
 	global.Server = Server;
-	module.exports = new Server()
+	module.exports = new Server(require('json5').parse(process.argv[2] || '{ }'))
 	.then(server => (console.log('Started server'), server))
 	.catch(error => { console.error(error); process.exitCode = 1; throw error; });
 }
