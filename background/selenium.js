@@ -5,18 +5,14 @@
 	module,
 }) {
 
-// for selenium tests this script needs to be required as the root script instead of ./index.js
-
-const port = runtime.getManifest().seleniun_setup_port;
-if (!port || (yield Storage.local.get([ '__update__.local.version', ]))['__update__.local.version']) {
-	return require.async('background/index'); // not selenium test after all, this script should not have been included
-}
+// for selenium tests this script is automatically set as the main module instead of ./index.js
+const port = runtime.getManifest().seleniun_setup_port; // set by the selenium build options
 
 // load the sdk-conection to prevent timeout; no need to wait for it, though
 gecko && require.async('./sdk-conection');
 
 // report possible error during startup
-require.cache[module.id].promise
+module.promise
 // .then(() => console.log('selenium bootstrap done'))
 .catch(error => {
 	HttpRequest(`http://localhost:${ port }/statup-failed`, { method: 'post', body: error && (error.stack || error.message) || error, });
@@ -24,14 +20,11 @@ require.cache[module.id].promise
 });
 
 // get initial storage
-let storage; try {
-	storage = (yield HttpRequest(`http://localhost:${ port }/get-storage`)).response;
-} catch (error) {
-	return require.async('background/index'); // not selenium test after all, this script should not have been included
-}
-const { local, sync, } = JSON.parse(storage);
-(yield Storage.local.set(local || { }));
-(yield Storage.sync.set(sync || { }));
+const { local, sync, } = JSON.parse((yield HttpRequest(`http://localhost:${ port }/get-storage`)).response);
+(yield Storage.local.clear());
+local && (yield Storage.local.set(local));
+(yield Storage.sync.clear());
+sync && (yield Storage.sync.set(sync));
 
 // start extension
 (yield require.async('background/index'));

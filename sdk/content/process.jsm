@@ -128,6 +128,8 @@ class Frame {
 
 function PageUtils(cfmm, caller, top, utils) {
 
+	// is utils.setCSSViewport() callable and useful?
+
 	const pausing = new Set;
 	const onDOMWindowCreatedListeners = new Set;
 
@@ -188,7 +190,7 @@ function PageUtils(cfmm, caller, top, utils) {
 				});
 			},
 			evalInSandbox: Cu.evalInSandbox,
-			waiveXrays: Cu.waiveXrays,
+			// waiveXrays: Cu.waiveXrays, // this doesn't work
 			getGlobalForObject: Cu.getGlobalForObject,
 		},
 		timers: {

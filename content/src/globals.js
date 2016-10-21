@@ -244,7 +244,7 @@ function cloneError(error) { // TODO: test
 	return new Ctor(error.message); // this constructs page objects, so it _should_ be safe
 }
 
-let apis = { };
+sandbox.apis = { }; /* global apis */
 const define = function define(name, object) {
 	let current = apis[name] || { };
 	if (typeof object === 'function') { object = object(current); }

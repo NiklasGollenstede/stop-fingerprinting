@@ -31,7 +31,7 @@ const https = httpsPorts.length && {
 const app = Express();
 
 // log
-debug && app.all('/*', (r, x, n) => (console.log(r.method, r.hostname + r.url, r.xhr ? 'xhr' : '', joinHeaders(r.rawHeaders)), n()));
+debug && app.all('/*', (r, x, n) => (console.log(r.method, r.url +' '+ r.protocol.toUpperCase() +'/'+ r.httpVersion, r.xhr ? ' xhr' : '', joinHeaders(r.rawHeaders)), n()));
 
 // serve favicon
 app.use(require('serve-favicon')(__dirname + './../../icons/default/32.png'));
@@ -66,7 +66,7 @@ if (https) {
 	// upgrade
 	this.upgrade = (yield Promise.all(Object.keys(upgradePorts).map(from => {
 		const to = upgradePorts[from];
-		const server = Https.createServer(Express().use((req, res) => {
+		const server = Http.createServer(Express().use((req, res) => {
 			const target = 'https://' + req.get('host').replace(from, to) + req.url;
 			debug && console.log('redirect to', target);
 			res.redirect(target);
@@ -77,7 +77,7 @@ if (https) {
 
 // http
 this.http = (yield Promise.all(httpPorts.map(port => {
-	const server = Https.createServer(app);
+	const server = Http.createServer(app);
 	return listen(server, port);
 })));
 

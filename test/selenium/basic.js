@@ -4,11 +4,21 @@ const {
 	concurrent: { async, },
 } = require('es6lib');
 
-require('.')('Stop Fingerpriting should', function(ctx) {
+const Test = require('.');
+
+describe('Stop Fingerpriting should', (function() {
+	this.timeout(15000);
+	let test; Test.register({
+		created(_) { test = _; },
+	});
+
 	it('start with options', async(function*() {
-		const port = ctx.httpServer.https[0].address().port;
-		const driver = (yield ctx.build({ storage: { sync: { '<default>.rules.screen.devicePixelRatio': [ 8, ], }, }, }));
-		(yield driver.get(`https://localhost:${ port }/`));
-		expect((yield driver.executeScript(() => window.devicePixelRatio))).to.equal(8);
+		const port = test.httpServer.http[0].address().port;
+		const browser = (yield test.start({ storage: { sync: {
+			'<default>.rules.screen.devicePixelRatio': [ 8, ],
+		}, }, }));
+		(yield browser.get(`http://localhost:${ port }/`));
+		expect((yield browser.executeScript(() => window.devicePixelRatio))).to.equal(8);
 	}));
-});
+
+}));

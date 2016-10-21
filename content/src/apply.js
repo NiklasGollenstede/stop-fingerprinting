@@ -36,7 +36,3 @@ function setProps(object, descs) {
 	});
 	return object;
 }
-
-global.apis = apis;
-
-console.log('global', global, apis);

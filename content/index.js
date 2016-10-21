@@ -15,14 +15,14 @@ spawn(function*() {
 	const profile = (yield Messages.request('getSenderProfile'));
 	const { tabId, } = profile;
 
-	console.log('got tabId', tabId);
+	console.log('got profile', profile);
 
 	page.onDOMWindowCreated.addListener(injectInto);
 	injectInto(window);
 
 
 	function injectInto(cw) { try {
-		const ucw = utils.waiveXrays(cw);
+		const ucw = cw.wrappedJSObject;
 		if (!profile) { return; }
 
 		const sandbox = utils.makeSandboxFor(cw);
@@ -31,7 +31,7 @@ spawn(function*() {
 		const cloneInto = obj => utils.cloneInto(obj, ucw, { cloneFunctions: false, }); // expose functions only explicitly through exportFunction
 		const needsCloning = obj => obj !== null && typeof obj === 'object' && utils.getGlobalForObject(obj) !== ucw; // TODO: test
 
-		sandbox.console = console; // utils.cloneInto(console, ucw, { cloneFunctions: true, });
+		sandbox.console = console;
 		sandbox.handleCriticalError = exportFunction(handleCriticalError.bind(this));
 		sandbox.profile = cloneInto(profile);
 		sandbox.isMainFrame = cw === window;
@@ -51,8 +51,11 @@ spawn(function*() {
 		Object.keys(files.fake).forEach(key => exec(files.fake[key]));
 		exec(files['apply.js']);
 
-		ucw.profile = cloneInto(profile); // TODO: remove
-		console.log('injection done');
+		if (profile.debug) { // TODO: remove
+			ucw.profile = cloneInto(profile);
+			ucw.apis = sandbox.apis;
+		}
+		console.log('injection done', profile.debug);
 	} catch (error) {
 		handleCriticalError(error, `Failed to inject code`);
 	} }

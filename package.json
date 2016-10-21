@@ -36,8 +36,8 @@
 		"chai": "3.5.0",
 		"chai-as-promised": "5.3.0",
 		"mocha": "2.5.3",
-		"selenium-webdriver": "3.0.0-beta-2",
 		"raw-body": "2.1.7",
+		"selenium-webdriver": "3.0.0-beta-3",
 
 		"nexe": "1.1.2",
 
@@ -53,7 +53,7 @@
 
 	"main": "build.js",
 	"scripts": {
-		"start": "node-dwe --detach test/server && node-dwe --detach build.js {icons:0,tld:0,post:1}",
+		"start": "node-dwe test/server && node-dwe build.js {icons:0,tld:0,post:1}",
 		"test": "mocha test/selenium",
 		"build": "node build",
 		"build-native": "nexe -i ./native/index.js -o ./native/native.exe -f",
