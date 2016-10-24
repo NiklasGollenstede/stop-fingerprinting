@@ -24,7 +24,9 @@ function setProps(object, descs) {
 		if (!hasOwnProperty(object, key)) {
 			if (desc.add) {
 				assign(desc, desc.add);
-			} else{
+			} else {
+				console.log('not adding ', object, key, desc);
+				// ???: should this throw (later?)?
 				return;
 			}
 		}

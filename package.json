@@ -53,7 +53,7 @@
 
 	"main": "build.js",
 	"scripts": {
-		"start": "node-dwe test/server && node-dwe build.js {icons:0,tld:0,post:1}",
+		"start": "node-dwe test/server {useCsp:0} && node-dwe build.js {icons:0,tld:0,post:1}",
 		"test": "mocha test/selenium",
 		"build": "node build",
 		"build-native": "nexe -i ./native/index.js -o ./native/native.exe -f",

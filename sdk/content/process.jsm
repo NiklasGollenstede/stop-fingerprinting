@@ -128,17 +128,19 @@ class Frame {
 
 function PageUtils(cfmm, caller, top, utils) {
 
-	// is utils.setCSSViewport() callable and useful?
+	// ???: is utils.setCSSViewport() callable and useful?
 
 	const pausing = new Set;
 	const onDOMWindowCreatedListeners = new Set;
 
 	function onDOMWindowCreatedDispatcher(event) {
-		const cw = Cu.cloneInto(event.target.defaultView, caller);
+		const cw = event.target.defaultView;
 		onDOMWindowCreatedListeners.forEach(listener => {
 			try { listener(cw); }
 			catch (error) { console.error('onDOMWindowCreated listener threw', error); }
 		});
+		// TODO: 'crawl' cw (opener, parent, top, ...) and notify this and other PageUtils (potentially in other processes ...) in some way
+		// ???: is there any way that a window A can get a reference to an other windows B if there was no reference from B to A when B was created?
 	}
 
 	const api = ({
@@ -220,7 +222,20 @@ function isScriptable(cw) {
 		if (url == null) { console.warn('isScriptable called with null url'); return false; }
 		if (url.length === 0) { console.warn('isScriptable called with empty url'); return false; }
 		const nsIURI = BrowserUtils.makeURI(url);
-		return allUrls.matches(nsIURI) && !amoUrl.matches(nsIURI);
+	// 	return allUrls.matches(nsIURI) && !amoUrl.matches(nsIURI);
+
+		if (allUrls.matches(nsIURI) && !amoUrl.matches(nsIURI)) {
+			return true;
+		} else {
+			debugger;
+			console.log('unscriptable window', cw, url, cw.location, cw.opener);
+			// TODO: after `window.open()` the new windows url is`'about:blank' (and thus unscriptable) but the `window.opener` is already set.
+			// so this function should probably return isScriptable(cw.opener)
+			// but TODO: test if this is the only case where `window.opener` is set
+			debugger;
+			return false;
+		}
+		// it might be worth a bug report that causing a reference error here (window) crashes the entire browser (and prevents it from starting)
 	} catch (error) {
 		console.error('isScriptable ', cw, ' threw', error);
 		return false;

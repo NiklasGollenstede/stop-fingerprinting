@@ -19,12 +19,15 @@ module.promise
 	throw error;
 });
 
-// get initial storage
-const { local, sync, } = JSON.parse((yield HttpRequest(`http://localhost:${ port }/get-storage`)).response);
+// get options
+const options = JSON.parse((yield HttpRequest(`http://localhost:${ port }/get-options`)).response);
 (yield Storage.local.clear());
-local && (yield Storage.local.set(local));
 (yield Storage.sync.clear());
-sync && (yield Storage.sync.set(sync));
+if (options.storage) {
+	const { local, sync, } = options.storage;
+	local && (yield Storage.local.set(local));
+	sync && (yield Storage.sync.set(sync));
+}
 
 // start extension
 (yield require.async('background/index'));

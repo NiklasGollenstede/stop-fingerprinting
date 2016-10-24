@@ -14,7 +14,7 @@ const CSP = require('./csp.js');
 
 const Server = module.exports = async(function*({
 	host = 'localhost',
-	origins = null,
+	useCsp = { },
 	httpPorts = [ 80, ],
 	httpsPorts = [ 443, 4430, 4431, 4432, 4433, ],
 	upgradePorts = { 8080: 443, },
@@ -34,7 +34,7 @@ const https = httpsPorts.length && {
 const app = Express();
 
 // employ CSP
-CSP(app, { origins, });
+useCsp && CSP(app, useCsp);
 
 // handle favicons before the logging to ignore them
 favicon === 'ignore' && app.use(require('serve-favicon')(__dirname + './../../icons/default/32.png'));
@@ -52,17 +52,26 @@ app.all('/*', (r, _, next) => {
 // by default log favicons after logging them
 favicon && app.use(require('serve-favicon')(__dirname + './../../icons/default/32.png'));
 
-app.get('/', ({ url, }, reply, next) => {
+// let __files; Object.defineProperty(this, 'files', { get() { return __files; }, set(v) { console.log('set .files', v); __files = v; }, });
+
+app.get(/^/, ({ url, }, reply, next) => {
 	url === '/' && (url = '/index.html');
 
-	const file = this.files && this.files[url.slice(1)];
-	if (typeof file !== 'string' && !(file instanceof Buffer)) { return next(); }
+	let file = this.files && this.files[url.slice(1)];
+	if (typeof file === 'string' || (file instanceof Buffer)) {
+		file = { content: file, };
+	}
+	if (file === null || typeof file !== 'object') { return next(); }
 
-	const mimeType = mimeTypes[url.match((/\.[^\\\/]{1,20}$/) || [ ])[0]];
-	reply.writeHead(200, mimeType && {
-		'content-type': mimeType,
-	});
-	reply.end(file);
+	const mimeType = file.mimeType || mimeTypes[url.match((/\.[^\\\/]{1,20}$/) || [ ])[0]];
+	reply.writeHead(200, Object.assign(mimeType ? { 'content-type': mimeType, } : { }, file.headers));
+
+	if (file.content != null) {
+		reply.end(file.content);
+	} else {
+		const stream = FS.createReadStream(Path.resolve(__dirname, '../clinent/', file.path));
+		stream.pipe(reply);
+	}
 });
 
 // serve files
@@ -72,6 +81,15 @@ const ifFiles = handler => (a, b, next) => {
 };
 app.use(ifFiles(Express.static(__dirname +'./../clinent/')));
 app.use('/fingerprintjs2.js', ifFiles(Express.static(__dirname +'./../../node_modules/fingerprintjs2/fingerprint2.js')));
+
+app.use(function(error, { url, }, reply, __) {
+	console.error('Unhandled error in reply to', url, error);
+	reply.destroy(); // kill the connection to display 'about:neterror'
+});
+app.use(function({ url, }, reply, __) {
+	console.log('Unhandled request to', url);
+	reply.destroy(); // kill the connection to display 'about:neterror'
+});
 
 /**
  ** Startup

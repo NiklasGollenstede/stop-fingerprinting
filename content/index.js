@@ -1,5 +1,8 @@
-(function(global) { 'use strict'; /* globals browser, cloneInto, exportFunction, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; try { /* globals browser, cloneInto, exportFunction, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 const __dirname = 'resource://stop-fingerprinting/webextension/content';
+
+if (document.body) { return; } // TODO: this should actually never happen, but it does when the extension is installed/reloaded.
+// I don't think that is intended behaviour. This line should be removed (once the reload behaviour is solved)!
 
 const { files, } = global;
 
@@ -51,6 +54,9 @@ spawn(function*() {
 		Object.keys(files.fake).forEach(key => exec(files.fake[key]));
 		exec(files['apply.js']);
 
+		// TODO: there are cases (the first load in a new using Crl+Click) where the direct window. properties
+		// are overwritten/not applied, but those on other objects (e.g. Screen.ptt) work
+
 		if (profile.debug) { // TODO: remove
 			ucw.profile = cloneInto(profile);
 			ucw.apis = sandbox.apis;
@@ -86,4 +92,7 @@ function spawn(generator) {
 	return Promise.resolve().then(next);
 }
 
-})((function() { return this; })());
+} catch (error) {
+	console.error(error);
+	alert(`Stop Fingerprinting totally failed, please try to reload or close the tab.\nIf you ignore this message Stop Fingerprinting won't be able to protect your privacy!`);
+} })((function() { return this; })());

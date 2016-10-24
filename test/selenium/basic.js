@@ -1,19 +1,18 @@
 'use strict'; /* globals describe, it, beforeEach, afterEach, before, after, __dirname, expect */
 
 const {
-	concurrent: { async, },
+	concurrent: { async, sleep, },
 } = require('es6lib');
+
+const { error: { WebDriverError, }, } = require('selenium-webdriver');
 
 const Test = require('.');
 
 describe('These tests should', (function() {
-	this.timeout(1000);
-	const getTest = new Test;
 	let test, browser, port;
-
-	before(async(function*() {
-		this.timeout(6000);
-		test = (yield getTest);
+	Test.register({
+	}, async(function*(_test) {
+		test = _test;
 		browser = (yield test.start({ storage: { sync: {
 			'<default>.rules.screen.devicePixelRatio': [ { from: 8, to: 8, }, ],
 			'options.debug': [ true, ],
@@ -21,41 +20,77 @@ describe('These tests should', (function() {
 		port = test.server.http[0].address().port;
 	}));
 
-	after(() => test && test.destroy());
-
 	it('start with options', async(function*() {
+		test.server.files = {
+			'index.html': '',
+		};
 
 		(yield browser.get(`http://localhost:${ port }/`));
 		expect((yield browser.executeScript(() => window.devicePixelRatio))).to.equal(8);
 	}));
 
-	it('serve virtual files', async(function*() {
+	it(`serve virtual files for '/'`, async(function*() {
 		test.server.files = {
-			'index.html': '<script>test=42</script>',
+			'index.html': '<script>test = 23</script>',
 		};
 
 		(yield browser.get(`http://localhost:${ port }/`));
+		expect((yield browser.executeScript(() => window.test))).to.equal(23);
+	}));
+
+	it('serve virtual files', async(function*() {
+		test.server.files = {
+			'index2.html': '<script>test = 42</script>',
+		};
+
+		(yield browser.get(`http://localhost:${ port }/index2.html`));
 		expect((yield browser.executeScript(() => window.test))).to.equal(42);
+	}));
+
+	it('serve changing virtual files', async(function*() {
+		test.server.files = {
+			'index.html': '<script>test = 1</script>',
+		};
+
+		(yield browser.get(`http://localhost:${ port }/`));
+		expect((yield browser.executeScript(() => window.test))).to.equal(1);
+
+		test.server.files = {
+			'index.html': '<script>test = 2</script>',
+		};
+
+		(yield browser.get(`http://localhost:${ port }/`));
+		expect((yield browser.executeScript(() => window.test))).to.equal(2);
 	}));
 
 	it('not serve real files', async(function*() {
 		test.server.files = null;
 
+		(yield () => browser.get(`http://localhost:${ port }/`).should.eventuelly.throw(WebDriverError));
+		// expect((yield browser.executeScript(() => window.document.title))).to.not.equal('Stop Fingerprinting Test');
+	}));
+
+	it('navigate to about:blank', async(function*() {
+		test.server.files = {
+			'index.html': '<script>document.title = "blob"</script>',
+		};
+
 		(yield browser.get(`http://localhost:${ port }/`));
-		expect((yield browser.executeScript(() => window.document.title))).to.not.equal('Stop Fingerprinting Test');
+		(yield browser.get('about:blank'));
+		expect((yield browser.executeScript(() => window.document.title))).to.not.equal('blob');
+	}));
+
+	it('log requests', async(function*() {
+
 	}));
 
 }));
 
-
 describe('Stop Fingerpriting should apply to', (function() {
-	this.timeout(1000);
-	const getTest = new Test;
 	let test, browser, port;
-
-	before(async(function*() {
-		this.timeout(6000);
-		test = (yield getTest);
+	Test.register({
+	}, async(function*(_test) {
+		test = _test;
 		browser = (yield test.start({ storage: { sync: {
 			'<default>.rules.screen.devicePixelRatio': [ { from: 8, to: 8, }, ],
 			'options.debug': [ true, ],
@@ -63,20 +98,15 @@ describe('Stop Fingerpriting should apply to', (function() {
 		port = test.server.http[0].address().port;
 	}));
 
-	after(() => test && test.destroy());
-
 	it('http: URLs', async(function*() {
-
+		test.server.files = { 'index.html': '', };
 		(yield browser.get(`http://localhost:${ port }/`));
 		expect((yield browser.executeScript(() => window.devicePixelRatio))).to.equal(8);
-		(yield browser.get('about:blank'));
 	}));
 
 	it('data: URLs', async(function*() {
-
-		(yield browser.get(`data:text/html,<script>temp=devicePixelRatio</script>`));
+		(yield browser.get(`data:text/html,<script>temp = devicePixelRatio</script>`));
 		expect((yield browser.executeScript(() => window.temp))).to.equal(8);
-		(yield browser.get('about:blank'));
 	}));
 
 }));

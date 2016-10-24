@@ -26,33 +26,35 @@ const { Key, } = require('selenium-webdriver/lib/input');
 
 const TestPrototype = {
 
-	constructor: async(function*() {
-		// start a web server which the extension will contact during startup
-		this.setupServer = new Http.Server(this._onSetupRequest.bind(this));
-		(yield eventToPromise(this.setupServer.listen(0), 'listening'));
-		this.setupServer.close = promisify(this.setupServer.close);
-		this.setupPort = this.setupServer.address().port;
+	constructor: async(function*({ noExt = false, server, } = { }) {
+		if (!noExt) {
+			// start a web server which the extension will contact during startup
+			this.setupServer = new Http.Server(this._onSetupRequest.bind(this));
+			(yield eventToPromise(this.setupServer.listen(0), 'listening'));
+			this.setupServer.close = promisify(this.setupServer.close);
+			this.setupPort = this.setupServer.address().port;
 
-		// build add-on and create a firefox builder with it
-		this.tempDir = (yield makeTempDir('add-on-build'));
-		this.extName = (yield buildExt({
-			icons: false, tld: false, // no need to rebuild these every time
-			selenium: { setupPort: this.setupPort, },
-			xpi: true,
-			outDir: this.tempDir,
-		}));
-		this.extPath = Path.join(this.tempDir, this.extName +'.xpi');
+			// build add-on and create a firefox builder with it
+			this.tempDir = (yield makeTempDir('add-on-build'));
+			this.extName = (yield buildExt({
+				icons: false, tld: false, // no need to rebuild these every time
+				selenium: { setupPort: this.setupPort, },
+				xpi: true,
+				outDir: this.tempDir,
+			}));
+			this.extPath = Path.join(this.tempDir, this.extName +'.xpi');
+		}
 		this._makeBuilder();
 
 		const log = this.serverLogs = [ ];
-		this.server = (yield new HttpServer({
+		this.server = (yield new HttpServer(Object.assign({
 			httpPorts: [ 0, ],
 			httpsPorts: [ 0, ],
 			upgradePorts: { },
 			log(header) { log.push(header); },
 			serveFromFS: false,
 			favicon: 'ignore',
-		}));
+		}, server)));
 
 		this.pendingStartUp = null; // holds a PromiseCapability with additional options while the browser is starting
 		this.browser = null; // reference to the browser driver, while it runs
@@ -63,8 +65,8 @@ const TestPrototype = {
 	start: async(function*({ storage, }) {
 		if (this.browser || this.pendingStartUp) { throw new Error('Browser already started'); }
 
-		const ctx = this.pendingStartUp = { storage, };
-		const done = ctx.promise = new Promise((y, n) => { ctx.resolve = y; ctx.reject = n; });
+		const ctx = this.pendingStartUp = { options: { storage, token: Math.random().toString(36).slice(2), }, };
+		const done = ctx.promise = this.setupServer ? new Promise((y, n) => { ctx.resolve = y; ctx.reject = n; }) : Promise.resolve();
 		this.browser = (yield this.builder.buildAsync());
 		(yield done);
 		this.pendingStartUp = null;
@@ -122,11 +124,19 @@ const TestPrototype = {
 		chromeOpts.addArguments(`load-extension=${ this.tempDir }/webextension`);
 
 		const ffProfile = new Firefox.Profile();
+
+		this.extPath && ffProfile.addExtension(this.extPath);
 		ffProfile.setPreference('extensions.@stop-fingerprinting.sdk.console.logLevel', 'all');
-		ffProfile.setPreference('xpinstall.signatures.required', false);
+		ffProfile.setPreference('xpinstall.signatures.required', false); // allow unsigned add-on (requires alpha/devEdition/unbranded build)
 		ffProfile.setPreference('extensions.checkCompatibility.51.0a', false); // FF51 devEdition
 		ffProfile.setPreference('extensions.checkCompatibility.51.0b', false); // FF51 beta
-		ffProfile.addExtension(this.extPath);
+
+		// disable all caching, for now this is an acceptable way to handle caching in these tests,
+		// but it needs to be removed once this extension affects caching itself
+		ffProfile.setPreference('browser.cache.disk.enable', false);
+		ffProfile.setPreference('browser.cache.memory.enable', false);
+		ffProfile.setPreference('browser.cache.offline.enable', false);
+		ffProfile.setPreference('network.http.use-cache', false);
 
 		// these don't seem to work
 		ffProfile.setAcceptUntrustedCerts(true);
@@ -147,9 +157,14 @@ const TestPrototype = {
 
 	_onSetupRequest({ url, body, }, out) {
 		const ctx = this.pendingStartUp;
-		switch (url.slice(1)) {
-			case 'get-storage': {
-				out.write(JSON.stringify(ctx.storage || { }));
+		switch (ctx && url.slice(1)) {
+			case 'get-options': {
+				if (ctx.options) {
+					out.write(JSON.stringify(ctx.options));
+				} else {
+					out.writeHead(404);
+				}
+				ctx.options = null;
 			} break;
 			case 'statup-done': {
 				ctx.resolve();
@@ -172,19 +187,22 @@ Object.keys(TestPrototype).forEach(key => Object.defineProperty(TestPrototype, k
 const Test = TestPrototype.constructor;
 Test.prototype = TestPrototype;
 
-Test.register = function(options) {
-	let test;
+Test.register = function(options, done) {
+	let test, getTest = new Test(options);
 
 	before(async(function*() {
-		test = (yield new Test);
-		options.created(test);
+		this.timeout(6000);
+		test = (yield getTest);
+		(yield done(test));
 	}));
 
 	beforeEach(async(function*() {
 	}));
 
 	afterEach(async(function*() {
-		(yield test.stop());
+		test.server.files = null;
+		(yield test.browser.get('about:blank'));
+		test.takeLogs();
 	}));
 
 	after(async(function*() {
