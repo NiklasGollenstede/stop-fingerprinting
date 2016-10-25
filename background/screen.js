@@ -1,7 +1,7 @@
-(() => { 'use strict'; define([ 'exports', ], function(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; const factory = function screen_gen(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /**
- * data from: https://en.wikipedia.org/wiki/List_of_common_resolutions and https://en.wikipedia.org/wiki/Display_resolution
+ * data (width, height, comments) from: https://en.wikipedia.org/wiki/List_of_common_resolutions and https://en.wikipedia.org/wiki/Display_resolution
  * @license CC BY-SA 3.0
  */
 const resolutions = [
@@ -118,32 +118,34 @@ const offsets = [
 	{ parts:  3, value:  50, },
 ];
 
-const Generator = exports.Generator = class Generator {
+class ScreenGenerator {
+
+	/**
+	 * Creates a new ScreenGenerator that produces screen obejcts according to `config`.
+	 * @param  {object}  config                     Optional. Configuration object that restricts the possible values of the generated screens' properties:
+	 * @param  {Range}   config.width               Optional. Restricts the values of the screen's .width (picked from `resolutions`). Defaults to no restriction.
+	 * @param  {Range}   config.height              Optional. Restricts the values of the screen's .height (picked from `resolutions`). Defaults to no restriction.
+	 * @param  {Range}   config.ratio               Optional. Restricts the possible ratio of the screen's .width/.height (picked from `resolutions`). Defaults to no restriction.
+	 * @param  {Range}   config.devicePixelRatio    Optional. Restricts the values of the screen's .devicePixelRatio (picked from `devicePixelRatios`). Defaults to no restriction.
+	 * @param  {object}  config.offset              Optional. Object of `top`, `right`, `bottom` and `left` Ranges that restrict the offset of the `avail` screen area
+	 *                                              (The area that is not reserved for task/menu/... bar). Defaults to { from: 30, to: 50, } at the bottom and 0 elsewhere.
+	 * @throws {RangeError}   If `config` is to restrictive to allow any of the values in the lists above.
+	 */
 	constructor(config = { }) {
 		this.ratio = parseRange(config.ratio, { from: 0, to: Infinity, });
 		this.width = parseRange(config.width, { from: 0, to: Infinity, });
 		this.height = parseRange(config.height, { from: 0, to: Infinity, });
-		this.resolutions = resolutions.filter(({ratio,  width, height, }) => isIn(ratio, this.ratio) && isIn(width, this.width) && isIn(height, this.height));
+		this.resolutions = resolutions.filter(({ ratio,  width, height, }) => isIn(ratio, this.ratio) && isIn(width, this.width) && isIn(height, this.height));
+		if (!this.resolutions.length) { throw new RangeError('The filters don\'t allow any resolutions'); }
+
 		const dprRange = parseRange(config.devicePixelRatio, { from: 1, to: 1.5, });
 		this.devicePixelRatios = devicePixelRatios.filter(({ value, }) => isIn(value, dprRange));
-		[ 'top', 'right', 'bottom', 'left' ].forEach(offset => {
-			const range = parseRange(config[offset] || config.offset && config.offset[offset], offset === 'bottom' ? { from: 30, to: 50, } : { from: 0, to: 0, });
+		if (!this.devicePixelRatios.length) { throw new RangeError('The devicePixelRatio range is invalid'); }
+
+		[ 'top', 'right', 'bottom', 'left', ].forEach(offset => {
+			const range = parseRange(config.offset && config.offset[offset], offset === 'bottom' ? { from: 30, to: 50, } : { from: 0, to: 0, });
 			this[offset] = offsets.filter(({ value, }) => isIn(value, range));
-		});
-		config.noThrow ? this.makeValid() : this.validate();
-	}
-	makeValid() {
-		if (!this.resolutions.length) { this.resolutions = resolutions; }
-		if (!this.devicePixelRatios.length) { this.devicePixelRatios = devicePixelRatios; }
-		[ 'top', 'right', 'bottom', 'left' ].forEach(offset => {
-			if (!this[offset]) { this[offset] = offsets[0]; }
-		});
-	}
-	validate() {
-		if (!this.resolutions.length) { throw new Error('The filters don\'t allow any resolutions'); }
-		if (!this.devicePixelRatios.length) { throw new Error('The devicePixelRatio range is invalid'); }
-		[ 'top', 'right', 'bottom', 'left' ].forEach(offset => {
-			if (!this[offset]) { throw new Error('The '+ offset +' offset range is invalid'); }
+			if (!this[offset].length) { throw new RangeError('The '+ offset +' offset range is invalid'); }
 		});
 	}
 	screen() {
@@ -169,8 +171,8 @@ const Generator = exports.Generator = class Generator {
 	generate() {
 		return this.screen();
 	}
-};
-Generator.keys = [ 'top', 'left', 'height', 'width', 'colorDepth', 'availTop', 'availLeft', 'availHeight', 'availWidth', 'pixelDepth', 'devicePixelRatio', ];
+}
+ScreenGenerator.keys = [ 'top', 'left', 'height', 'width', 'colorDepth', 'availTop', 'availLeft', 'availHeight', 'availWidth', 'pixelDepth', 'devicePixelRatio', ];
 
 function isIn(value, range) {
 	return value >= range.from && value <= range.to;
@@ -187,14 +189,6 @@ function parseRange(arg, def) {
 	return { from: +arg || 0, to: +arg || 0, };
 }
 
-function randInRange(range, random = rand()) {
-	return range.from + (random % (range.to - range.from + 1));
-}
-
-function rand() {
-	return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
-}
-
 function chooseWeightedRandom(array) {
 	addTotalParts(array);
 	let r = Math.random() * array.total_parts << 0;
@@ -206,4 +200,6 @@ function addTotalParts(array) {
 	array.total_parts = array.reduce((sum, { parts, }) => sum + parts, 0);
 }
 
-}); })();
+return (ScreenGenerator.ScreenGenerator = ScreenGenerator);
+
+}; if (typeof define === 'function' && define.amd) { define([ 'exports', ], factory); } else { const exp = { }, result = factory(exp) || exp; if (typeof exports === 'object' && typeof module === 'object') { module.exports = result; } else { global[factory.name] = result; } } })((function() { return this; })());

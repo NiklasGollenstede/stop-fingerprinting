@@ -1,20 +1,21 @@
 'use strict'; /* globals module, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+const self = require('sdk/self');
 const { Cc, Ci, Cu, } = require('chrome');
 Cu.import("resource://gre/modules/Services.jsm"); /* global Services */
 const { ppmm: gppmm, mm: gfmm, } = Services;
 
 class ProcessScript {
 	constructor({ process, frame, namespace, handlers, }) {
-		// TODO: this wotks, but the caching issue of frame scrips is still open: https://bugzilla.mozilla.org/show_bug.cgi?id=1051238
+		// TODO: this works, but the caching issue of frame scrips is still open: https://bugzilla.mozilla.org/show_bug.cgi?id=1051238
 		// maybe this behaviour changes when e10s is enabled
-		this.processSrc = `resource://stop-fingerprinting/${ process }`;
-		this.frameSrc   = `resource://stop-fingerprinting/${ frame }`;
-		this.prefix = 'stop-fingerprinting-'+ namespace +':';
-		this.handlers = handlers;
+		this.processSrc = self.data.url(`../${ process }`);
+		this.frameSrc   = self.data.url(`../${ frame }`);
+		this.prefix     = self.id.replace(/@/g, '') +'-'+ namespace +':';
+		this.handlers   = handlers;
+		this.onRequest  = this.onRequest.bind(this);
 		gppmm.loadProcessScript(this.processSrc, true);
 		gfmm.loadFrameScript(this.frameSrc, true);
-		this.onRequest = this.onRequest.bind(this);
 		gfmm.addMessageListener(this.prefix +'request', this.onRequest);
 		console.log('created ProcessScript', this);
 	}
