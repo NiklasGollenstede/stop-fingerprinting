@@ -25,7 +25,8 @@ const openMainFrameRequests = new Map; // tabId ==> Requests with .type === 'mai
 
 // start sync connection to content script
 if (gecko) {
-	Messages.addHandler('getSenderProfile', function() {
+	Messages.addHandler('getSenderProfile', function() { // TODO: only allow for top frame
+		console.log('getSenderProfile', this);
 		const host = domainFromUrl(this.tab.url);
 		const session = Profiles.getSessionForTab(this.tab.id, host);
 		return session ? session.data : null;
@@ -75,6 +76,8 @@ new RequestListener({
 		const session = this.session = this.isMainFrame
 		? Profiles.getSessionForPageLoad(tabId, domain)
 		: Profiles.getSessionForTab(tabId, domain);
+
+		if (!session) { return ignore; } // TODO: this is not always the best idea ...
 
 		const profile = this.profile = session.data;
 

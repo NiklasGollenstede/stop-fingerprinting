@@ -240,7 +240,7 @@ let errorMap = new WeakMap(
 function cloneError(error) { // TODO: test
 	if (!needsCloning(error)) { return error; }
 	console.log('cloning Error', error);
-	const Ctor = errorMap.get(error.constructor) || Error;
+	let Ctor = errorMap.get(error.constructor) || Error;
 	return new Ctor(error.message); // this constructs page objects, so it _should_ be safe
 }
 

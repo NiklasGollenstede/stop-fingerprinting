@@ -16,8 +16,8 @@ const startDone = (token => () => page.resume(token))(page.pause());
 
 spawn(function*() {
 	const profile = (yield Messages.request('getSenderProfile'));
-	if (!profile) { return; } // no profile available for this tab yet. This is not an error
-	if (profile.disabled) { return; } // never mind ...
+	if (!profile) { console.log('profile is null'); return; } // no profile available for this tab yet. This is not an error
+	if (profile.disabled) { console.log('profile is disabled'); return; } // never mind ...
 
 	console.log('got profile', profile);
 
@@ -68,13 +68,13 @@ spawn(function*() {
 	} }
 
 })
-.catch(error => handleCriticalError)
+.catch(error => handleCriticalError(error, `Failed to load profile`))
 .then(startDone)
 .catch(error => console.error(error));
 
 function handleCriticalError(error, message, rethrow) {
 	message || (message = (error && error.message || '') + '');
-	const resume = confirm(message.replace(/[!?.]$/, _=>_ || '.') +`\nResume navigation?`);
+	const resume = confirm(message.replace(/[!?.]?$/, _=>_ || '.') +`\nResume navigation?`);
 	if (!resume) {
 		page.pause();
 		window.stop();
