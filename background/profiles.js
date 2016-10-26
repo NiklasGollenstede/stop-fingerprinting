@@ -3,11 +3,12 @@
 	'node_modules/es6lib/concurrent': { async, },
 	'node_modules/es6lib/functional': { log, },
 	'node_modules/es6lib/object': { MultiMap, deepFreeze, },
-	'node_modules/web-ext-utils/chrome/': { Tabs, applications, rootUrl, Storage, },
 	'node_modules/get-tld/': { Host, getTLD, },
+	'node_modules/regexpx/': RegExpX,
+	'node_modules/web-ext-utils/chrome/': { Tabs, applications, rootUrl, Storage, },
+	'common/options': options,
 	'common/profile-data': ProfileData,
 	'common/utils': { notify, domainFromUrl, setBrowserAction, nameprep, },
-	'common/options': options,
 	'icons/urls': icons,
 	ua: { Generator: NavGen, },
 	ScreenGen,
@@ -17,8 +18,9 @@ const defaultProfData   = ProfileData.defaultProfile;
 const ruleModel         = ProfileData.model.rules.children;
 const profIdToData      = new Map;            // profileId         ==>  ProfileData, unsorted
 const profIdToStack     = new Map;            // profileId         ==>  ProfileStack, sorted by the ProfileStack's .priority
-const hostToSession     = new Map;            // HostPattern       ==>  Session, unsorted, only if Session can be shared between tabs
+const originToSession   = new Map;            // Origin            ==>  Session, unsorted, only if Session can be shared between tabs
 const tabIdToSession    = new Map;            // tabId             ==>  Session, unsorted, for every tab that currently holds a scriptable site
+const tabIdToTempProfId = new Map;            // tabId             ==>  profileId, unsorted
 let needRebuild = true; // rebuld() needs to be called before accessing any of the maps above.
 let mayRebuild = 0; // a value below zero indicates that some ProfileData are still loading and the (synchronous) rebuld() must thus fail.
 let defaultStack = null;
@@ -71,91 +73,94 @@ function removeProfile(id) {
 	console.log('removed ProfileData', profIdToData, profIdToStack, data);
 }
 
-const HostPattern = cached(Object.assign((class HostPattern { // TODO: this needs a rewrite
-	constructor(pattern) {
-		this.pattern = pattern; console.log('new HostPattern', this);
-		this.children = pattern.split(/\s*\|\s*/g).map(string => { switch (string.lastIndexOf('*')) {
-			case -1: return new HostPattern.Single(string);
-			case  0: return new HostPattern.AnySub(string);
-			default: return new HostPattern.Pattern(string);
-		} });
-		return this.children.length === 1 ? this.children[0] : this;
-	}
+const patternTypes = RegExpX`^(?: # anchor
+	(file:\/\/.*)	# file:// url prefix
+|				# OR
+	(?:			# a "normal" url
+		(			# scheme
+			https?: | ftp: | \*:
+		)				# is http, https, ftp or <any>
+	\/\/)?				# is optional (default to https)
+	(				# host
+		(?:\*\.)?		# may start with '*.'
+		[\w-]+			# must contain at least one word
+		(?: \.[\w-]+ )*	# may contain more '.'+ word
+		(?: :\d+ )?		# may have a port number
+	)					# is not optional
+	\/?
+)$`;
 
-	includes(domain) {
-		return this.children.every(_=>_.includes(domain));
-	}
+/*interface Origin { // these are cached, so that there is only one instance per logical origin, which means that two Origins are equal iff o1 === o2
+	includes(url: URL) : bool;
+	toString() : string;
+}*/
 
-	static tldError(original, escaped = original) {
-		notify.error({
-			title: `Invalid domain name`,
-			message: `The domain "${ original }"${ original !== escaped ? '('+ escaped +')' : '' } does not end with a valid TLD`,
-		});
-	}
-}), {
-	Single: function(domain) {
-		this.pattern = domain;
-		domain = nameprep(domain);
-		this.includes = s => s === domain;
-	},
-	AnySub: function(domain) {
-		this.pattern = domain;
-		domain = nameprep(domain);
-		const suffix = domain.slice(2), length = suffix.length;
-		this.includes = s => s.length >= length && s.endsWith(suffix) && (s.length === length || s[s.length - length - 1] === '.');
-	},
-	Pattern: function(domain) {
-		this.pattern = domain;
-		domain = nameprep(domain);
-		const anyTld = (/\.\*$/).test(domain);
-		let tld = anyTld || getTLD(domain);
-		if (tld === null) { HostPattern.tldError(this.pattern, domain); tld = '@'; }
-		domain = domain.slice(0, anyTld ? -2 : -tld.length);
-		const host = (/[^.]*$/).exec(domain)[0];
-		const anyHost = host === '*';
-		const sub = domain.slice(0, -host.length);
-		const anySub = sub === '*.';
-		const any = anySub && anyHost && anyTld;
-
-		this.includes = any ? () => true : cached(_domain => {
-			let _tld = getTLD(_domain);
-			if (_tld === null) { HostPattern.tldError(_domain); _tld = '@'; }
-			_domain = _domain.slice(0, -_tld.length);
-			const _host = (/[^.]*$/).exec(_domain)[0];
-			const _sub = _domain.slice(0, -_host.length);
-			return (
-				(anyTld || tld === _tld)
-				&& (anyHost || host === _host)
-				&& (anySub || sub === _sub)
-			);
-		});
-	},
+const originFromOrigin = cached(origin => ({
+	origin,
+	includes(url) { return url.origin === this.origin; },
+	toString() { return this.origin; },
 }));
+const originFromUrl = url/*: URL */ => originFromOrigin(url.origin);
 
-function detachTabs(equivs, reason) {
-	setBrowserAction({
-		filter: ({ url, }) => equivs.some(equiv => typeof equiv === 'string' ? url === equiv : equiv.includes(domainFromUrl(url))),
-		icon: 'detached', title: reason,
-	})
-	.then(_=>_.forEach(tabId => {
-		const session = tabIdToSession.get(tabId);
-		if (!session) { return; }
-		session.detachFromTab(tabId);
-	}));
-}
+const originFromPattern = cached(function(pattern) {
+	pattern = nameprep(pattern);
+	const match = patternTypes.exec(pattern);
+	if (!match) { throw new Error(`Pattern "${ pattern }" is invalid`); }
+	let [ , filePrefix, protocol, host, ] = match;
+	protocol || (protocol = 'https:');
+
+	if (filePrefix) {
+		return {
+			prefix: filePrefix,
+			includes(url) { return url.href.startsWith(this.prefix); },
+			toString() { return this.prefix; },
+		};
+	}
+
+	const anySub = host.includes('*');
+	if (anySub) {
+		if (host.lastIndexOf('*') !== host.indexOf('*')) { throw new Error(`Pattern "${ pattern }" contains more than one '*' in the host part`); }
+		if (new Host(host).sub !== '*.') { throw new Error(`Pattern "${ pattern }" contains a '*' in a bad position`); }
+	}
+
+	if (!anySub && protocol !== '*') { return originFromOrigin((protocol +'//'+ host)); } // to get the correctly cached version
+
+	return {
+		pattern, protocol,
+		suffix: anySub && host.slice(2),
+		equals: !anySub && host,
+		includes(url) {
+			if (url.protocol !== this.protocol && this.protocol !== '*:') { return false; }
+			return this.suffix ? url.host.endsWith(this.suffix) : url.host === this.equals;
+		},
+		toString() { return this.pattern; },
+	};
+});
+const originFromPatternGroup = cached(function(patterns) {
+	const split = patterns.split(/\s*\|\s*/);
+	if (split.length === 1) { return originFromPattern(patterns); }
+	const origins = split.map(originFromPattern);
+	return {
+		patterns, origins,
+		includes(url) { return this.origins.some(_=>_.includes(url)); },
+		toString() { return this.patterns; },
+	};
+});
 
 let count = 0;
 
 class ProfileStack {
 	constructor(data, parent) {
-		if (count++ > 20) { throw new Error('count'); }
+		if (count++ > 20) { throw new Error('count'); } // TODO: remove
 		data = data.children;
 		this.parent = parent;
 		this.id = data.id.value;
 		this.data = data;
 		this.priority = data.priority.value; // used for the sorting
-		this.hostPatterns = this.data.include.values.current.map(_ => new HostPattern(_));
-		data.rules.onAnyChange((value, { parent: { path, }, }) => this.clear(path.replace(/^\.?rules\./, ''))); // wil be removed on data.destroy()
+		data.priority.whenChange(() => needRebuild = true); // TODO: this is expensive
+		data.inherits.whenChange(() => needRebuild = true); // TODO: this is expensive
+		data.include.whenChange((_, { current: origins, }) => this.origins = origins.map(originFromPatternGroup));
+		data.rules.onAnyChange((value, { parent: { path, }, }) => this.clear(path.replace(/^\.?rules\./, ''))); // will be removed on data.destroy()
 		this.sessions = new Set; // used to .outdade() them on this.clear() or .destroy()
 		this.values = null;
 
@@ -169,15 +174,13 @@ class ProfileStack {
 		this.values = Object.create(this.parent && this.parent.values || null);
 		(function clone(model, data, values) {
 			Object.keys(model).forEach(child => {
-				if (!data[child]) { debugger; console.log('message', model, data, values, child); }
-
 				const ownValues = data[child].values.current;
 				if (!ownValues.length) { return; } // no own values set ==> inherit through data.__proto__
-				const ownValue = !model[child].maxLength || model[child].maxLength < 2 ? values[0] : values; // if at most one value is allowed ==> not an array type
-				if (model[child].children && model[child].children.length && ownValues.some(_=>_)) { // trueisch own values and model is an object type
+				const ownValue = !model[child].maxLength || model[child].maxLength < 2 ? ownValues[0] : ownValues; // if at most one value is allowed ==> not an array type
+				if (model[child].children && ownValues.some(_=>_)) { // trueisch own values and model is an object type
 					set(values, child, Object.create(values[child] || null)); // inherit unset sub-values
 					set(values[child], 'value', ownValue); // save the actual own value
-					clone(model[child], data[child], values[child]); // recurse
+					clone(model[child].children, data[child].children, values[child]); // recurse
 				} else {
 					set(values, child, ownValue);
 				}
@@ -188,36 +191,40 @@ class ProfileStack {
 
 		this.navGen = !this.values.navigator ? { generate() { return null; }, } : new NavGen(this.values.navigator); // TODO: XXX: these may throw
 		this.screenGen = !this.values.screen ? { generate() { return null; }, } : new ScreenGen(this.values.screen); // TODO: XXX: these may throw
+
+		console.log('init done', this);
 	}
 
-	getSessionForPageLoad(tabId, host) {
+	getSessionForPageLoad(tabId, url) {
 		this.init();
 
-		let hostPattern = this.hostPatterns.find(_=>_.includes(host));
-		if (!hostPattern) {
-			if (this === defaultStack) { hostPattern = new HostPattern(host); }
-			else { throw new Error(`ProfileStack.newSession() called with wrong host`); }
+		let origin = this.origins.find(_=>_.includes(url));
+		if (!origin) {
+			if (
+				this === defaultStack
+				|| tabIdToTempProfId.get(tabId) === this.id
+			) { origin = originFromUrl(url); }
+			else { throw new Error(`ProfileStack.newSession() called with wrong origin`); }
 		}
 
 		switch (this.values.session) {
 			case 'browser': {
-				const session = hostToSession.get(hostPattern);
-				if (session && !session.outdated) { return session; } // host was previously visited in this browser session
+				const session = originToSession.get(origin);
+				if (session && !session.outdated) { return session; } // origin was previously visited in this browser session
 			} break;
 			case 'tab': {
 				const session = tabIdToSession.get(tabId);
-				if (session && !session.outdated && session.hostPattern === hostPattern) { return session; } // host is loaded in this tab anyway
+				if (session && !session.outdated && session.origin === origin) { return session; } // origin is loaded in this tab anyway
 			} break;
 			// case 'page': // must create a new session on every load
 		}
-		const session = new Session(this, hostPattern);
+		const session = new Session(this, origin);
 
 		switch (this.values.session) {
 			case 'browser': {
-
-				hostToSession.set(hostPattern, session); // host is being visited for the first time, save the session
+				originToSession.set(origin, session); // origin is being visited for the first time, save the session
 			} break;
-			// case 'tab': // nothing to do, only keep the session for same-host navigations, which this is not
+			// case 'tab': // nothing to do, only keep the session for same-origin navigations, which this is not
 		}
 
 		this.sessions.add(session); // add to be able to .outdate() it
@@ -236,24 +243,27 @@ class ProfileStack {
 		profIdToStack.delete(this.id, this);
 	}
 
-	static find(host) {
+	static findStack(tabId, url) {
+		const tempId = tabIdToTempProfId.get(tabId);
+		if (tempId) { return profIdToStack.get(tempId); }
 		for (const [ , stack, ] of profIdToStack) {
-			if (stack.hostPatterns.some(_=>_.includes(host))) { return stack; }
+			if (stack.origins.some(_=>_.includes(url))) { return stack; }
 		}
 		return defaultStack;
 	}
 }
 
 class Session {
-	constructor(stack, hostPattern) {
+	constructor(stack, origin) {
 		this.stack = stack;
-		this.hostPattern = hostPattern;
+		this.origin = origin;
 		this.outdaded = false;
 
 		const data = this.data = { };
-		Object; // TODO: do a deepPeepFlatteningClone from stack.values onto this.data
+		deepDeepFlatteningClone(data, stack.values);
 		data.nonce = Array.prototype.map.call(window.crypto.getRandomValues(new Uint32Array(6)), _=>_.toString(36)).join('');
-		data.navigator = this.stack.navGen.generate();
+		this.navigator = this.stack.navGen.generate();
+		data.navigator = this.navigator && this.navigator.toJSON();
 		data.screen = this.stack.screenGen.generate();
 		data.debug = options.children.debug.value;
 		console.log('Session.created', this);
@@ -267,80 +277,56 @@ class Session {
 		console.log('Session.detachFrom', this, tabId);
 		tabIdToSession.get(tabId) === this && tabIdToSession.delete(tabId);
 	}
+
+	outdate() {
+		this.outdaded = true;
+	}
 }
 
 addProfile('<default>');
 options.children.profiles.whenChange((_, { current: ids, }) => {
-	profIdToData.forEach((_, old) => !ids.includes(old) && removeProfile(old));
+	profIdToData.forEach((_, old) => !ids.includes(old) && old !== '<default>' && removeProfile(old));
 	Promise.all(ids.map(id => !profIdToData.has(id) && addProfile(id)))
 	.then(() => mayRebuild++);
 	mayRebuild--;
 	needRebuild = true;
 });
 
-
 const Profiles = ({
-	getSessionForPageLoad(tabId, host) { // never returns null, may only be called during a tabs top_frame request
-		const stack = ProfileStack.find(host);
-		return stack.getSessionForPageLoad(tabId, host);
-
-		/*let session = tabIdToSession.get(arg.tabId);
-		if (session && session.hostPattern.includes(arg.host)) {
-			// found existing session and the host didn't change
-			const stack = session.stack; // thus the stack is the correct one
-			if ((arg.requestId != null && session.stack.sessionPerPage)) {
-				return stack.newSession(arg); // top frame load ==> must create new session
-			} else { return session; } // can use existing session
-		}
-		// no session yet or the host changed ==> create new one from the correct stack
-		return stack.newSession(arg); // TODO: do only ever create new Sessions if requestId is set (on top frame load)
-*/	},
-	getSessionForTab(tabId, host) { // may return null
+	getSessionForPageLoad(tabId, rawUrl) { // never returns null, may only be called during a tabs top_frame request
+		const url = new URL(rawUrl);
+		const stack = ProfileStack.findStack(tabId, url);
+		return stack.getSessionForPageLoad(tabId, url);
+	},
+	getSessionForTab(tabId, rawUrl) { // may return null
+		const url = new URL(rawUrl);
 		let session = tabIdToSession.get(tabId);
-		if (session && !session.hostPattern.includes(host)) {
-			throw new Error(`The current session for tab ${ tabId } does not match the pattern ${ session.hostPattern }`);
+		if (session && !session.origin.includes(url)) {
+			throw new Error(`The current session for tab ${ tabId } does not match the origin ${ session.origin }`);
 		}
 		return session || null;
 	},
-	detachFromTab(tabId, host) {
+	detachFromTab(tabId, rawUrl) {
+		const url = new URL(rawUrl);
 		let session = tabIdToSession.get(tabId);
-		if (session || !session.hostPattern.includes(host)) { return; }
+		if (session || !session.origin.includes(url)) { return; }
 		tabIdToSession.delete(tabId);
 	},
-	findStack(host) {
-		return ProfileStack.find(host);
+	findStack(tabId, rawUrl) {
+		return ProfileStack.findStack(tabId, new URL(rawUrl));
 	},
 	getNames() {
-		return [ ];
-		/*return Array.from(profiles.values()).map(
+		return Array.from(profIdToData.values()).map(
 			({ children: { id: { value: id, }, title: { value: name, }, }, }) => ({ id, name, })
-		);*/
+		);
 	},
-	setTemp(domain, profileId) {
+	setTempProfileForTab(tabId, profileId) {
+		if (profileId == null) { return -tabIdToTempProfId.delete(tabId); }
+		if (profIdToData.has(profileId)) { tabIdToTempProfId.set(tabId, profileId); return 1; }
 		return 0;
-		/*(!profileId || profileId === '<none>') && (profileId = undefined);
-		let retVal = 1, icon = icons.temp;
-		let equiv = getEquivalent(domain);
-		const current = domainTemps.get(equiv);
-		if (profileId === (current && current.children.id.value)) { return 0; }
-
-		if (!profileId) {
-			retVal = -1;
-			domainTemps.delete(equiv);
-		} else {
-			const profile = profiles.get(profileId);
-			if (!profile) { throw new Error('No such Profile "'+ profileId +'"'); }
-			domainTemps.set(equiv, profile);
-		}
-		typeof equiv === 'string' && (equiv = new HostPattern.Single(equiv));
-		setBrowserAction({ filter: ({ url, }) => equiv.includes(domainFromUrl(url)), icon: 'detached', title: 'tempChanged', });
-		return retVal;*/
 	},
-	getTemp(domain) {
-		return null;
-		/*let equiv = getEquivalent(domain);
-		const profile = domainTemps.get(equiv);
-		return profile && profile.children.id.value;*/
+	getTempProfileForTab(tabId) /*: ?string */ {
+		return tabIdToTempProfId.get(tabId) || null;
 	},
 });
 
@@ -368,11 +354,15 @@ function cached(func, cache) {
 	};
 }
 
-function diff(before, after, mapper = x=>x) {
-	before = new Set(before), after = new Set(after);
-	const added = after, kept = new Set, deleted = new Set;
-	before.forEach(e => after.has(e) ? (added.delete(e), kept.add(e)) : deleted.add(e));
-	return { added: mapper(added), kept: mapper(kept), deleted: mapper(deleted), };
+function deepDeepFlatteningClone(target, source) {
+	for (let key in source) {
+		let value = source[key];
+		if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+			value = deepDeepFlatteningClone({ }, value);
+		}
+		target[key] = value;
+	}
+	return target;
 }
 
 return Object.freeze(Profiles);

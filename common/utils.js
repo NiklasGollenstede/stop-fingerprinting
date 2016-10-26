@@ -11,6 +11,7 @@ const titles = {
 	optionsChanged: 'Options affecting this tab changed. Please reload to apply',
 	equivChanged: 'A change in the equivalent domains affects this tab. Please reload',
 	includesChanged: 'A change in the include domains of a profile affects this tab. Please reload',
+	browserTab: `This tab belongs to the browser itself or an add-on. If you don't trust it, remove it from your computer`,
 	// includesNew: 'A new profile was created that may affects this tab. Please reload',
 	// includesDeleted: 'A profile that may have affected this tab was deleted. Please reload',
 };

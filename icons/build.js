@@ -2,7 +2,7 @@
 
 const icons = {
 	default: {
-		layers: { background: '', fingerprint: '', stopSign: 'fill: hsla(000, 100%, 50%, 1.00)', fingerprintUpper: '', stopText: '', },
+		layers: { background: '', fingerprint: '', stopSign: 'fill: hsla(  0, 100%, 50%, 1.00)', fingerprintUpper: '', stopText: '', },
 		sizes: [ 16, 19, 32, 38, 48, 64, 128, 256, 1024, ],
 	},
 	temp: {
@@ -11,6 +11,10 @@ const icons = {
 	},
 	detached: {
 		layers: { background: '', fingerprint: '', stopSign: 'fill: hsla( 40, 100%, 50%, 1.00)', fingerprintUpper: '', stopText: '', },
+		sizes: [ 16, 19, 32, 38, 48, 64, 128, ],
+	},
+	inactive: {
+		layers: { background: '', fingerprint: '', stopSign: 'fill: hsla(  0,   0%, 50%, 1.00)', fingerprintUpper: '', stopText: '', },
 		sizes: [ 16, 19, 32, 38, 48, 64, 128, ],
 	},
 	error: {
@@ -69,7 +73,9 @@ const imagemin = require('imagemin');
 const imageminPngquant = require('imagemin-pngquant');
 
 const build = module.exports = async(function*({ include, exclude, } = { }) {
-	const names = include ? include : Object.keys(icons).filter(name => !exclude || !exclude.includes(name));
+	const names = include
+	? Array.isArray(include) ? include : [ include, ]
+	: Object.keys(icons).filter(name => !exclude || !exclude.includes(name));
 
 	const template = relative('template.svg');
 	(yield Promise.all(names.map(writeSvg)));

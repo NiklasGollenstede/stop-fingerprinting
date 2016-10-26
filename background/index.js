@@ -1,4 +1,4 @@
-(() => { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function() { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/web-ext-utils/update/': updated,
 	'node_modules/es6lib/concurrent': { sleep, async, },
 	'node_modules/es6lib/functional': { throttle, },
@@ -17,6 +17,7 @@ console.log('Ran updates', updated);
 
 window.options = options;
 window.Profiles = Profiles;
+window.Chrome = window.Browser = arguments[0]['node_modules/web-ext-utils/chrome/'];
 
 let nativeConnector; // chrome only: NativeConnector instance while it runs, null while it is down
 let echoPortNum = 0; // chrome only: the port number the native echo server runs at
@@ -27,8 +28,7 @@ const openMainFrameRequests = new Map; // tabId ==> Requests with .type === 'mai
 if (gecko) {
 	Messages.addHandler('getSenderProfile', function() { // TODO: only allow for top frame
 		console.log('getSenderProfile', this);
-		const host = domainFromUrl(this.tab.url);
-		const session = Profiles.getSessionForTab(this.tab.id, host);
+		const session = Profiles.getSessionForTab(this.tab.id, this.tab.url);
 		return session ? session.data : null;
 	});
 } else {
@@ -69,15 +69,17 @@ new RequestListener({
 		this.requestId = requestId; this.url = url; this.type = type, this.tabId = tabId;
 		// console.log('request start', this);
 		this.isMainFrame = type === 'main_frame';
+
+		if (this.isMainFrame && gecko && url.startsWith('https://addons.mozilla.org/')) { return ignore; } // can't attach content_scripts anyway
+
 		this.isMainFrame && openMainFrameRequests.set(this.id, this);
 		this.isOptionsRequest = false; // chrome only
 
-		const domain = this.domain = domainFromUrl(url);
 		const session = this.session = this.isMainFrame
-		? Profiles.getSessionForPageLoad(tabId, domain)
-		: Profiles.getSessionForTab(tabId, domain);
+		? Profiles.getSessionForPageLoad(tabId, url)
+		: Profiles.getSessionForTab(tabId, url);
 
-		if (!session) { return ignore; } // TODO: this is not always the best idea ...
+		if (!session && !this.isMainFrame) { return ignore; } // TODO: this is not always the best idea ...
 
 		const profile = this.profile = session.data;
 
@@ -120,9 +122,9 @@ new RequestListener({
 		const options = !gecko && this.getEchoOptions();
 		if (options) { return options; }
 
-		if (!this.profile.navigator) { return; }
+		if (!this.session.navigator) { return; }
 
-		const order = this.profile.navigator.headerOrder;
+		const order = this.session.navigator.headerOrder;
 		const headers = this.objectifyHeaders(requestHeaders, order);
 
 		this.setUserAgent(headers, this.type);
@@ -179,7 +181,7 @@ new RequestListener({
 	}
 
 	setUserAgent(headers, type) {
-		const { navigator, } = this.profile;
+		const { navigator, } = this.session;
 		headers['User-Agent'].value = navigator.userAgent;
 		navigator.accept[type] && (headers['Accept'] = { name: 'Accept', value: navigator.accept[type], });
 		navigator.acceptLanguage['en-US'] && (headers['Accept-Language'] = { name: 'Accept-Language', value: navigator.acceptLanguage['en-US'], });
@@ -187,7 +189,7 @@ new RequestListener({
 	}
 
 	setDNT(headers) {
-		const { navigator, } = this.profile;
+		const { navigator, } = this.session;
 		const DNT = navigator.doNotTrack;
 		if (DNT === '1' || DNT === '0') { headers['DNT'] = { name: 'DNT', value: DNT, }; }
 		else { delete headers.DNT; }
@@ -270,8 +272,7 @@ options.children.clearCache.children.where.when({
 Messages.addHandler('notify', function(method, { title, message, url, }) {
 	url || (url = this.tab.url);
 	const { id: tabId, title: tabTitle, } = this.tab;
-	const domain = domainFromUrl(url);
-	const logLevel = Profiles.getSessionForTab(tabId, domain).data.logLevel;
+	const logLevel = Profiles.getSessionForTab(tabId, url).data.logLevel;
 	notify(method, { title, message, url, tabId, tabTitle, logLevel, });
 });
 
@@ -284,7 +285,9 @@ setBrowserAction({ icon: 'detached', title: 'installed', });
 Tabs.onUpdated.addListener(function(tabId, info, { url, }) {
 	if (!('status' in info)) { return; }
 	setBrowserAction(
-		Profiles.getTemp(domainFromUrl(url)) == null
+		Profiles.getSessionForTab(tabId, url) == null
+		? { tabId, icon: 'inactive', title: 'browserTab', }
+		: Profiles.getTempProfileForTab(tabId) == null
 		? { tabId, icon: 'default', title: 'default', }
 		: { tabId, icon: 'temp', title: 'tempActive', }
 	);

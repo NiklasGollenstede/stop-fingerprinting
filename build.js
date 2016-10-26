@@ -135,7 +135,7 @@ const sdkPackageJson = {
 	name: packageJson.name,
 	title: packageJson.title,
 	description: packageJson.description,
-	icon: packageJson.icon,
+	icon: 'webextension/'+ packageJson.icon,
 	version: packageJson.version,
 	license: packageJson.license,
 	author: packageJson.author,

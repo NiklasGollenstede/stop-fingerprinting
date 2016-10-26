@@ -439,14 +439,16 @@ const defaultProfile = (yield createProfile('<default>', copyProperties(makeMode
 		maxLength: 0,
 	},
 	priority: {
+		default: -Infinity,
 		expanded: null,
 		disabled: true,
-		default: -Infinity,
 		type: 'string',
 	},
 	inherits: {
 		default: null,
 		expanded: null,
+		type: 'label',
+		description: `TODO`,
 	},
 	// rules: ,
 	manage: {
