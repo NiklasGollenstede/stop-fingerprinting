@@ -227,12 +227,10 @@ function isScriptable(cw) {
 		if (allUrls.matches(nsIURI) && !amoUrl.matches(nsIURI)) {
 			return true;
 		} else {
-			debugger;
 			console.log('unscriptable window', cw, url, cw.location, cw.opener);
 			// TODO: after `window.open()` the new windows url is`'about:blank' (and thus unscriptable) but the `window.opener` is already set.
 			// so this function should probably return isScriptable(cw.opener)
 			// but TODO: test if this is the only case where `window.opener` is set
-			debugger;
 			return false;
 		}
 		// it might be worth a bug report that causing a reference error here (window) crashes the entire browser (and prevents it from starting)

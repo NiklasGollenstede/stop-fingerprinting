@@ -5,7 +5,7 @@
 	'node_modules/web-ext-utils/tabview/': TabView,
 	'node_modules/web-ext-utils/options/editor': Editor,
 	'common/options': options,
-	'common/profile': Profile,
+	'common/profile-data': ProfileData,
 }) {
 window.options = options;
 window.profiles = { };
@@ -26,7 +26,7 @@ const addProfile = async(function*(id) {
 		id = `{${ Guid() }}`;
 		(yield options.children.profiles.values.splice(Infinity, 0, id));
 	}
-	const profile = (yield Profile(id));
+	const profile = (yield ProfileData(id));
 	tabs.add({
 		id,
 		data:  { branch: profile, },

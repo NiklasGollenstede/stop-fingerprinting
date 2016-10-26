@@ -16,7 +16,8 @@ const startDone = (token => () => page.resume(token))(page.pause());
 
 spawn(function*() {
 	const profile = (yield Messages.request('getSenderProfile'));
-	const { tabId, } = profile;
+	if (!profile) { return; } // no profile available for this tab yet. This is not an error
+	if (profile.disabled) { return; } // never mind ...
 
 	console.log('got profile', profile);
 

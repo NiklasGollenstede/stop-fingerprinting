@@ -26,10 +26,9 @@ const openMainFrameRequests = new Map; // tabId ==> Requests with .type === 'mai
 // start sync connection to content script
 if (gecko) {
 	Messages.addHandler('getSenderProfile', function() {
-		const tabId = this.tab.id;
-		const profile = Profiles.get({ tabId, }).toJSON();
-		profile.tabId = tabId;
-		return profile;
+		const host = domainFromUrl(this.tab.url);
+		const session = Profiles.getSessionForTab(this.tab.id, host);
+		return session ? session.data : null;
 	});
 } else {
 	// in chrome the only way to send a synchronous message (from the content script to the background)
@@ -73,9 +72,11 @@ new RequestListener({
 		this.isOptionsRequest = false; // chrome only
 
 		const domain = this.domain = domainFromUrl(url);
-		const profile = this.profile = this.isMainFrame
-		? Profiles.create({ requestId, domain, tabId, })
-		: Profiles.get({ tabId, domain, });
+		const session = this.session = this.isMainFrame
+		? Profiles.getSessionForPageLoad(tabId, domain)
+		: Profiles.getSessionForTab(tabId, domain);
+
+		const profile = this.profile = session.data;
 
 		if (profile.disabled) { return ignore; }
 	}
@@ -142,19 +143,19 @@ new RequestListener({
 			if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return this.removeHSTS(header); }
 		});
 
-		this.type === 'main_frame' && this.profile.attachTo(this.tabId);
+		this.type === 'main_frame' && this.session.attachToTab(this.tabId);
 
 		if (changed) { return { responseHeaders, }; }
 	}
 
 	onAuthRequired() {
-		if (this.type === 'main_frame') { this.profile.detachFrom(this.tabId); return reset; }
+		if (this.type === 'main_frame') { this.session.detachFromTab(this.tabId); return reset; }
 	}
 	onBeforeRedirect() {
-		if (this.type === 'main_frame') { this.profile.detachFrom(this.tabId); return reset; }
+		if (this.type === 'main_frame') { this.session.detachFromTab(this.tabId); return reset; }
 	}
 	onErrorOccurred() {
-		if (this.type === 'main_frame') { this.profile.detachFrom(this.tabId); }
+		if (this.type === 'main_frame') { this.session.detachFromTab(this.tabId); }
 	}
 
 	objectifyHeaders(headers, which) {
@@ -262,12 +263,12 @@ options.children.clearCache.children.where.when({
 	true: () => webRequest.onHeadersReceived.addListener(clearCache, { urls: [ '*://*/*', ], }, [ ]),
 });
 
-// let other views, and in chrome the content, post notifications
+// let other views and the content post notifications
 Messages.addHandler('notify', function(method, { title, message, url, }) {
 	url || (url = this.tab.url);
 	const { id: tabId, title: tabTitle, } = this.tab;
 	const domain = domainFromUrl(url);
-	const logLevel = Profiles.findStack(domain).get('logLevel');
+	const logLevel = Profiles.getSessionForTab(tabId, domain).data.logLevel;
 	notify(method, { title, message, url, tabId, tabTitle, logLevel, });
 });
 

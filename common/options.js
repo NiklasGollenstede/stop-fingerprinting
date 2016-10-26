@@ -1,14 +1,13 @@
 (() => { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'node_modules/regexpx/': RegExpX,
 	'node_modules/es6lib/object': { deepFreeze, },
+	'node_modules/regexpx/': RegExpX,
 	'node_modules/web-ext-utils/options/': Options,
 	'node_modules/web-ext-utils/chrome/': { Storage, applications: { blink, }, },
 	utils: { DOMAIN_CHARS, },
 }) {
 
-const model = deepFreeze([
-	Object.assign({
-		name: 'clearCache',
+const model = deepFreeze({
+	clearCache: Object.assign({
 		title: 'Disable Caching',
 		type: 'label',
 	}, blink ? { // chrome
@@ -47,50 +46,25 @@ const model = deepFreeze([
 			{ name: 'where', type: 'hidden', default: false, },
 			{ name: 'what', type: 'hidden', default: false, },
 		],
-	}), {
-		name: 'equivalentDomains',
-		title: 'Equivalent Domains',
-		description: ``, // TODO
-		maxLength: Infinity,
-		addDefault: String.raw`*.domain.com | www.domain.co.uk | *.*.berlin`,
-		restrict: {
-			match: {
-				exp: RegExpX`^(?! \s* \| \s* ) (?:
-					(?: ^ | \s* \| \s* )      # '|' separated list of:
-					(?:                                # '<sub>.<name>.<tld>':
-						  (?:
-							   \* \. |(?:    ${ DOMAIN_CHARS }+ \.)*      # '*' or a '.' terminated list of sub domain names
-						) (?:
-							   \*    |       ${ DOMAIN_CHARS }+           # '*' or a domain name
-						) (?:
-							\. \*    |(?: \. ${ DOMAIN_CHARS }+   )+      # '.*' or '.'+ TLD
-						)
-					)
-				)+$`,
-				message: `Each line must be a '|' separated list of domains (<sub>.<name>.<tld>)`,
-			},
-			unique: '.',
-		},
-		type: 'string',
-	}, {
-		name: 'debug',
+	}),
+	debug: {
 		title: 'Enable debugging',
 		description: `Enable some stuff that can definitely be used to compromise your privacy and security but is helpful when debugging`,
 		type: 'bool',
 		default: false,
 		expanded: false,
-	}, {
-		name: 'profiles',
+	},
+	profiles: {
 		maxLength: Infinity,
 		restrict: { match: (/^\{[0-9a-f\-]{40}\}$/), unique: '.', },
 		type: 'hidden',
-	}, {
-		name: 'addProfile',
+	},
+	addProfile: {
 		title: 'Add new profile',
 		default: 'Add',
 		type: 'control',
 	},
-]);
+});
 
 const listerners = new WeakMap;
 
