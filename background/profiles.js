@@ -169,7 +169,7 @@ class ProfileStack {
 	}
 
 	init() {
-		if (this.values) { return; }
+		if (this.values) { return this; }
 		this.parent && this.parent.init();
 		this.values = Object.create(this.parent && this.parent.values || null);
 		(function clone(model, data, values) {
@@ -193,16 +193,17 @@ class ProfileStack {
 		this.screenGen = !this.values.screen ? { generate() { return null; }, } : new ScreenGen(this.values.screen); // TODO: XXX: these may throw
 
 		console.log('init done', this);
+		return this;
 	}
 
-	getSessionForPageLoad(tabId, url) {
+	getSessionForPageLoad(url, prev, isOverwrite) {
 		this.init();
 
 		let origin = this.origins.find(_=>_.includes(url));
 		if (!origin) {
 			if (
 				this === defaultStack
-				|| tabIdToTempProfId.get(tabId) === this.id
+				|| isOverwrite
 			) { origin = originFromUrl(url); }
 			else { throw new Error(`ProfileStack.newSession() called with wrong origin`); }
 		}
@@ -213,8 +214,7 @@ class ProfileStack {
 				if (session && !session.outdated) { return session; } // origin was previously visited in this browser session
 			} break;
 			case 'tab': {
-				const session = tabIdToSession.get(tabId);
-				if (session && !session.outdated && session.origin === origin) { return session; } // origin is loaded in this tab anyway
+				if (prev && !prev.outdated && prev.origin === origin) { return prev; } // origin is loaded in this tab anyway
 			} break;
 			// case 'page': // must create a new session on every load
 		}
@@ -235,7 +235,7 @@ class ProfileStack {
 		this.values = null;
 
 		// detach from current scopes
-		this.sessions.forEach(session => session.outdade());
+		this.sessions.forEach(session => session.outdate());
 	}
 
 	destroy(reason = 'profileDeleted') {
@@ -243,13 +243,11 @@ class ProfileStack {
 		profIdToStack.delete(this.id, this);
 	}
 
-	static findStack(tabId, url) {
-		const tempId = tabIdToTempProfId.get(tabId);
-		if (tempId) { return profIdToStack.get(tempId); }
+	static findStack(url) {
 		for (const [ , stack, ] of profIdToStack) {
-			if (stack.origins.some(_=>_.includes(url))) { return stack; }
+			if (stack.origins.some(_=>_.includes(url))) { return stack.init(); }
 		}
-		return defaultStack;
+		return defaultStack.init();
 	}
 }
 
@@ -266,16 +264,8 @@ class Session {
 		data.navigator = this.navigator && this.navigator.toJSON();
 		data.screen = this.stack.screenGen.generate();
 		data.debug = options.children.debug.value;
+		data.debug && (data.profileTitle = stack.data.title.value);
 		console.log('Session.created', this);
-	}
-
-	attachToTab(tabId) {
-		console.log('Session.attachToTab', this, tabId);
-		tabIdToSession.set(tabId, this);
-	}
-	detachFromTab(tabId) {
-		console.log('Session.detachFrom', this, tabId);
-		tabIdToSession.get(tabId) === this && tabIdToSession.delete(tabId);
 	}
 
 	outdate() {
@@ -293,41 +283,17 @@ options.children.profiles.whenChange((_, { current: ids, }) => {
 });
 
 const Profiles = ({
-	getSessionForPageLoad(tabId, rawUrl) { // never returns null, may only be called during a tabs top_frame request
+	getSessionForPageLoad(rawUrl, tempId, previous) {
 		const url = new URL(rawUrl);
-		const stack = ProfileStack.findStack(tabId, url);
-		return stack.getSessionForPageLoad(tabId, url);
-	},
-	getSessionForTab(tabId, rawUrl) { // may return null
-		const url = new URL(rawUrl);
-		let session = tabIdToSession.get(tabId);
-		if (session && !session.origin.includes(url)) {
-			throw new Error(`The current session for tab ${ tabId } does not match the origin ${ session.origin }`);
-		}
-		return session || null;
-	},
-	detachFromTab(tabId, rawUrl) {
-		const url = new URL(rawUrl);
-		let session = tabIdToSession.get(tabId);
-		if (session || !session.origin.includes(url)) { return; }
-		tabIdToSession.delete(tabId);
-	},
-	findStack(tabId, rawUrl) {
-		return ProfileStack.findStack(tabId, new URL(rawUrl));
+		const stack = tempId ? profIdToStack.get(tempId) : ProfileStack.findStack(url);
+		return stack.getSessionForPageLoad(url, previous, !!tempId);
 	},
 	getNames() {
 		return Array.from(profIdToData.values()).map(
 			({ children: { id: { value: id, }, title: { value: name, }, }, }) => ({ id, name, })
 		);
 	},
-	setTempProfileForTab(tabId, profileId) {
-		if (profileId == null) { return -tabIdToTempProfId.delete(tabId); }
-		if (profIdToData.has(profileId)) { tabIdToTempProfId.set(tabId, profileId); return 1; }
-		return 0;
-	},
-	getTempProfileForTab(tabId) /*: ?string */ {
-		return tabIdToTempProfId.get(tabId) || null;
-	},
+	prepare() { /* triggers the asynchronous rebuild(), if necessary */ },
 });
 
 Object.keys(Profiles).forEach(key => {

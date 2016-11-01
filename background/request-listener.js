@@ -2,8 +2,8 @@
 	'node_modules/web-ext-utils/chrome/': { webRequest, },
 }) {
 
-const ignore = Symbol('ignore');
-const reset = Symbol('ignore');
+const ignore = { toString() { return 'ignore'; }, };
+const reset = { toString() { return 'ignore'; }, };
 
 // TODO: If a request is redirected to a data:// URL, onBeforeRedirect is the last reported event.
 
@@ -38,8 +38,8 @@ function RequestListener(filter, options, Handler) {
 			if (handler === ignore) { return; }
 			if (!handler) { try {
 				handler = handlers[requestId] = new Handler(...arguments);
-				if (handler === reset) { done(arguments[0]); console.log('reset', requestId, event, url); }
-				if (handler === ignore) { done(arguments[0]); handlers[requestId] = ignore; console.log('ignore', requestId, event, url); }
+				if (handler === reset) { done(arguments[0]); console.log('reset', requestId, event, url); return; }
+				if (handler === ignore) { done(arguments[0]); handlers[requestId] = ignore; console.log('ignore', requestId, event, url); return; }
 			} catch (error) {
 				console.error('Uncaught error during handler construction', error);
 				return;
@@ -62,7 +62,7 @@ function RequestListener(filter, options, Handler) {
 				}
 				return value;
 			} catch (error) {
-				console.error(`Uncaught error in "${ event }" handler`, error);
+				console.error(`Uncaught error in "${ event }" handler of`, handler, error);
 			}
 		}
 	}

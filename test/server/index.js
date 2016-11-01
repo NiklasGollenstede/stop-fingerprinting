@@ -4,7 +4,7 @@ const Express = require('express');
 const BodyParser = require('body-parser');
 const CookieParser = require('cookie-parser');
 const {
-	concurrent: { async, promisify, },
+	concurrent: { _async, promisify, },
 	fs: { FS, Path, },
 	functional: { log, },
 	network: { mimeTypes, },
@@ -12,7 +12,7 @@ const {
 
 const CSP = require('./csp.js');
 
-const Server = module.exports = async(function*({
+const Server = module.exports = _async(function*({
 	host = 'localhost',
 	useCsp = { },
 	httpPorts = [ 80, ],

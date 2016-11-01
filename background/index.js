@@ -11,6 +11,7 @@
 	sdkConection,
 	RequestListener, RequestListener: { ignore, reset, },
 	Profiles,
+	Tab,
 	require,
 }) {
 console.log('Ran updates', updated);
@@ -19,19 +20,25 @@ window.options = options;
 window.Profiles = Profiles;
 window.Chrome = window.Browser = arguments[0]['node_modules/web-ext-utils/chrome/'];
 
-	Messages.addHandler('getSenderProfile', function() { // TODO: only allow for top frame
-		console.log('getSenderProfile', this);
-		const session = Profiles.getSessionForTab(this.tab.id, this.tab.url);
-		// session will be null for data: (and blob:/file:/... ?) urls. Those need to be handled in some way
-		// should probably listen to webNavigation to detect tab loads (and unloads!) that don't cause a network request
-		// for data: urls it should use the origin of the window.opener, if present, and be ignored otherwise
-		return session ? session.data : null;
-	});
+	Tabs         .onCreated                   .addListener((...args) => console.log('onCreated'                   , ...args));
+	Tabs         .onRemoved                   .addListener((...args) => console.log('onRemoved'                   , ...args));
+	webNavigation.onBeforeNavigate            .addListener((...args) => console.log('onBeforeNavigate'            , ...args));
+	webNavigation.onCommitted                 .addListener((...args) => console.log('onCommitted'                 , ...args));
+	webNavigation.onErrorOccurred             .addListener((...args) => console.log('onErrorOccurred'             , ...args));
+
+const callOnTab = member => details => Tab.get(details.tabId)[member](details);
+webNavigation.onBeforeNavigate .addListener(callOnTab('startNavigation'));
+webNavigation.onCommitted      .addListener(callOnTab('commitNavigation'));
+webNavigation.onErrorOccurred  .addListener(callOnTab('cancelNavigation'));
+
+Messages.addHandler('getSenderProfile', function() {
+	console.log('getSenderProfile', this);
+	return Tab.get(this.tab.id).getContentProfile(this.tab.url);
+});
 
 // TODO: do cached pages from the tab history pose a problem?
 // TODO: it seems that sync XHRs are not sent here by firefox
 new RequestListener({
-	// urls: [ '*://*/*', ],
 	urls: [ '<all_urls>', ],
 }, {
 	onBeforeRequest: [ 'blocking', ],
@@ -39,24 +46,18 @@ new RequestListener({
 	onHeadersReceived: [ 'blocking', 'responseHeaders', ], // not needed in firefox (?)
 }, class Request {
 	constructor({ requestId, url, tabId, type, }) {
-		this.requestId = requestId; this.url = url; this.type = type, this.tabId = tabId;
-		// console.log('request start', this);
+		this.requestId = requestId; this.url = url; this.type = type; this.tabId = tabId;
+		console.log('request start', this);
+
+		this.tab = Tab.get(tabId);
 		this.isMainFrame = type === 'main_frame';
 
-		if (this.isMainFrame && gecko && url.startsWith('https://addons.mozilla.org/')) { return ignore; } // can't attach content_scripts anyway
+		this.session = this.tab.getSession(url, this.isMainFrame);
 
-		const session = this.session = this.isMainFrame
-		? Profiles.getSessionForPageLoad(tabId, url)
-		: Profiles.getSessionForTab(tabId, url);
-
-		if (!session && !this.isMainFrame) { return ignore; } // TODO: this is not always the best idea ...
-
-		const profile = this.profile = session.data;
-
-		if (profile.disabled) { return ignore; }
+		if (!this.session || (this.profile = this.session.data).disabled) { this.destroy(); return ignore; }
 	}
 	destroy() {
-		// console.log('request end', this.requestId);
+		console.log('request end', this.requestId);
 	}
 
 	// TODO: (only?) firefox: this is not called for the favicon
@@ -82,16 +83,7 @@ new RequestListener({
 			if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return this.removeHSTS(header); }
 		});
 
-		this.type === 'main_frame' && this.session.attachToTab(this.tabId);
-
 		if (changed) { return { responseHeaders, }; }
-	}
-
-	onBeforeRedirect() {
-		if (this.type === 'main_frame') { this.session.detachFromTab(this.tabId); return reset; }
-	}
-	onErrorOccurred() {
-		if (this.type === 'main_frame') { this.session.detachFromTab(this.tabId); }
 	}
 
 	objectifyHeaders(headers, which) {
@@ -142,22 +134,26 @@ new RequestListener({
 Messages.addHandler('notify', function(method, { title, message, url, }) {
 	url || (url = this.tab.url);
 	const { id: tabId, title: tabTitle, } = this.tab;
-	const logLevel = Profiles.getSessionForTab(tabId, url).data.logLevel;
+	const tab = Tab.get(tabId);
+	const logLevel = tab.session ? tab.session.data.logLevel : null;
 	notify(method, { title, message, url, tabId, tabTitle, logLevel, });
 });
 
 Messages.addHandler('openOptions', () => showExtensionTab('/ui/home/index.html#options', '/ui/home/index.html'));
 
-Messages.addHandlers('Profiles.', Profiles);
+Messages.addHandler('getTempProfileForTab', tabId => Tab.get(tabId).tempProfId);
+Messages.addHandler('setTempProfileForTab', (tabId, value) => Tab.get(tabId).tempProfId = value);
+Messages.addHandler('getProfilesNames', () => Profiles.getNames());
 
 // set the correct browserAction icon
 setBrowserAction({ icon: 'detached', title: 'installed', });
 Tabs.onUpdated.addListener(function(tabId, info, { url, }) {
 	if (!('status' in info)) { return; }
+	const tab = Tab.get(tabId);
 	setBrowserAction(
-		Profiles.getSessionForTab(tabId, url) == null
+		tab.session == null
 		? { tabId, icon: 'inactive', title: 'browserTab', }
-		: Profiles.getTempProfileForTab(tabId) == null
+		: tab.tempProfId == null
 		? { tabId, icon: 'default', title: 'default', }
 		: { tabId, icon: 'temp', title: 'tempActive', }
 	);

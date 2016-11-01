@@ -72,6 +72,9 @@ class Frame {
 		this.cfmm.addEventListener('unload', this);
 		this.top = null; // the top level window, if its url isScriptable
 		this.utils = null; // nsIDOMWindowUtils of .top
+		this.pageUtils = new PageUtils(this);
+		this.pauseTokens = new Set; // used by this.pageUtils. cleared on topWindowCreated
+		this.onDOMWindowCreatedListeners = new Set; // used by this.pageUtils. cleared on topWindowCreated
 		console.log('created Frame', this);
 	}
 
@@ -102,6 +105,8 @@ class Frame {
 	onDOMWindowCreated(event) {
 		const cw = event.target.defaultView;
 
+		if (cw.location.protocol === 'moz-extension:') { extendWebExtWindow(cw); } // TODO: find a way to identify this extension
+
 		if (cw.top === cw) { // TODO: verify that this is true exactly iff cw is the tabs top level frame
 			return this.topWindowCreated(cw);
 		}
@@ -111,8 +116,10 @@ class Frame {
 		console.log('topWindowCreated', cw);
 		this.top = null;
 		this.utils = null;
+		this.pauseTokens.clear();
+		this.onDOMWindowCreatedListeners.clear();
 
-		if (!isScriptable(cw)) { console.log('skipping non-content tab', this); return; }
+		if (!isScriptable(cw) && cw.document.URL !== 'about:blank') { console.log('skipping non-content tab', this); return; }
 
 		this.top = cw;
 		this.utils = cw.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
@@ -120,22 +127,19 @@ class Frame {
 
 		ucw.getPageUtils = Cu.exportFunction(caller => {
 			delete ucw.getPageUtils;
-			return PageUtils(this.cfmm, caller, this.top, this.utils);
+			return Cu.cloneInto(this.pageUtils, caller, { cloneFunctions: true, });
 		}, Cu.waiveXrays(cw), { allowCrossOriginArguments: true, });
 
 	}
 }
 
-function PageUtils(cfmm, caller, top, utils) {
+function PageUtils(frame) {
 
 	// ???: is utils.setCSSViewport() callable and useful?
 
-	const pausing = new Set;
-	const onDOMWindowCreatedListeners = new Set;
-
 	function onDOMWindowCreatedDispatcher(event) {
 		const cw = event.target.defaultView;
-		onDOMWindowCreatedListeners.forEach(listener => {
+		frame.onDOMWindowCreatedListeners.forEach(listener => {
 			try { listener(cw); }
 			catch (error) { console.error('onDOMWindowCreated listener threw', error); }
 		});
@@ -145,38 +149,38 @@ function PageUtils(cfmm, caller, top, utils) {
 
 	const api = ({
 		pause() {
-			if (pausing.size === 0) {
+			if (frame.pauseTokens.size === 0) {
 				console.log('pausing now');
-				utils.suppressEventHandling(true);
-				utils.suspendTimeouts();
+				frame.utils.suppressEventHandling(true);
+				frame.utils.suspendTimeouts();
 			}
 			const token = Math.round(Math.random() * Number.MAX_SAFE_INTEGER);
-			pausing.add(token);
-			// console.log('pausing', pausing.size);
+			frame.pauseTokens.add(token);
+			// console.log('pausing', frame.pauseTokens.size);
 			return token;
 		},
 		resume(token) {
-			const removed = pausing.delete(token);
-			if (pausing.size === 0) {
+			const removed = frame.pauseTokens.delete(token);
+			if (frame.pauseTokens.size === 0) {
 				console.log('resuming now');
-				utils.suppressEventHandling(false);
-				utils.resumeTimeouts();
+				frame.utils.suppressEventHandling(false);
+				frame.utils.resumeTimeouts();
 			}
-			// console.log('resuming', pausing.size);
+			// console.log('resuming', frame.pauseTokens.size);
 			return removed;
 		},
 		onDOMWindowCreated: {
 			addListener(func) {
 				checkType(func, 'function');
-				if (onDOMWindowCreatedListeners.size === 0) {
-					cfmm.addEventListener('DOMWindowCreated', onDOMWindowCreatedDispatcher);
+				if (frame.onDOMWindowCreatedListeners.size === 0) {
+					frame.cfmm.addEventListener('DOMWindowCreated', onDOMWindowCreatedDispatcher);
 				}
-				onDOMWindowCreatedListeners.add(func);
+				frame.onDOMWindowCreatedListeners.add(func);
 			},
 			removeListener(func) {
-				const removed = onDOMWindowCreatedListeners.delete(func);
-				if (onDOMWindowCreatedListeners.size === 0) {
-					cfmm.removeEventListener('DOMWindowCreated', onDOMWindowCreatedDispatcher);
+				const removed = frame.onDOMWindowCreatedListeners.delete(func);
+				if (frame.onDOMWindowCreatedListeners.size === 0) {
+					frame.cfmm.removeEventListener('DOMWindowCreated', onDOMWindowCreatedDispatcher);
 				}
 				return removed;
 			}
@@ -202,10 +206,23 @@ function PageUtils(cfmm, caller, top, utils) {
 	});
 
 	function checkType(value, type, name = 'argument') {
-		if (typeof value !== type) { throw new caller.TypeError(`"${ name }" must be a ${ type } (?)`); }
+		if (typeof value !== type) { throw new TypeError(`"${ name }" must be a ${ type } (?)`); }
 	}
 
-	return Cu.cloneInto(api, caller, { cloneFunctions: true, });
+	return api;
+}
+
+function extendWebExtWindow(cw) {
+	const ucw = Cu.waiveXrays(cw);
+	ucw./*browser.tabs.*/isScriptable = Cu.exportFunction(function(url) {
+		try {
+			const nsIURI = BrowserUtils.makeURI(url);
+			return allUrls.matches(nsIURI) && !amoUrl.matches(nsIURI);
+		} catch (error) {
+			console.error('isScriptable ', url, ' threw', error);
+			return false;
+		}
+	}, ucw, { allowCrossOriginArguments: true, });
 }
 
 function parseError(string) {

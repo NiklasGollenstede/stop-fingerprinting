@@ -1,6 +1,6 @@
 'use strict'; /* globals exports, setTimeout: true, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-const { async, spawn, } = require('webextension/node_modules/es6lib/concurrent.js');
+const { _async, spawn, } = require('webextension/node_modules/es6lib/concurrent.js');
 const Port = require('webextension/node_modules/es6lib/port.js');
 const webExtension = require('sdk/webextension');
 const { setTimeout, } = require('sdk/timers');
@@ -21,7 +21,7 @@ const webExtHandlers = { // handlers for the actions specified in /background/sd
 	},
 };
 
-const startWebExt = async(function*() {
+const startWebExt = _async(function*() {
 
 	// load the WebExtension
 	let extension;

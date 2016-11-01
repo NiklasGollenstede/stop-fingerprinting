@@ -196,7 +196,7 @@ function makeFunction(body, name, fullName, length, isCtor, isClass) {
 			}
 		}
 		: !isClass
-		? function() {
+		? function() { // TODO: the exposed function still has a [[Construct]] field, which is detectable by passing it as new.target into Reflect.construct()
 			if (new.target) {
 				throw new TypeError(name +' is not a constructor'); // TODO: instead if `name` this actually needs to be the local identifier of wrapper at it's call site
 			}

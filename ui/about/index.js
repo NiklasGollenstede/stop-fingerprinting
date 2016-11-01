@@ -1,7 +1,7 @@
 'use strict';
 
 const xhr = new XMLHttpRequest; xhr.open('get', '/package.json', true); xhr.send();
-xhr.onload = ({ target: { response: json, }, }) => main(JSON.parse(json), (window.browser || window.chrome).runtime.getManifest());
+xhr.onload = ({ target: { response: json, }, }) => main(JSON.parse(json), window.chrome.runtime.getManifest());
 
 function main(_package, manifest) {
 
