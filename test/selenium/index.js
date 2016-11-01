@@ -6,7 +6,7 @@ chai.should();
 global.expect = chai.expect;
 
 const {
-	concurrent: { async, spawn, promisify, },
+	concurrent: { _async, asyncClass, spawn, promisify, },
 	fs: { FS, Path, },
 } = require('es6lib');
 
@@ -24,9 +24,9 @@ const Firefox = require('selenium-webdriver/firefox');
 const { Key, } = require('selenium-webdriver/lib/input');
 
 
-const TestPrototype = {
+const Test = asyncClass({
 
-	constructor: async(function*({ noExt = false, server, } = { }) {
+	constructor: function*({ noExt = false, server, } = { }) {
 		if (!noExt) {
 			// start a web server which the extension will contact during startup
 			this.setupServer = new Http.Server(this._onSetupRequest.bind(this));
@@ -59,10 +59,10 @@ const TestPrototype = {
 		this.pendingStartUp = null; // holds a PromiseCapability with additional options while the browser is starting
 		this.browser = null; // reference to the browser driver, while it runs
 		return this;
-	}),
+	},
 
 	// start browser with config, wait for the add-on to have started, clear server logs
-	start: async(function*({ storage, }) {
+	start: function*({ storage, }) {
 		if (this.browser || this.pendingStartUp) { throw new Error('Browser already started'); }
 
 		const ctx = this.pendingStartUp = { options: { storage, token: Math.random().toString(36).slice(2), }, };
@@ -72,18 +72,18 @@ const TestPrototype = {
 		this.pendingStartUp = null;
 		this.takeLogs();
 		return this.browser;
-	}),
+	},
 
 	// close browser, clear server logs
-	stop: async(function*() { // TODO: add 'force' option
+	stop: function*() { // TODO: add 'force' option
 		this.pendingStartUp && (yield this.pendingStartUp.promise);
 		this.browser && (yield this.browser.quit());
 		this.browser = null;
 		this.takeLogs();
-	}),
+	},
 
 	// stop servers, calls .stop(true)
-	destroy: async(function*() {
+	destroy: function*() {
 		(yield this.stop(true));
 		this.server && (yield this.server.close());
 		this.server = null;
@@ -91,7 +91,7 @@ const TestPrototype = {
 		this.setupServer = null;
 		// TODO: destroy builder
 		this.builder = null;
-	}),
+	},
 
 	takeLogs() {
 		return this.serverLogs.splice(0, Infinity);
@@ -100,26 +100,26 @@ const TestPrototype = {
 		return this.serverLogs.slice(0, Infinity);
 	},
 /*
-	openTab: async(function*(url) {
+	openTab: function*(url) {
 		(yield this.browser.executeScript('window.open()')); console.log('opened');
 		// TODO: wait?
 		(yield this.focusTab()); console.log('focused');
 		url != null && (yield this.browser.get(url)); console.log('navigated');
-	}),
-	focusTab: async(function*(index) {
+	},
+	focusTab: function*(index) {
 		const tabs = (yield this.browser.getAllWindowHandles()); console.log('tabs', tabs);
 		index = index == null ? tabs.length - 1 : index < 0 ? tabs.length - 1 + length : length;
 		index = Math.max(0, Math.min(index, tabs.length - 1)); console.log('index', index);
 		(yield this.browser.switchTo().window(tabs[index]));
-	}),
-	closeTab: async(function*(index) {
+	},
+	closeTab: function*(index) {
 		index != null && (yield this.focusTab(index));
 		(yield this.browser.close());
 		// (yield this.browser.executeScript('window.close()'));
 		(yield this.focusTab(0));
-	}),
+	},
 */
-	_makeBuilder: (function() {
+	_makeBuilder: function() {
 		const chromeOpts = new Chrome.Options();
 		chromeOpts.addArguments(`load-extension=${ this.tempDir }/webextension`);
 
@@ -153,7 +153,7 @@ const TestPrototype = {
 		.setFirefoxOptions(ffOpts)
 		.disableEnvironmentOverrides()
 		;
-	}),
+	},
 
 	_onSetupRequest({ url, body, }, out) {
 		const ctx = this.pendingStartUp;
@@ -182,30 +182,27 @@ const TestPrototype = {
 		out.end();
 	},
 	[Symbol.toStringTag]: 'Test',
-};
-Object.keys(TestPrototype).forEach(key => Object.defineProperty(TestPrototype, key, { enumerable: false, }));
-const Test = TestPrototype.constructor;
-Test.prototype = TestPrototype;
+});
 
 Test.register = function(options, done) {
 	let test, getTest = new Test(options);
 
-	before(async(function*() {
+	before(_async(function*() {
 		this.timeout(6000);
 		test = (yield getTest);
 		(yield done(test));
 	}));
 
-	beforeEach(async(function*() {
+	beforeEach(_async(function*() {
 	}));
 
-	afterEach(async(function*() {
+	afterEach(_async(function*() {
 		test.server.files = null;
 		(yield test.browser.get('about:blank'));
 		test.takeLogs();
 	}));
 
-	after(async(function*() {
+	after(_async(function*() {
 		(yield test.destroy());
 	}));
 };

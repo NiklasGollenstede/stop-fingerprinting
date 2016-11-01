@@ -1,7 +1,7 @@
 'use strict'; /* globals describe, it, beforeEach, afterEach, before, after, __dirname, expect */
 
 const {
-	concurrent: { async, },
+	concurrent: { _async, },
 } = require('es6lib');
 
 const Test = require('..');
@@ -15,7 +15,7 @@ const Test = require('..');
 			server: {
 				httpPorts: [ 0, 0, 0, ],
 			},
-		}, async(function*(_test) {
+		}, _async(function*(_test) {
 			test = _test;
 			browser = (yield test.start({
 

@@ -1,6 +1,6 @@
 (function() { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/web-ext-utils/update/': updated,
-	'node_modules/es6lib/concurrent': { sleep, async, },
+	'node_modules/es6lib/concurrent': { sleep, _async, },
 	'node_modules/es6lib/functional': { throttle, },
 	'node_modules/es6lib/port': for_chrome_Messages,
 	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, browsingData, webNavigation, webRequest, applications: { gecko, }, content, },

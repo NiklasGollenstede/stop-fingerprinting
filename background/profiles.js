@@ -1,6 +1,6 @@
 (function() { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/web-ext-utils/update/': updated, // wait for updates to be run
-	'node_modules/es6lib/concurrent': { async, },
+	'node_modules/es6lib/concurrent': { _async, },
 	'node_modules/es6lib/functional': { log, },
 	'node_modules/es6lib/object': { MultiMap, deepFreeze, },
 	'node_modules/get-tld/': { Host, getTLD, },
@@ -56,7 +56,7 @@ function rebuild() {
 	return; // that's it (?)
 }
 
-const addProfile = async(function*(id) {
+const addProfile = _async(function*(id) {
 	const data = (yield ProfileData(id));
 	profIdToData.set(id, data);
 

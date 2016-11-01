@@ -1,5 +1,5 @@
 (() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'node_modules/es6lib/concurrent': { async, },
+	'node_modules/es6lib/concurrent': { _async, },
 	'node_modules/es6lib/dom': { createElement, DOMContentLoaded, },
 	'node_modules/es6lib/string': { Guid },
 	'node_modules/web-ext-utils/tabview/': TabView,
@@ -10,7 +10,7 @@
 window.options = options;
 window.profiles = { };
 
-const deleteProfile = async(function*(profile) {
+const deleteProfile = _async(function*(profile) {
 	const id = profile.children.id.value;
 	(yield profile.resetAll());
 	(yield options.children.profiles.values.splice(options.children.profiles.values.current.indexOf(id), 1));
@@ -20,7 +20,7 @@ const deleteProfile = async(function*(profile) {
 	delete window.profiles[id];
 });
 
-const addProfile = async(function*(id) {
+const addProfile = _async(function*(id) {
 	const created = !id;
 	if (created) {
 		id = `{${ Guid() }}`;

@@ -2,7 +2,7 @@
 
 exports.description = /* 'The [patched]? browser does[n't]? */ `persist window.name`;
 
-exports.getTest = isFixed => require('es6lib/concurrent').async(function*(test, browser, ports) {
+exports.getTest = isFixed => require('es6lib/concurrent')._async(function*(test, browser, ports) {
 
 	const token = Math.random().toString(36).slice(2);
 	test.server.files = {
