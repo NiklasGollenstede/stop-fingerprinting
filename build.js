@@ -242,7 +242,7 @@ const build = module.exports = async(function*(options) {
 	const jpm = 'node "'+ resolve(__dirname, 'node_modules/jpm/bin/jpm') +'"';
 	const run = command => execute(command, { cwd: outDir, });
 
-	if (options.xpi || (!options.run && !options.post && !options.zip)) {
+	if (options.xpi || (options.xpi !== false && !options.run && !options.post && !options.zip)) {
 		log((yield run(jpm +' xpi')).replace(packageJson.name, outputName));
 		(yield FS.rename(join(outDir, packageJson.name +'.xpi'), join(outDir, outputName +'.xpi')));
 	}

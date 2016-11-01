@@ -29,6 +29,9 @@ if (gecko) {
 	Messages.addHandler('getSenderProfile', function() { // TODO: only allow for top frame
 		console.log('getSenderProfile', this);
 		const session = Profiles.getSessionForTab(this.tab.id, this.tab.url);
+		// session will be null for data: (and blob:/file:/... ?) urls. Those need to be handled in some way
+		// should probably listen to webNavigation to detect tab loads (and unloads!) that don't cause a network request
+		// for data: urls it should use the origin of the window.opener, if present, and be ignored otherwise
 		return session ? session.data : null;
 	});
 } else {

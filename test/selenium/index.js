@@ -13,7 +13,7 @@ const {
 const HttpServer = require('../server/index.js');
 const buildExt = require('../../build.js');
 
-const makeTempDir = promisify(require('temp').mkdir);
+const makeTempDir = promisify(require('temp').track().mkdir);
 const eventToPromise = require('event-to-promise');
 const Https = require('https'), Http = require('http');
 const getBody = require('raw-body');

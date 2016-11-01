@@ -22,6 +22,7 @@
 		"jpm": "1.2.2",
 		"json5": "0.5.0",
 		"svgexport": "0.3.2",
+		"temp": "0.8.3",
 		"utf-8-validate": "1.2.1",
 		"winreg": "1.2.2",
 		"ws": "1.1.1",
@@ -43,7 +44,6 @@
 
 		"body-parser": "^1.15.1",
 		"cookie-parser": "^1.4.1",
-		"electron-prebuilt": "^1.4.0",
 		"event-to-promise": "0.7.0",
 		"express": "^4.13.4",
 		"fingerprintjs2": "^1.4.0",

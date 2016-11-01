@@ -16,6 +16,7 @@ if (
 // The alternative, to assign the .name once, instead of defining it.
 // This however would have the effect that an outside observer (e.g. through `window.open()`) would see the property change even though it shouldn't.
 // Also, for successful `window.open()` calls the .name of the opened window should remain unchanged (so for the first page load in a tab?, only if !profile.isolateTabs?).
+// TODO: the window.opener() survives cross origin navigations too ==> handle it the same way (set to null)
 
 let windowName = '';
 define('self', { name: {

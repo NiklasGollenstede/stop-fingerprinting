@@ -100,7 +100,7 @@ const originFromOrigin = cached(origin => ({
 	includes(url) { return url.origin === this.origin; },
 	toString() { return this.origin; },
 }));
-const originFromUrl = url/*: URL */ => originFromOrigin(url.origin);
+const originFromUrl = url/*: URL */ => originFromOrigin(url.origin); // TODO: handle 'null' origin (e.g. file:// urls)
 
 const originFromPattern = cached(function(pattern) {
 	pattern = nameprep(pattern);
