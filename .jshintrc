@@ -1,6 +1,7 @@
 {
 	"indent": 1, // indent with tabs
 	"-W002": false, // Value of '{caught exception}' may be overwritten in IE 8 and earlier.
+	"-W003": false, // '{a}' was used before it was defined.
 	"-W006": false, // Confusing minuses.
 	"-W030": false, // Expected an assignment or function call and instead saw an expression.
 	"-W034": false, // Unnecessary directive "use strict".

@@ -31,8 +31,8 @@ webNavigation.onBeforeNavigate .addListener(callOnTab('startNavigation'));
 webNavigation.onCommitted      .addListener(callOnTab('commitNavigation'));
 webNavigation.onErrorOccurred  .addListener(callOnTab('cancelNavigation'));
 
-Messages.addHandler('getSenderProfile', function() {
-	console.log('getSenderProfile', this);
+Messages.addHandler('getSenderProfile', function(openerUrl) {
+	console.log('getSenderProfile', openerUrl, this);
 	return Tab.get(this.tab.id).getContentProfile(this.tab.url);
 });
 

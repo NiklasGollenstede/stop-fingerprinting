@@ -3,13 +3,12 @@
 	'node_modules/es6lib/concurrent': { _async, },
 	'node_modules/es6lib/functional': { log, },
 	'node_modules/es6lib/object': { MultiMap, deepFreeze, },
-	'node_modules/get-tld/': { Host, getTLD, },
-	'node_modules/regexpx/': RegExpX,
 	'node_modules/web-ext-utils/chrome/': { Tabs, applications, rootUrl, Storage, },
 	'common/options': options,
 	'common/profile-data': ProfileData,
-	'common/utils': { notify, domainFromUrl, setBrowserAction, nameprep, },
+	'common/utils': { notify, domainFromUrl, setBrowserAction, },
 	'icons/urls': icons,
+	OriginPattern: { originFromPatternGroup, originFromUrl, },
 	ua: { Generator: NavGen, },
 	ScreenGen,
 }) {
@@ -19,8 +18,6 @@ const ruleModel         = ProfileData.model.rules.children;
 const profIdToData      = new Map;            // profileId         ==>  ProfileData, unsorted
 const profIdToStack     = new Map;            // profileId         ==>  ProfileStack, sorted by the ProfileStack's .priority
 const originToSession   = new Map;            // Origin            ==>  Session, unsorted, only if Session can be shared between tabs
-const tabIdToSession    = new Map;            // tabId             ==>  Session, unsorted, for every tab that currently holds a scriptable site
-const tabIdToTempProfId = new Map;            // tabId             ==>  profileId, unsorted
 let needRebuild = true; // rebuld() needs to be called before accessing any of the maps above.
 let mayRebuild = 0; // a value below zero indicates that some ProfileData are still loading and the (synchronous) rebuld() must thus fail.
 let defaultStack = null;
@@ -73,85 +70,8 @@ function removeProfile(id) {
 	console.log('removed ProfileData', profIdToData, profIdToStack, data);
 }
 
-const patternTypes = RegExpX`^(?: # anchor
-	(file:\/\/.*)	# file:// url prefix
-|				# OR
-	(?:			# a "normal" url
-		(			# scheme
-			https?: | ftp: | \*:
-		)				# is http, https, ftp or <any>
-	\/\/)?				# is optional (default to https)
-	(				# host
-		(?:\*\.)?		# may start with '*.'
-		[\w-]+			# must contain at least one word
-		(?: \.[\w-]+ )*	# may contain more '.'+ word
-		(?: :\d+ )?		# may have a port number
-	)					# is not optional
-	\/?
-)$`;
-
-/*interface Origin { // these are cached, so that there is only one instance per logical origin, which means that two Origins are equal iff o1 === o2
-	includes(url: URL) : bool;
-	toString() : string;
-}*/
-
-const originFromOrigin = cached(origin => ({
-	origin,
-	includes(url) { return url.origin === this.origin; },
-	toString() { return this.origin; },
-}));
-const originFromUrl = url/*: URL */ => originFromOrigin(url.origin); // TODO: handle 'null' origin (e.g. file:// urls)
-
-const originFromPattern = cached(function(pattern) {
-	pattern = nameprep(pattern);
-	const match = patternTypes.exec(pattern);
-	if (!match) { throw new Error(`Pattern "${ pattern }" is invalid`); }
-	let [ , filePrefix, protocol, host, ] = match;
-	protocol || (protocol = 'https:');
-
-	if (filePrefix) {
-		return {
-			prefix: filePrefix,
-			includes(url) { return url.href.startsWith(this.prefix); },
-			toString() { return this.prefix; },
-		};
-	}
-
-	const anySub = host.includes('*');
-	if (anySub) {
-		if (host.lastIndexOf('*') !== host.indexOf('*')) { throw new Error(`Pattern "${ pattern }" contains more than one '*' in the host part`); }
-		if (new Host(host).sub !== '*.') { throw new Error(`Pattern "${ pattern }" contains a '*' in a bad position`); }
-	}
-
-	if (!anySub && protocol !== '*') { return originFromOrigin((protocol +'//'+ host)); } // to get the correctly cached version
-
-	return {
-		pattern, protocol,
-		suffix: anySub && host.slice(2),
-		equals: !anySub && host,
-		includes(url) {
-			if (url.protocol !== this.protocol && this.protocol !== '*:') { return false; }
-			return this.suffix ? url.host.endsWith(this.suffix) : url.host === this.equals;
-		},
-		toString() { return this.pattern; },
-	};
-});
-const originFromPatternGroup = cached(function(patterns) {
-	const split = patterns.split(/\s*\|\s*/);
-	if (split.length === 1) { return originFromPattern(patterns); }
-	const origins = split.map(originFromPattern);
-	return {
-		patterns, origins,
-		includes(url) { return this.origins.some(_=>_.includes(url)); },
-		toString() { return this.patterns; },
-	};
-});
-
-let count = 0;
-
 class ProfileStack {
 	constructor(data, parent) {
-		if (count++ > 20) { throw new Error('count'); } // TODO: remove
 		data = data.children;
 		this.parent = parent;
 		this.id = data.id.value;
@@ -304,21 +224,6 @@ Object.keys(Profiles).forEach(key => {
 		return member.apply(Profiles, arguments);
 	};
 });
-
-function cached(func, cache) {
-	cache = cache || new Map;
-	return function wrapper(arg) {
-		let result = cache.get(arg);
-		if (result !== undefined) { return result; }
-		if (new.target) {
-			Reflect.construct(func, arguments, new.target === wrapper ? func : new.target);
-		} else {
-			result = func.apply(this, arguments);
-		}
-		cache.set(arg, result);
-		return result;
-	};
-}
 
 function deepDeepFlatteningClone(target, source) {
 	for (let key in source) {

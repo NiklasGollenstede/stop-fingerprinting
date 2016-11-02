@@ -1,15 +1,14 @@
 'use strict';
 
-const xhr = new XMLHttpRequest; xhr.open('get', '/package.json', true); xhr.send();
-xhr.onload = ({ target: { response: json, }, }) => main(JSON.parse(json), window.chrome.runtime.getManifest());
+main(window.chrome.runtime.getManifest());
 
-function main(_package, manifest) {
+function main(manifest) {
 
 	set('title', manifest.name);
 	set('version', manifest.version);
 	set('license', manifest.license);
 	set('author', manifest.author);
-	set('repo', 'href', _package.repository.url);
+	set('repo', 'href', manifest.repository.url);
 
 }
 

@@ -60,6 +60,7 @@ const webExtManifestJson = {
 	author: packageJson.author,
 	license: packageJson.license,
 	description: packageJson.description,
+	repository: packageJson.repository,
 
 	icons: { 64: 'icons/default/64.png', }, // TODO: read from dir
 

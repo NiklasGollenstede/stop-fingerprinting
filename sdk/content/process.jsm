@@ -128,7 +128,7 @@ class Frame {
 		ucw.getPageUtils = Cu.exportFunction(caller => {
 			delete ucw.getPageUtils;
 			return Cu.cloneInto(this.pageUtils, caller, { cloneFunctions: true, });
-		}, Cu.waiveXrays(cw), { allowCrossOriginArguments: true, });
+		}, ucw, { allowCrossOriginArguments: true, });
 
 	}
 }

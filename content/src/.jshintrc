@@ -40,7 +40,10 @@
 		"handleCriticalError": true,
 		"isMainFrame": true,
 		"needsCloning": true,
+		"originIncludes": true,
+		"pageLoadCount": true,
 		"profile": true,
+		"profileChanged": true,
 		"sandbox": true
 	},
 	"predef": [ // from https://github.com/jshint/jshint/blob/master/src/vars.js

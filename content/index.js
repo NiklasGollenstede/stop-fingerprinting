@@ -15,11 +15,18 @@ utils.cloneInto = cloneInto; utils.exportFunction = exportFunction;
 const startDone = (token => () => page.resume(token))(page.pause());
 
 spawn(function*() {
-	const profile = (yield Messages.request('getSenderProfile'));
-	if (!profile) { console.log('profile is null'); return; } // no profile available for this tab yet. This is not an error
+	const tabData = (yield Messages.request('getSenderProfile', window.opener && window.opener.document.URL));
+	if (!tabData) { console.log('profile is null'); return; } // no profile available for this tab yet. This is not an error
+	const {
+		profile,
+		changed: profileChanged, // whether this profile is a different one than on the last page load
+		pageLoadCount, // number of pages loaded in this tab, starting ta 1
+		includes: includeRegExpSource, // RegExp of (url.origin || url.href) that share their origin with the current page
+	} = tabData;
 	if (profile.disabled) { console.log('profile is disabled'); return; } // never mind ...
 
-	console.log('got profile', profile);
+	console.log('got profile', profile.nonce, tabData);
+	const includeRegExp = new RegExp(includeRegExpSource);
 
 	page.onDOMWindowCreated.addListener(injectInto);
 	injectInto(window);
@@ -34,14 +41,18 @@ spawn(function*() {
 		const exportFunction = func => utils.exportFunction(func, ucw, { allowCrossOriginArguments: true, });
 		const cloneInto = obj => utils.cloneInto(obj, ucw, { cloneFunctions: false, }); // expose functions only explicitly through exportFunction
 		const needsCloning = obj => obj !== null && typeof obj === 'object' && utils.getGlobalForObject(obj) !== ucw; // TODO: test
+		const originIncludes = url => (url = new URL(url, cw.location)) && url.origin === 'null' ? includeRegExp.test(url.href) : includeRegExp.test(url.origin);
 
 		sandbox.console = console;
 		sandbox.handleCriticalError = exportFunction(handleCriticalError.bind(this));
 		sandbox.profile = cloneInto(profile);
 		sandbox.isMainFrame = cw === window;
+		sandbox.profileChanged = profileChanged;
+		sandbox.pageLoadCount = pageLoadCount;
 		sandbox.exportFunction = exportFunction(exportFunction);
 		sandbox.cloneInto = exportFunction(cloneInto);
 		sandbox.needsCloning = exportFunction(needsCloning);
+		sandbox.originIncludes = exportFunction(originIncludes);
 		sandbox.sandbox = sandbox;
 		sandbox.ucw = ucw;
 

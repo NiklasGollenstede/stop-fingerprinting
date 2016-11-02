@@ -33,8 +33,10 @@ class Tab {
 		this.url = null; // : string
 		this.session = null; // : profiles/Session
 		this.navigation = null; // : Navigation
-		this.isScriptable = false;
-		this.contentPending = false;
+		this.isScriptable = false; // whether isScriptable(this.url)
+		this.contentPending = false; // whether .getContentProfile() has been called since .commitNavigation()
+		this.changedSession = true; // whether .commitNavigation() changed the value of this.session
+		this.loadCount = 0; // number of times .getContentProfile() was calles (successfuly), and thus the number of scriptable pages loaded in the tab
 	}
 
 	getSession(url, navigating) { // may return null
@@ -49,10 +51,16 @@ class Tab {
 	// for data: urls it should use the origin of the window.opener, if present, and be ignored otherwise
 		if (!this.contentPending) { throw new Error(`getContentProfile requested more than once per load`); }
 		this.contentPending = false;
+		this.loadCount++;
 
 		if (!this.session) { return null; }
 		if (!this.session.origin.includes(new URL(url))) { throw new Error(`Tab origin mismatch!`); }
-		return this.session.data;
+		return {
+			profile: this.session.data,
+			changed: this.changedSession,
+			pageLoadCount: this.loadCount,
+			includes: this.session.origin.regExp.source,
+		};
 	}
 
 	startNavigation(details) {
@@ -61,6 +69,7 @@ class Tab {
 	}
 
 	commitNavigation(details) {
+		this.changedSession = this.session !== this.navigation.session;
 		this.session = this.navigation.session;
 		this.url = this.navigation.url;
 		this.isScriptable = this.navigation.isScriptable;
