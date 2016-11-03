@@ -31,6 +31,7 @@ class OriginPattern {
 	}
 
 	includes(url/*: URL */) { /*: bool */
+		if (typeof url === 'string') { url = new URL(url); }
 		return url.origin === 'null'
 		? this.regExp.test(url.href)
 		: this.regExp.test(url.origin);
@@ -46,7 +47,7 @@ const originFromPlainString = cached(string => new OriginPattern(
 	RegExpX`^ ${ string } $`
 ), cache);
 
-const originFromUrl = url/*: URL */ =>url.origin === 'null'
+const originFromUrl = url/*: URL */ => url.origin === 'null'
 ? originFromPlainString(url.href)
 : originFromPlainString(url.origin);
 

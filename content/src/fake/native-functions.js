@@ -36,7 +36,7 @@ define('Error.prototype', {
 
 			const filtered = stack.filter(line => !test(frameFilter, line)).join('');
 
-			console.log('filtered stack', stack.join(''), 'to', filtered);
+			// console.log('filtered stack', stack.join(''), 'to', filtered);
 
 			return filtered;
 		}, x => x),

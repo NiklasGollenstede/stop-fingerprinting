@@ -10,7 +10,7 @@
 if (
 	!profile.windowName
 	|| !isMainFrame // TODO: test
-	|| pageLoadCount === 1 && (profile.session === 'browser' || window.opener != null && originIncludes(window.opener.location)) // first load in a tab and tab isolation is off
+	// || pageLoadCount === 1 && (profile.session === 'browser' || window.opener != null && originIncludes(window.opener.location)) // first load in a tab and tab isolation is off. @see window-open.js
 ) { break file; }
 
 // The code below keeps the underlying window.name as is (for the better or good, the page will be unable to read/write the actual property).

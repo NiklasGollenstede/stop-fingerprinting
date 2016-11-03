@@ -11,10 +11,15 @@ const Messages = new global.es6lib_port(browser, global.es6lib_port.web_ext_Runt
 const { page, page: { utils, }, } = browser;
 utils.cloneInto = cloneInto; utils.exportFunction = exportFunction;
 
-// pause the page untill startDone() gets called.
+// pause the page until startDone() gets called.
 const startDone = (token => () => page.resume(token))(page.pause());
 
 spawn(function*() {
+	Messages.addHandler('getCurrentProfile', () => tabData && { // this is called after history navigation, which may restore a cached window without any webRequests
+		id: profile.nonce,
+		url: window.location.href,
+	});
+
 	const tabData = (yield Messages.request('getSenderProfile', window.opener && window.opener.document.URL));
 	if (!tabData) { console.log('profile is null'); return; } // no profile available for this tab yet. This is not an error
 	const {

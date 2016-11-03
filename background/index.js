@@ -60,6 +60,9 @@ new RequestListener({
 		console.log('request end', this.requestId);
 	}
 
+	// TODO: cross-origin main_frame request redirects can iterate multiple sessions ...
+	onBeforeRedirect() { return reset; } // create a new instance when redirecting
+
 	// TODO: (only?) firefox: this is not called for the favicon
 	onBeforeSendHeaders({ requestHeaders, }) {
 		if (!this.session.navigator) { return; }
@@ -75,7 +78,9 @@ new RequestListener({
 		return { requestHeaders: this.orderHeaders(headers, requestHeaders, order), };
 	}
 
-	onHeadersReceived({ responseHeaders, }) {
+	onHeadersReceived({ responseHeaders, url, }) {
+		if (url !== this.url) { console.error('url changed', this.requestId, this.url, url); }
+
 		let changed = false;
 
 		// not firefox: disable HSTS header (has no effect in firefox, but it should have, so leave the code for now)

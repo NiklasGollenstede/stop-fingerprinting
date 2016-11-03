@@ -141,7 +141,7 @@ function PageUtils(frame) {
 		const cw = event.target.defaultView;
 		frame.onDOMWindowCreatedListeners.forEach(listener => {
 			try { listener(cw); }
-			catch (error) { console.error('onDOMWindowCreated listener threw', error); }
+			catch (error) { try { console.error('onDOMWindowCreated listener threw', error); } catch (_) { throw error; } }
 		});
 		// TODO: 'crawl' cw (opener, parent, top, ...) and notify this and other PageUtils (potentially in other processes ...) in some way
 		// ???: is there any way that a window A can get a reference to an other windows B if there was no reference from B to A when B was created?

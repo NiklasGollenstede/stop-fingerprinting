@@ -1,7 +1,7 @@
 (function() { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/es6lib/concurrent': { _async, sleep, spawn, },
 	'node_modules/es6lib/object': { setConst, },
-	'node_modules/web-ext-utils/chrome/': { Tabs, applications: { gecko, }, },
+	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, applications: { gecko, }, },
 	Profiles,
 }) {
 
@@ -21,7 +21,11 @@ class Navigation {
 	init(url) { // returns null iff !isScriptable(url)
 		this.url = url;
 		this.isScriptable = isScriptable(url);
-		this.session = !this.isScriptable ? null : Profiles.getSessionForPageLoad(url, this.tab.tempProfId, this.tab.session);
+		this.session = !this.isScriptable ? null : Profiles.getSessionForPageLoad(
+			url, this.tab.tempProfId,
+			this.session || this.tab.session // init() will be called multiple times if the fain_frame request is redirected.
+			// If possible, it should use the session of the previous request. TODO: actually, it should try both
+		);
 	}
 }
 
@@ -36,7 +40,8 @@ class Tab {
 		this.isScriptable = false; // whether isScriptable(this.url)
 		this.contentPending = false; // whether .getContentProfile() has been called since .commitNavigation()
 		this.changedSession = true; // whether .commitNavigation() changed the value of this.session
-		this.loadCount = 0; // number of times .getContentProfile() was calles (successfuly), and thus the number of scriptable pages loaded in the tab
+		this.loadCount = 0; // number of times .getContentProfile() was called (successfully), and thus the number of scriptable pages loaded in the tab
+		this.pastSessions = new Map; // nonce => Session; all `.session`s this ever had
 	}
 
 	getSession(url, navigating) { // may return null
@@ -54,7 +59,7 @@ class Tab {
 		this.loadCount++;
 
 		if (!this.session) { return null; }
-		if (!this.session.origin.includes(new URL(url))) { throw new Error(`Tab origin mismatch!`); }
+		if (!this.session.origin.includes(url)) { throw new Error(`Tab origin mismatch!`); }
 		return {
 			profile: this.session.data,
 			changed: this.changedSession,
@@ -69,12 +74,38 @@ class Tab {
 	}
 
 	commitNavigation(details) {
-		this.changedSession = this.session !== this.navigation.session;
-		this.session = this.navigation.session;
-		this.url = this.navigation.url;
-		this.isScriptable = this.navigation.isScriptable;
-		this.navigation = null;
-		this.contentPending = true;
+		if (this.navigation.url) {
+			this.changedSession = this.session !== this.navigation.session;
+			this.session = this.navigation.session;
+			this.pastSessions.set(this.session.data.nonce, this.session);
+			this.url = this.navigation.url;
+			this.isScriptable = this.navigation.isScriptable;
+			this.navigation = null;
+			this.contentPending = true;
+		} else { // there was no webRequest to get the main_frame
+			this.url = details.url;
+			this.isScriptable = isScriptable(this.url);
+			this.navigation = null;
+			this.contentPending = true;
+			if (!this.isScriptable) {
+				this.changedSession = this.session !== null;
+				this.session = null;
+			} else { // see if the page was cached and still knows its session
+				Messages.request({ tabId: this.id, frameId: 0, }, 'getCurrentProfile')
+				.then(tabData => { // this shouldn't be async ...
+					let session = null;
+					if (tabData == null) {
+						console.log('restored null session');
+					} else {
+						console.log('restored session', tabData);
+						session = this.pastSessions.get(tabData.id) || null;
+						if (!session || !session.origin.includes(tabData.url)) { console.error('failed to restore session', session, tabData.url); }
+					}
+					this.changedSession = this.session !== session;
+					this.session = session;
+				});
+			}
+		}
 	}
 
 	cancelNavigation(details) {
