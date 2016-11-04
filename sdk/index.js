@@ -1,17 +1,25 @@
 'use strict'; /* globals exports, setTimeout: true, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-const { _async, spawn, } = require('webextension/node_modules/es6lib/concurrent.js');
-const Port = require('webextension/node_modules/es6lib/port.js');
+const Prefs = require('sdk/simple-prefs');
 const webExtension = require('sdk/webextension');
 const { setTimeout, } = require('sdk/timers');
-const Prefs = require('sdk/simple-prefs');
+
+const { _async, spawn, } = require('./webextension/node_modules/es6lib/concurrent.js');
+const Port = require('./webextension/node_modules/es6lib/port.js');
+// const { sliceTabInto, closeParentTab, } = require('./slice-tab.js');
 
 // attach the frame/process scripts
 const processScript = new (require('./attach.js'))({
 	process:   'content/process.js',
 	frame:     'content/frame.js',
 	namespace: 'content',
-	handlers: {
+});
+
+processScript.port.addHandlers({
+	ping(value) {
+		const tab = this.ownerGlobal.gBrowser.getTabForBrowser(this);
+		console.log('got ping from', tab, value);
+		return tab._tPos;
 	},
 });
 

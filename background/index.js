@@ -26,7 +26,7 @@ window.Chrome = window.Browser = arguments[0]['node_modules/web-ext-utils/chrome
 	webNavigation.onCommitted                 .addListener((...args) => console.log('onCommitted'                 , ...args));
 	webNavigation.onErrorOccurred             .addListener((...args) => console.log('onErrorOccurred'             , ...args));
 
-const callOnTab = member => details => Tab.get(details.tabId)[member](details);
+const callOnTab = member => details => details.parentFrameId === -1 && Tab.get(details.tabId)[member](details);
 webNavigation.onBeforeNavigate .addListener(callOnTab('startNavigation'));
 webNavigation.onCommitted      .addListener(callOnTab('commitNavigation'));
 webNavigation.onErrorOccurred  .addListener(callOnTab('cancelNavigation'));

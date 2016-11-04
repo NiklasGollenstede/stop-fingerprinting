@@ -127,9 +127,7 @@ const sdkRootFiles = [
 
 // files from '/sdk/' to be included in '/'
 const sdkFiles = [
-	'content/',
-	'attach.js',
-	'index.js',
+	'./',
 ];
 
 const sdkPackageJson = {

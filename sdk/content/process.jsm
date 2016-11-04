@@ -1,8 +1,8 @@
 'use strict'; /* globals Components, frames: true, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 const EXPORTED_SYMBOLS = [ 'init', 'reload', 'addFrame', ];
-const prefix = 'stop-fingerprinting-content:';
+const namespace = 'stop-fingerprinting-content';
 const __dirname = 'resource://stop-fingerprinting/content';
-const __fielname = __dirname +'/process.jsm';
+const __fielname = __dirname +'/process.jsm'; // which is __URL__
 
 const global = this;
 const { classes: Cc, interfaces: Ci, utils: Cu, } = Components;
@@ -11,7 +11,11 @@ Cu.import("resource://gre/modules/Console.jsm");
 Cu.import("resource://gre/modules/Timer.jsm");
 Cu.import("resource://gre/modules/MatchPattern.jsm"); /* global MatchPattern */
 Cu.import("resource://gre/modules/BrowserUtils.jsm"); /* global BrowserUtils */
-let cpmm = null, needsReload = false;
+
+try { Cu.unload('resource://stop-fingerprinting/webextension/node_modules/es6lib/port.js'); } catch (_) { }
+const { es6lib_port: Port, } = Cu.import('resource://stop-fingerprinting/webextension/node_modules/es6lib/port.js', { });
+
+let port = null, needsReload = false;
 const frames = new Map;
 const resolved = Promise.resolve();
 const allUrls = new MatchPattern('<all_urls>');
@@ -19,46 +23,36 @@ const amoUrl  = new MatchPattern('https://addons.mozilla.org/*');
 
 console.log('process.jsm loading', this);
 
-const messageHandler = {
+const messageHandlers = {
 	destroy() {
 		console.log('process script destroy');
 		try { // try to unload, if it fails the process.js will unload the next it loads
 			Cu.unload(__fielname);
 		} catch (error) { needsReload = true; } // see https://bugzilla.mozilla.org/show_bug.cgi?id=1195689
 
-		// remove all listeners and the MessageManager
-		Object.keys(messageHandler).forEach(type => {
-			cpmm.removeMessageListener(prefix + type, messageHandler[type]);
-		});
-		cpmm = null;
+		// remove all listeners
+		port.destroy(); port = null;
 
 		// detach from all frames
 		frames.forEach(_=>_.destroy());
 		frames.clear();
 	},
 };
-Object.keys(messageHandler).forEach(key => {
-	const handler = messageHandler[key];
-	messageHandler[key] = function() { try {
-		handler.apply(this, arguments);
-	} catch (error) {
-		console.error(`precess "${ key }" handler threw`, error);
-	} };
-});
 
-function init(_cpmm) {
-	console.log('process script init', _cpmm);
-	cpmm = _cpmm;
-	Object.keys(messageHandler).forEach(type => {
-		cpmm.addMessageListener(prefix + type, messageHandler[type]/*, true*/);
-	});
+function init(cpmm) { // called once by ./process.js directly after (re-)loading this module
+	console.log('process script init', cpmm);
+	port = new Port({
+		in: cpmm, out: null,
+		namespace,
+	}, Port.moz_nsIMessageListenerManager);
+	port.addHandlers(messageHandlers);
 }
 
-function reload() { // this is called by process.js to ensure that it gets a fresh module
+function reload() { // this is called by ./process.js to ensure that it gets a fresh module
 	needsReload && Cu.unload(__fielname);
 }
 
-function addFrame(cfmm) {
+function addFrame(cfmm) { // called by ./frame.js for every frame it is loaded in
 	new Frame(cfmm);
 }
 
@@ -92,16 +86,6 @@ class Frame {
 		} catch (error) { console.error('on'+ event.type +' threw', error); }
 	}
 
-	request(name, ...args) {
-		console.log('request (sync)', name, ...args);
-		const result = this.cfmm.sendSyncMessage(prefix +'request', { name, args, });
-		if (result.length !== 1) { throw new Error(`request was handled ${ result.length } times`); }
-		if (result[0].threw) {
-			throw parseError(result[0].error);
-		}
-		return result[0].value;
-	}
-
 	onDOMWindowCreated(event) {
 		const cw = event.target.defaultView;
 
@@ -110,6 +94,12 @@ class Frame {
 		if (cw.top === cw) { // TODO: verify that this is true exactly iff cw is the tabs top level frame
 			return this.topWindowCreated(cw);
 		}
+
+		const ucw = Cu.waiveXrays(cw);
+		this.onDOMWindowCreatedListeners.forEach(listener => {
+			try { listener(ucw); } // will be xRayed again // TODO: XXX: for some iframes it will be wrapped in an opaque wrapper
+			catch (error) { try { console.error('onDOMWindowCreated listener threw', error); } catch (_) { throw error; } }
+		});
 	}
 
 	topWindowCreated(cw) {
@@ -137,16 +127,6 @@ function PageUtils(frame) {
 
 	// ???: is utils.setCSSViewport() callable and useful?
 
-	function onDOMWindowCreatedDispatcher(event) {
-		const cw = event.target.defaultView;
-		frame.onDOMWindowCreatedListeners.forEach(listener => {
-			try { listener(cw); }
-			catch (error) { try { console.error('onDOMWindowCreated listener threw', error); } catch (_) { throw error; } }
-		});
-		// TODO: 'crawl' cw (opener, parent, top, ...) and notify this and other PageUtils (potentially in other processes ...) in some way
-		// ???: is there any way that a window A can get a reference to an other windows B if there was no reference from B to A when B was created?
-	}
-
 	const api = ({
 		pause() {
 			if (frame.pauseTokens.size === 0) {
@@ -172,17 +152,10 @@ function PageUtils(frame) {
 		onDOMWindowCreated: {
 			addListener(func) {
 				checkType(func, 'function');
-				if (frame.onDOMWindowCreatedListeners.size === 0) {
-					frame.cfmm.addEventListener('DOMWindowCreated', onDOMWindowCreatedDispatcher);
-				}
 				frame.onDOMWindowCreatedListeners.add(func);
 			},
 			removeListener(func) {
-				const removed = frame.onDOMWindowCreatedListeners.delete(func);
-				if (frame.onDOMWindowCreatedListeners.size === 0) {
-					frame.cfmm.removeEventListener('DOMWindowCreated', onDOMWindowCreatedDispatcher);
-				}
-				return removed;
+				return frame.onDOMWindowCreatedListeners.delete(func);
 			}
 		},
 		utils: {

@@ -10,7 +10,8 @@ if (!profile.devices) { break file; }
 define('MediaDevices.prototype', {
 	enumerateDevices: { value: makeMethod(function enumerateDevices() { return Promise_resolve(cloneInto([ ])); }), },
 });
+/*
 define('MediaStreamTrack', {
 	getSources: { value: makeMethod(function getSources(cb) { MediaStreamTrack_p_getSources(this, function() { call(cb, this, cloneInto([ ])); }); }), }, // chrome only
 });
-
+*/
