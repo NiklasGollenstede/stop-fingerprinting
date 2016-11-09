@@ -1,7 +1,8 @@
 'use strict'; /* globals Components, frames: true, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 const EXPORTED_SYMBOLS = [ 'init', 'reload', 'addFrame', ];
 const namespace = 'stop-fingerprinting-content';
-const __dirname = 'resource://stop-fingerprinting/content';
+const __resource = 'resource://stop-fingerprinting';
+const __dirname = __resource +'/content';
 const __fielname = __dirname +'/process.jsm'; // which is __URL__
 
 const global = this;
@@ -12,10 +13,12 @@ Cu.import("resource://gre/modules/Timer.jsm");
 Cu.import("resource://gre/modules/MatchPattern.jsm"); /* global MatchPattern */
 Cu.import("resource://gre/modules/BrowserUtils.jsm"); /* global BrowserUtils */
 
-try { Cu.unload('resource://stop-fingerprinting/webextension/node_modules/es6lib/port.js'); } catch (_) { }
-const { es6lib_port: Port, } = Cu.import('resource://stop-fingerprinting/webextension/node_modules/es6lib/port.js', { });
+const Port = require('webextension/node_modules/es6lib/port.js');
+const { _async, spawn, sleep, asyncClass, Resolvable, } = require('webextension/node_modules/es6lib/concurrent.js');
 
 let port = null, needsReload = false;
+const getWebExtId = new Resolvable; let webExtOrigin = null;
+const getWebExtStarted = new Resolvable; let webExtStarted = false;
 const frames = new Map;
 const resolved = Promise.resolve();
 const allUrls = new MatchPattern('<all_urls>');
@@ -40,12 +43,25 @@ const messageHandlers = {
 };
 
 function init(cpmm) { // called once by ./process.js directly after (re-)loading this module
-	console.log('process script init', cpmm);
+	console.log('process script init', ...arguments);
 	port = new Port({
-		in: cpmm, out: null,
+		in: cpmm, out: cpmm,
 		namespace,
 	}, Port.moz_nsIMessageListenerManager);
 	port.addHandlers(messageHandlers);
+
+	port.request('getWebExtId')
+	.then(webExtId => {
+		webExtOrigin = 'moz-extension://'+ webExtId;
+		getWebExtId.resolve();
+		console.log('got webExtId', webExtId);
+	}).then(() => port.request('getWebExtStarted'))
+	.then(() => {
+		webExtStarted = true;
+		getWebExtStarted.resolve();
+		console.log('starting process.jsm');
+	})
+	.catch(error => { getWebExtId.reject(error); getWebExtStarted.reject(error); console.error(error); });
 }
 
 function reload() { // this is called by ./process.js to ensure that it gets a fresh module
@@ -57,8 +73,8 @@ function addFrame(cfmm) { // called by ./frame.js for every frame it is loaded i
 }
 
 
-class Frame {
-	constructor(cfmm) {
+const Frame = asyncClass({
+	constructor: class { constructor(cfmm) {
 		if (frames.has(cfmm)) { throw new Error('duplicate frame'); }
 		frames.set(cfmm, this);
 		this.cfmm = cfmm;
@@ -70,46 +86,70 @@ class Frame {
 		this.pauseTokens = new Set; // used by this.pageUtils. cleared on topWindowCreated
 		this.onDOMWindowCreatedListeners = new Set; // used by this.pageUtils. cleared on topWindowCreated
 		console.log('created Frame', this);
-	}
+	} },
 
 	destroy() {
 		console.log('destroying Frame', this);
 		frames.delete(this.cfmm);
 		this.cfmm.removeEventListener('DOMWindowCreated', this);
 		this.cfmm.removeEventListener('unload', this);
-	}
-	onunload() { this.destroy(); }
+	},
+	onunload() { this.destroy(); },
 
 	handleEvent(event) {
 		try {
 			return this['on'+ event.type](event);
 		} catch (error) { console.error('on'+ event.type +' threw', error); }
-	}
+	},
 
-	onDOMWindowCreated(event) {
+	onDOMWindowCreated: _async(function*(event) {
+		console.log('onDOMWindowCreated', event);
 		const cw = event.target.defaultView;
 
-		if (cw.location.protocol === 'moz-extension:') { extendWebExtWindow(cw); } // TODO: find a way to identify this extension
-
 		if (cw.top === cw) { // TODO: verify that this is true exactly iff cw is the tabs top level frame
-			return this.topWindowCreated(cw);
+			this.topWindowCreated(cw);
 		}
+
+		if (webExtOrigin == null) { // pause until the WebExtension is started far enough to know it's id
+			console.log('pausing');
+			const token = this.pauseRenderer();
+			try {
+				(yield getWebExtId);
+			} catch (error) { throw error; } // TODO: user interaction
+			this.resumeRenderer(token);
+			console.log('resumed');
+		} // webExtOrigin is not null anymore
+
+		if (cw.location.origin === webExtOrigin) { extendWebExtWindow(cw); }
 
 		const ucw = Cu.waiveXrays(cw);
 		this.onDOMWindowCreatedListeners.forEach(listener => {
 			try { listener(ucw); } // will be xRayed again // TODO: XXX: for some iframes it will be wrapped in an opaque wrapper
 			catch (error) { try { console.error('onDOMWindowCreated listener threw', error); } catch (_) { throw error; } }
 		});
-	}
+	}, { callSync: true, }),
 
-	topWindowCreated(cw) {
+	topWindowCreated: _async(function*(cw) {
 		console.log('topWindowCreated', cw);
-		this.top = null;
-		this.utils = null;
+
+		// remove the previous window and all related resources
+		this.top = this.utils = null;
 		this.pauseTokens.clear();
 		this.onDOMWindowCreatedListeners.clear();
 
+		port.request({ sender: this.cfmm, }, 'ping', 42).then(value => console.log('pong', value)).catch(error => console.error('not pong -.-', error));
+
 		if (!isScriptable(cw) && cw.document.URL !== 'about:blank') { console.log('skipping non-content tab', this); return; }
+
+		if (webExtStarted == null) { // pause until the WebExtension is completely started
+			console.log('pausing');
+			const token = this.pauseRenderer();
+			try {
+				(yield getWebExtStarted);
+			} catch (error) { throw error; } // TODO: user interaction
+			this.resumeRenderer(token);
+			console.log('resumed');
+		}
 
 		this.top = cw;
 		this.utils = cw.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
@@ -120,35 +160,39 @@ class Frame {
 			return Cu.cloneInto(this.pageUtils, caller, { cloneFunctions: true, });
 		}, ucw, { allowCrossOriginArguments: true, });
 
-	}
-}
+	}, { callSync: true, }),
+
+
+	pauseRenderer() {
+		if (this.pauseTokens.size === 0) {
+			console.log('pausing now');
+			this.utils.suppressEventHandling(true);
+			this.utils.suspendTimeouts();
+		}
+		const token = Math.round(Math.random() * Number.MAX_SAFE_INTEGER);
+		this.pauseTokens.add(token);
+		// console.log('pausing', this.pauseTokens.size);
+		return token;
+	},
+	resumeRenderer(token) {
+		const removed = this.pauseTokens.delete(token);
+		if (this.pauseTokens.size === 0) {
+			console.log('resuming now');
+			this.utils.suppressEventHandling(false);
+			this.utils.resumeTimeouts();
+		}
+		// console.log('resuming', this.pauseTokens.size);
+		return removed;
+	},
+});
 
 function PageUtils(frame) {
 
 	// ???: is utils.setCSSViewport() callable and useful?
 
 	const api = ({
-		pause() {
-			if (frame.pauseTokens.size === 0) {
-				console.log('pausing now');
-				frame.utils.suppressEventHandling(true);
-				frame.utils.suspendTimeouts();
-			}
-			const token = Math.round(Math.random() * Number.MAX_SAFE_INTEGER);
-			frame.pauseTokens.add(token);
-			// console.log('pausing', frame.pauseTokens.size);
-			return token;
-		},
-		resume(token) {
-			const removed = frame.pauseTokens.delete(token);
-			if (frame.pauseTokens.size === 0) {
-				console.log('resuming now');
-				frame.utils.suppressEventHandling(false);
-				frame.utils.resumeTimeouts();
-			}
-			// console.log('resuming', frame.pauseTokens.size);
-			return removed;
-		},
+		pause: frame.pauseRenderer.bind(frame),
+		resume: frame.resumeRenderer.bind(frame),
 		onDOMWindowCreated: {
 			addListener(func) {
 				checkType(func, 'function');
@@ -157,6 +201,10 @@ function PageUtils(frame) {
 			removeListener(func) {
 				return frame.onDOMWindowCreatedListeners.delete(func);
 			}
+		},
+		loadSheet(cw, url) {
+			const utils = cw.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+			utils.loadSheet(BrowserUtils.makeURI(url), utils.AGENT_SHEET);
 		},
 		utils: {
 			makeSandboxFor(cw) {
@@ -233,4 +281,10 @@ function isScriptable(cw) {
 function ErrorLogger(error) {
 	console.error('uncaught (in Promise):', error);
 	throw error;
+}
+
+function require(path) {
+	const id = __resource + path.replace(/^\/?/, '/');
+	try { Cu.unload(id); } catch (_) { }
+	return Cu.import(id, { }).exports;
 }

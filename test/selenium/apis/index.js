@@ -7,13 +7,14 @@ const {
 const Test = require('..');
 
 [ false, true, ].forEach(isFixed => describe(
-	isFixed ? `The pathed browser doesn't` : 'The browser does',
+	isFixed ? `The patched browser doesn't` : 'The browser does',
 	(function() {
 		let test, browser, ports;
 		Test.register({
 			noExt: !isFixed,
 			server: {
 				httpPorts: [ 0, 0, 0, ],
+				useCsp: false, // TODO: fix same-origin serving and remove this
 			},
 		}, _async(function*(_test) {
 			test = _test;
@@ -25,8 +26,12 @@ const Test = require('..');
 
 		require('fs').readdirSync(__dirname).forEach(name => {
 			if (name === 'index.js') { return; }
-			const { description, getTest, } = require('./'+ name);
-			it(description, () => getTest(isFixed)(test, browser, ports));
+			const { description, getTest, timeout, } = require('./'+ name);
+
+			it(description, function() {
+				timeout && this.timeout(timeout);
+				return getTest(isFixed)(test, browser, ports);
+			});
 		});
 	})
 ));

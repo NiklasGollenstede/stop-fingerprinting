@@ -27,6 +27,7 @@
 	let   Object                       = _.Object; // used in this file
 	const open                         = _.open;
  //	const Promise                      = _.Promise;
+	let   Proxy                        = _.Proxy;
 	const RegExp                       = _.RegExp;
  //	const Set                          = _.Set;
  //	const setTimeout                   = _.setTimeout;
@@ -166,7 +167,7 @@ function getSetter(proto, prop) {
 }
 
 
-let hiddenFunctions = new WeakMap;
+let hiddenFunctions = new WeakMap; // TODO: this needs to be frame-global in order to handle functions across iframes
 
 	const makeMethod      = function(      func)    { return makeFunction(func, func.name,         func.name, func.length, false,   false); };
 	const makeNamedMethod = function(name, func)    { return makeFunction(func,      name,              name, func.length, false,   false); };
@@ -183,8 +184,8 @@ let hiddenFunctions = new WeakMap;
 function makeFunction(body, name, fullName, length, isCtor, isClass) {
 	if (typeof body !== 'function' && !(!isCtor && isClass)) { throw new TypeError('The function body must be a function'); }
 
-	let wrapper = exportFunction(isCtor
-		? function() {
+	let wrapper = (isCtor
+		? exportFunction(function() {
 			if (!new.target) {
 				if (isClass) { throw new TypeError('class constructors must be invoked with |new|'); }
 				// else: the construct call will throw the correct error
@@ -195,9 +196,9 @@ function makeFunction(body, name, fullName, length, isCtor, isClass) {
 			} catch (error) {
 				throw cloneError(error);
 			}
-		}
+		})
 		: !isClass
-		? function() { // TODO: the exposed function still has a [[Construct]] field, which is detectable by passing it as new.target into Reflect.construct()
+		? exportFunction(function() { // TODO: the exposed function still has a [[Construct]] field, which is detectable by passing it as new.target into Reflect.construct()
 			if (new.target) {
 				throw new TypeError(name +' is not a constructor'); // TODO: instead if `name` this actually needs to be the local identifier of wrapper at it's call site
 			}
@@ -206,10 +207,27 @@ function makeFunction(body, name, fullName, length, isCtor, isClass) {
 			} catch (error) {
 				throw cloneError(error);
 			}
-		}
-		: function () { // not a ctor but a class? Can't be called
+		})
+/*
+		? exportFunction(class { method() { // same as above, and the thrown error is even worse
+			try {
+				return apply(body, this, arguments);
+			} catch (error) {
+				throw cloneError(error);
+			}
+		} }.prototype.method)
+*//*
+		? new Proxy(class { m() { } }.prototype.m, { apply(_, self, args) { // dito -.-
+			try {
+				return apply(body, this, arguments);
+			} catch (error) {
+				throw cloneError(error);
+			}
+		}, })
+*/
+		: exportFunction(function () { // not a ctor but a class? Can't be called
 			throw new TypeError('Illegal constructor');
-		}
+		})
 	);
 
 	// create prototype
@@ -238,12 +256,14 @@ let errorMap = new WeakMap(
 	.map(name => [ sandbox[name], global[name], ])
 );
 
-function cloneError(error) { // TODO: test
+function cloneError(error) { try { // TODO: test
 	if (!needsCloning(error)) { return error; }
 	console.log('cloning Error', error);
 	let Ctor = errorMap.get(error.constructor) || Error;
 	return new Ctor(error.message); // this constructs page objects, so it _should_ be safe
-}
+} catch (_) { try {
+	console.log('failed to clone error', error);
+} finally { return null; } } }
 
 sandbox.apis = { }; /* global apis */
 const define = function define(name, object) {

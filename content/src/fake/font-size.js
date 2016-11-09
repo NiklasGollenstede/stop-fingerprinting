@@ -10,6 +10,8 @@
 // Element.offsetWith/Height randomization
 if (!profile.fonts) { break file; }
 
+break file; // TODO: remove or reimplement
+
 const dispersion = profile.fonts.dispersion / 100;
 const offset = 1 - dispersion;
 const factor = 2 * dispersion / (256 * 256);
