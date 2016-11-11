@@ -42,6 +42,7 @@
 		"needsCloning": true,
 		"originIncludes": true,
 		"pageLoadCount": true,
+		"postToBackground": true,
 		"profile": true,
 		"profileChanged": true,
 		"sandbox": true

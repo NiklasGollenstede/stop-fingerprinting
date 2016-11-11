@@ -42,6 +42,12 @@ class Tab {
 		this.changedSession = true; // whether .commitNavigation() changed the value of this.session
 		this.loadCount = 0; // number of times .getContentProfile() was called (successfully), and thus the number of scriptable pages loaded in the tab
 		this.pastSessions = new Map; // nonce => Session; all `.session`s this ever had
+		this.mustResetOnCrossNavigation = false;
+	}
+
+	resetOnCrossNavigation() {
+		console.log('.mustResetOnCrossNavigation = true', this);
+		this.mustResetOnCrossNavigation = true;
 	}
 
 	getSession(url, navigating) { // may return null

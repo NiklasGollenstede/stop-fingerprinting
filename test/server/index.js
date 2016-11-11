@@ -15,9 +15,9 @@ const CSP = require('./csp.js');
 const Server = module.exports = _async(function*({
 	host = 'localhost',
 	useCsp = { },
-	httpPorts = [ 80, ],
+	httpPorts = [ 80, 8080, 8081, ],
 	httpsPorts = [ 443, 4430, 4431, 4432, 4433, ],
-	upgradePorts = { 8080: 443, },
+	upgradePorts = { /*8080: 443,*/ },
 	certPath = './cert/test',
 	log: logger = console.log,
 	serveFromFS = true,

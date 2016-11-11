@@ -29,13 +29,14 @@ const callOnTab = member => details => details.parentFrameId === -1 && Tab.get(d
 webNavigation.onBeforeNavigate .addListener(callOnTab('startNavigation'));
 webNavigation.onCommitted      .addListener(callOnTab('commitNavigation'));
 webNavigation.onErrorOccurred  .addListener(callOnTab('cancelNavigation'));
-console.log('creating port');
+
 const sdkPort = new Port(runtime.connect({ name: 'sdk', }), Port.web_ext_Port);
-console.log('adding handler', sdkPort);
+
 sdkPort.addHandler('awaitStarted', () => require.main.promise.then(() => 'started'));
 
 Messages.addHandler('getSenderTabId', function() { return this.tab.id; });
 sdkPort.addHandler('getTabData', (tabId, url) => Tab.get(tabId).getContentProfile(url));
+sdkPort.addHandler('resetOnCrossNavigation', (tabId, url) => Tab.get(tabId).resetOnCrossNavigation());
 
 // TODO: do cached pages from the tab history pose a problem?
 // TODO: it seems that sync XHRs are not sent here by firefox
@@ -63,6 +64,14 @@ new RequestListener({
 
 	// TODO: cross-origin main_frame request redirects can iterate multiple sessions ...
 	onBeforeRedirect() { return reset; } // create a new instance when redirecting
+
+	onBeforeRequest() {
+		if (this.isMainFrame && this.tab.mustResetOnCrossNavigation && this.tab.session !== this.tab.navigation.session) {
+			console.log('resetting tab', this);
+			sdkPort.post('resetTab', this.tabId, { url: this.url, });
+			return { cancel: true, };
+		}
+	}
 
 	// TODO: (only?) firefox: this is not called for the favicon
 	onBeforeSendHeaders({ requestHeaders, }) {

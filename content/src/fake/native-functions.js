@@ -26,7 +26,7 @@ define('Function.prototype', {
 const assignedStcks = new WeakMap; // TODO: this may need to be a tab global variable
 
 // const frameFilter = new RegExp(raw`@resource:\/\/stop-fingerprinting\/webextension\/content\/src\/(?:fake\/)?[\w-]+(?:\.js)?(?:${ profile.nonce })(?::\d+)(?::\d+)$`, 'm');
-const frameFilter = new RegExp(profile.nonce); // this will only match frames within the add-on code. And since the page doesn't know the nonce, it can't fake those (e.g with source maps)
+const frameFilter = new RegExp(profile.debug ? 'abcdef' : profile.nonce); // this will only match frames within the add-on code. And since the page doesn't know the nonce, it can't fake those (e.g with source maps)
 
 define('Error.prototype', {
 	stack: {

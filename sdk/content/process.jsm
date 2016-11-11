@@ -151,6 +151,8 @@ const Frame = asyncClass({
 					ucw.getTabId = Cu.cloneInto({ resolve, reject, }, ucw, { cloneFunctions: true, });
 				});
 				this.tabId = (yield this.pauseWhile(getTabId));
+				console.log('got tabId', this.tabId);
+				port.post({ sender: this.cfmm, }, 'setTabId', this.tabId);
 			}
 		}
 
@@ -170,15 +172,13 @@ const Frame = asyncClass({
 		console.log('topWindowCreated', cw);
 
 		// remove the previous window and all related resources
-		this.top = this.utils = this.webExtPort = this.tabData = null;
-		this.pauseTokens.size && console.log('replaced page was paused');
+		this.webExtPort = this.tabData = null;
+		this.pauseTokens.size && console.warn('replaced page was paused');
 		this.pauseTokens.clear();
-
-		this.isScriptable = isScriptable(cw)
-		|| cw.document.URL === 'about:blank'; // ???: is this necessary?
-
 		this.top = cw;
 		this.utils = cw.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+
+		this.isScriptable = isScriptable(cw);
 		this.isScriptable && cw.addEventListener('unload', () => { /* disable BFcache */ }); // worry about the performance hit later
 	},
 
@@ -207,6 +207,7 @@ const Frame = asyncClass({
 		const cloneInto = obj => Cu.cloneInto(obj, ucw, { cloneFunctions: false, }); // expose functions only explicitly through exportFunction
 		const needsCloning = obj => obj !== null && typeof obj === 'object' && Cu.getGlobalForObject(obj) !== ucw; // TODO: test
 		const originIncludes = url => (url = new URL(url, cw.location)) && url.origin === 'null' ? includeRegExp.test(url.href) : includeRegExp.test(url.origin);
+		const postToBackground = (name, ...args) => port.post({ sender: this.cfmm, }, name, this.tabId, ...args);
 
 		sandbox.console = cw.console;
 		sandbox.handleCriticalError = exportFunction(this.handleCriticalError.bind(this));
@@ -218,12 +219,13 @@ const Frame = asyncClass({
 		sandbox.cloneInto = exportFunction(cloneInto);
 		sandbox.needsCloning = exportFunction(needsCloning);
 		sandbox.originIncludes = exportFunction(originIncludes);
+		sandbox.postToBackground = exportFunction(postToBackground);
 		sandbox.sandbox = sandbox;
 		sandbox.ucw = ucw;
 
 		const exec = ({ content, name, offset, }) => Cu.evalInSandbox(
 			content, sandbox, 'latest',
-			__dirname +'/'+ name +'?'+ profile.nonce, // the nonce is needed to create unpredictable error stack fames that can be filtered
+			__dirname +'/'+ name +'?'+ (profile.debug ? 'abcdef' : profile.nonce), // the nonce is needed to create unpredictable error stack fames that can be filtered
 			offset + 1
 		);
 
@@ -238,7 +240,7 @@ const Frame = asyncClass({
 			ucw.profile = cloneInto(profile);
 			ucw.apis = sandbox.apis;
 		}
-		console.log('injection done', profile.debug);
+		cw.console.log('injection done', profile.debug, this.tabId);
 	},
 
 	pauseWhile(promise) {
@@ -298,6 +300,10 @@ function extendWebExtWindow(cw) {
 
 function isScriptable(cw) {
 	try {
+		if (cw.document.readyState === 'uninitialized') {
+			console.log('cw.document is uninitialized', cw.document, 'assuming', !!cw.document.domain);
+			return !!cw.document.domain;
+		}
 		const url = cw.document.URL;
 		if (url == null) { console.warn('isScriptable called with null url'); return false; }
 		if (url.length === 0) { console.warn('isScriptable called with empty url'); return false; }

@@ -7,12 +7,6 @@
  * Remove references between .open() and .opener
  */
 
-isMainFrame && (window.opener = null);
-define('self', { open: { value: makeNamedMethod('open', function() { open(...arguments); return null; }), }, });
-// The code below is how it *should* work, but implementing a fix for the TODO would be quite complex.
-// For now it's far easier to always reset the opener references.
-break file;
-
 
 const alwaysIsolate = profile.session !== 'browser';
 
@@ -26,15 +20,16 @@ define('self', { open: {
 		return ref;
 	}),
 }, });
-// TODO: this is still insufficient, if a ta has a reference to another same origin tab and that tab then navigates cross-origin, then the tab has a reference to a cross-origin tab (the returned ref follows navigations)
-// ==> in the background, save that a tab has an active opener relation and if it navigates cross-origin, close that tab and load the navigation target into a new (cloned) tab
-// once that is done, the block below should only run once per tab, directly after is was opened
 
-
-if (
-	isMainFrame && window.opener != null
-	&& (pageLoadCount > 1 || alwaysIsolate || !originIncludes(window.opener.location)) // not first load or should isolate
-) {
-	window.opener = null;
+if (isMainFrame && window.opener != null) { // the tab still has an opener, i.e. it hasn't been reset yet. This is especially true directly after a tab has been open()ed
+	if (alwaysIsolate || !originIncludes(window.opener.location)) {
+		window.opener = null; // the opener got a null reference from open() too, so we are done here
+		// TODO: if the origin rules change, then !this.includes(opener) does not imply !opener.includes(this), so this logic would be wrong. But that's rather unlikely
+	} else {
+		// let the tab keep it's opener.
+		// This is also the only situation where it makes sense (for a main frame) to keep the window.name.
+		// The opener got a reference to this tab, the only way to reset that is to close and re-open this tab, so:
+		postToBackground('resetOnCrossNavigation'); // once this is set, it may, but doesn't need to be set again. It thus doesn't matter if the page resets its opener
+	}
 }
 

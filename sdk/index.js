@@ -9,14 +9,17 @@ const { Services } = require('resource://gre/modules/Services.jsm');
 
 const { _async, spawn, Resolvable, } = require('./webextension/node_modules/es6lib/concurrent.js');
 const Port = require('./webextension/node_modules/es6lib/port.js');
-// const { sliceTabInto, closeParentTab, } = require('./slice-tab.js');
+const { sliceTabInto, replaceParentTab, } = require('./tab-utils.js');
 
 const getWebExtId = new Resolvable;
 let webExtPort = null;
 
+const tabIdToBrowser = new Map; // webExt tabId ==> xul <browser> // this association should never change, if it does (for relevant pages) these maps are insufficient
+const browserToTabId = new Map; // xul <browser> ==> webExt tabId
+
 // attach the frame/process scripts
 const processScript = new (require('./attach.js'))({
-	process:   'content/process.js', // could try to add the webExtId here and forward it to process.jsm to avoid the call to getWebExtId. This may indotoduce inconsistent beahviour, though
+	process:   'content/process.js', // could try to add the webExtId here and forward it to process.jsm to avoid the call to getWebExtId. This might introduce inconsistent behaviour, though
 	frame:     'content/frame.js',
 	namespace: 'content',
 });
@@ -24,14 +27,34 @@ const processScript = new (require('./attach.js'))({
 processScript.port.addHandlers({
 	getWebExtId() { console.log('getWebExtId'); return getWebExtId; },
 	getWebExtStarted() { console.log('getWebExtStarted'); return getWebExtStarted; },
+	setTabId(tabId) {
+		if (tabId == null) { throw new Error(`invalid tabId`); }
+		// const tab = this.ownerGlobal.gBrowser && this.ownerGlobal.gBrowser.getTabForBrowser(this);
+		tabIdToBrowser.set(tabId, this);
+		browserToTabId.set(this, tabId);
+	},
 	getTabData(tabId, url) {
+		if (browserToTabId.get(this) !== tabId) { console.error('xul <browser> <==> webExt tabId relation changed!'); }
 		return webExtPort.request('getTabData', tabId, url);
+	},
+	resetOnCrossNavigation(tabId) {
+		return webExtPort.request('resetOnCrossNavigation', tabId);
 	},
 });
 
 const webExtHandlers = { // handlers for the actions specified in /background/sdk-connection.js
 	getPref(name) {
 		return Prefs.prefs[name];
+	},
+	resetTab(tabId, { userContextId, url, }) {
+		const browser = tabIdToBrowser.get(tabId);
+		const tab = browser.ownerGlobal.gBrowser && browser.ownerGlobal.gBrowser.getTabForBrowser(browser);
+		if (!tab) { return false; }
+
+		userContextId == null && (userContextId = tab.getAttribute('usercontextid') || '');
+		const newTab = sliceTabInto(tab, userContextId, url);
+		replaceParentTab(newTab); // TODO: this should be called once the navigation in newTab is committed, or newTab should be closed if it fails
+		return true;
 	},
 };
 
