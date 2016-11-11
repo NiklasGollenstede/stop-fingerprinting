@@ -1,14 +1,13 @@
-(function() { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/web-ext-utils/update/': updated,
 	'node_modules/es6lib/concurrent': { sleep, _async, },
 	'node_modules/es6lib/functional': { throttle, },
-	'node_modules/es6lib/port': for_chrome_Messages,
-	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, browsingData, webNavigation, webRequest, applications: { gecko, }, content, },
+	'node_modules/es6lib/port': Port, // also for chrome.Messages
+	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, browsingData, runtime, webNavigation, webRequest, applications: { gecko, }, content, },
 	'node_modules/web-ext-utils/utils': { showExtensionTab, },
 	'common/utils': { notify, domainFromUrl, setBrowserAction, },
 	'common/options': options,
 	'icons/urls': icons,
-	sdkConection,
 	RequestListener, RequestListener: { ignore, reset, },
 	Profiles,
 	Tab,
@@ -16,9 +15,9 @@
 }) {
 console.log('Ran updates', updated);
 
-window.options = options;
-window.Profiles = Profiles;
-window.Chrome = window.Browser = arguments[0]['node_modules/web-ext-utils/chrome/'];
+global.options = options;
+global.Profiles = Profiles;
+global.Chrome = global.Browser = arguments[0]['node_modules/web-ext-utils/chrome/'];
 
 	Tabs         .onCreated                   .addListener((...args) => console.log('onCreated'                   , ...args));
 	Tabs         .onRemoved                   .addListener((...args) => console.log('onRemoved'                   , ...args));
@@ -30,11 +29,13 @@ const callOnTab = member => details => details.parentFrameId === -1 && Tab.get(d
 webNavigation.onBeforeNavigate .addListener(callOnTab('startNavigation'));
 webNavigation.onCommitted      .addListener(callOnTab('commitNavigation'));
 webNavigation.onErrorOccurred  .addListener(callOnTab('cancelNavigation'));
+console.log('creating port');
+const sdkPort = new Port(runtime.connect({ name: 'sdk', }), Port.web_ext_Port);
+console.log('adding handler', sdkPort);
+sdkPort.addHandler('awaitStarted', () => require.main.promise.then(() => 'started'));
 
-Messages.addHandler('getSenderProfile', function(openerUrl) {
-	console.log('getSenderProfile', openerUrl, this);
-	return Tab.get(this.tab.id).getContentProfile(this.tab.url);
-});
+Messages.addHandler('getSenderTabId', function() { return this.tab.id; });
+sdkPort.addHandler('getTabData', (tabId, url) => Tab.get(tabId).getContentProfile(url));
 
 // TODO: do cached pages from the tab history pose a problem?
 // TODO: it seems that sync XHRs are not sent here by firefox
@@ -164,4 +165,4 @@ Tabs.onUpdated.addListener(function(tabId, info, { url, }) {
 	);
 });
 
-}); })();
+}); })((function() { /* jshint strict: false */ return this; })());

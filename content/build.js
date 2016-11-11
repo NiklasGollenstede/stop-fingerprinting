@@ -60,9 +60,9 @@ const build = module.exports = async(function*() {
 		console.warn(`Unused global variables: `+ Array.from(unused).join(', '));
 	}
 
-	const data = `this.files = (`+ JSON.stringify(files, null, '\t') +`);`;
+	const data = `this.EXPORTED_SYMBOLS = [ 'exports', ]; this.exports = (`+ JSON.stringify(files, null, '\t') +`);`;
 
-	(yield FS.writeFile(_`./files.js`, data, 'utf8'));
+	(yield FS.writeFile(_`./files.jsm`, data, 'utf8'));
 
 });
 

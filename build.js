@@ -93,10 +93,7 @@ const webExtManifestJson = {
 			all_frames: false, // injection into sub_frames is done from the main_frame
 			run_at: 'document_start',
 			js: [
-				'content/get-api.js',
-				'node_modules/es6lib/port.js',
-				'content/files.js',
-				'content/index.js'
+				'content/get-tab-id.js'
 			]
 		}
 	],

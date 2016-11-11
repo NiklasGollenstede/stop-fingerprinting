@@ -1,4 +1,4 @@
-(() => { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function() { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/web-ext-utils/chrome/': { notifications, runtime, Storage, applications: { current, gecko, }, },
 	'node_modules/es6lib/network': { HttpRequest, },
 	require,
@@ -7,9 +7,6 @@
 
 // for selenium tests this script is automatically set as the main module instead of ./index.js
 const port = runtime.getManifest().seleniun_setup_port; // set by the selenium build options
-
-// load the sdk-conection to prevent timeout; no need to wait for it, though
-gecko && require.async('./sdk-conection');
 
 // report possible error during startup
 module.promise

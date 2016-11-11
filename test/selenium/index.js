@@ -138,6 +138,9 @@ const Test = asyncClass({
 		ffProfile.setPreference('browser.cache.offline.enable', false);
 		ffProfile.setPreference('network.http.use-cache', false);
 
+		// enable all debugging output within Firefox
+		ffProfile.setPreference('extensions.@stop-fingerprinting.sdk.console.logLevel', 'all');
+
 		// these don't seem to work
 		ffProfile.setAcceptUntrustedCerts(true);
 		ffProfile.setAssumeUntrustedCertIssuer(true);
@@ -157,7 +160,12 @@ const Test = asyncClass({
 
 	_onSetupRequest({ url, body, }, out) {
 		const ctx = this.pendingStartUp;
-		switch (ctx && url.slice(1)) {
+		if (!ctx) {
+			console.error('Unexpected startup request:', url);
+			out.writeHead(404);
+			out.end(); return;
+		}
+		switch (url.slice(1)) {
 			case 'get-options': {
 				if (ctx.options) {
 					out.write(JSON.stringify(ctx.options));

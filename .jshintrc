@@ -29,7 +29,7 @@
 	"globalstrict": true,
 	"latedef": "nofunc",
 
-	"browser": true,
+	"browser": false,
 	"devel": true, // console, alert, ...
 
 	"globals": {

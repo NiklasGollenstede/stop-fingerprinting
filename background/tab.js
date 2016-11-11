@@ -54,7 +54,7 @@ class Tab {
 	getContentProfile(url) {
 	// session will be null for data: (and blob:/file:/... ?) urls.
 	// for data: urls it should use the origin of the window.opener, if present, and be ignored otherwise
-		if (!this.contentPending) { throw new Error(`getContentProfile requested more than once per load`); }
+		// if (!this.contentPending) { throw new Error(`getContentProfile requested more than once per load`); } // TODO: this should not happen, but it does. This is not really a problem itself, but it indicates other errors
 		this.contentPending = false;
 		this.loadCount++;
 

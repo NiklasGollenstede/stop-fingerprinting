@@ -12,6 +12,7 @@ const Port = require('./webextension/node_modules/es6lib/port.js');
 // const { sliceTabInto, closeParentTab, } = require('./slice-tab.js');
 
 const getWebExtId = new Resolvable;
+let webExtPort = null;
 
 // attach the frame/process scripts
 const processScript = new (require('./attach.js'))({
@@ -21,13 +22,11 @@ const processScript = new (require('./attach.js'))({
 });
 
 processScript.port.addHandlers({
-	ping(value) {
-		const tab = this.ownerGlobal.gBrowser && this.ownerGlobal.gBrowser.getTabForBrowser(this); // .gBrowser is undefined for windows without view
-		console.log('got ping from', tab, value);
-		return tab && tab._tPos;
-	},
 	getWebExtId() { console.log('getWebExtId'); return getWebExtId; },
 	getWebExtStarted() { console.log('getWebExtStarted'); return getWebExtStarted; },
+	getTabData(tabId, url) {
+		return webExtPort.request('getTabData', tabId, url);
+	},
 });
 
 const webExtHandlers = { // handlers for the actions specified in /background/sdk-connection.js
@@ -57,35 +56,36 @@ const startWebExt = _async(function*() {
 	// connect to the WebExtension
 	let port;
 	try {
-		port = (yield new Promise((resolve, reject) => {
-			extension.browser.runtime.onConnect.addListener(_port => {
-				if (_port.name !== 'sdk') { return; }
-				resolve(new Port(_port, Port.web_ext_Port));
+		webExtPort = new Port((yield new Promise((resolve, reject) => {
+			extension.browser.runtime.onConnect.addListener(port => {
+				port.name === 'sdk' && resolve(port);
 			});
 			setTimeout(reject, 10000);
-		}));
+		})), Port.web_ext_Port);
 	} catch (_) {
 		return 2;
 	}
 
-	port.addHandlers(webExtHandlers);
+	webExtPort.addHandlers(webExtHandlers);
 
 	// wait for the WebExtension to start
 	try {
-		(yield port.request('start'));
+		(yield webExtPort.request('awaitStarted'));
 	} catch (error) {
 		console.error(error);
 		return 3;
 	}
 
+	return 0;
 });
 
 const getWebExtStarted = startWebExt()
 .then(code => {
+	// calling processScript.destroy(); here has very wiers effects (const variables in process.jsm are reset to undefined)
 	switch (code) {
 		case 0: {
 			console.info('WebExtension started');
-		} break;
+		} return;
 		case 1: {
 			throw new Error('Could not start, the WebExtension Experiment API is most likely missing');
 		} break;
@@ -98,7 +98,11 @@ const getWebExtStarted = startWebExt()
 		case 4: {
 			throw new Error(`Failed to read the WebExtension's UUID`);
 		} break;
+		default: {
+			throw new Error(`WebExtension failed with unknown error`);
+		} break;
 	}
+	processScript.destroy();
 })
 .catch(error => {
 	getWebExtId.reject(error);
