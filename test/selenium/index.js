@@ -198,21 +198,18 @@ Test.register = function(options, done) {
 	before(_async(function*() {
 		this.timeout(6000);
 		test = (yield getTest);
-		port = test.server.http[0].address().port;
+		port = test.server.http[test.server.http.length - 1].address().port;
 		(yield done(test));
 	}));
 
 	beforeEach(_async(function*() {
-		test.server.files = { 'index.html': 'Hey Ho!', };
-		(yield test.browser.get(`http://localhost:${ port }/index.html`));
+		test.server.files = { 'reset.html': 'Hey Ho!', };
+		(yield test.browser.get(`http://localhost:${ port }/reset.html`));
 		test.server.files = null;
 		test.takeLogs();
 	}));
 
 	afterEach(_async(function*() {
-		// test.server.files = null;
-		// (yield test.browser.get('about:blank'));
-		// test.takeLogs();
 	}));
 
 	after(_async(function*() {

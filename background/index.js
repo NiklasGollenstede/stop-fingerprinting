@@ -35,8 +35,17 @@ const sdkPort = new Port(runtime.connect({ name: 'sdk', }), Port.web_ext_Port);
 sdkPort.addHandler('awaitStarted', () => require.main.promise.then(() => 'started'));
 
 Messages.addHandler('getSenderTabId', function() { return this.tab.id; });
-sdkPort.addHandler('getTabData', (tabId, url) => Tab.get(tabId).getContentProfile(url));
 sdkPort.addHandler('resetOnCrossNavigation', (tabId, url) => Tab.get(tabId).resetOnCrossNavigation());
+sdkPort.addHandler('getTabData', _async(function*(tabId, url) {
+	const tab = Tab.get(tabId);
+	for (let i = 1; tab.navigation && i < 15; ++i) {
+		console.warn('waiting for tab to commit navigation', tab, url);
+		(yield sleep(5 + 5 * i));
+	}
+	if (tab.navigation) { throw new Error(`tab is still navigating`); }
+	return tab.getContentProfile(url);
+}));
+
 
 // TODO: do cached pages from the tab history pose a problem?
 // TODO: it seems that sync XHRs are not sent here by firefox

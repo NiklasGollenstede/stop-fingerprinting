@@ -1,4 +1,4 @@
-'use strict'; /* globals exports, it, expect */
+'use strict'; /* globals exports, it, expect, window */
 
 exports.description = /* 'The [patched]? browser does[n't]? */ `persist window.name`;
 

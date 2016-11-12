@@ -13,7 +13,7 @@ const Test = require('..');
 		Test.register({
 			noExt: !isFixed,
 			server: {
-				httpPorts: [ 0, 0, 0, ],
+				httpPorts: [ 0, 0, 0, 0, 0, ],
 				useCsp: false, // TODO: fix same-origin serving and remove this
 			},
 		}, _async(function*(_test) {

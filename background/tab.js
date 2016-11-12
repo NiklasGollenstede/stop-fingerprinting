@@ -60,12 +60,12 @@ class Tab {
 	getContentProfile(url) {
 	// session will be null for data: (and blob:/file:/... ?) urls.
 	// for data: urls it should use the origin of the window.opener, if present, and be ignored otherwise
-		// if (!this.contentPending) { throw new Error(`getContentProfile requested more than once per load`); } // TODO: this should not happen, but it does. This is not really a problem itself, but it indicates other errors
+		if (!this.contentPending) { throw new Error(`getContentProfile requested more than once per load`); } // this is not really a problem itself, but it indicates other errors
 		this.contentPending = false;
 		this.loadCount++;
 
 		if (!this.session) { return null; }
-		if (!this.session.origin.includes(url)) { throw new Error(`Tab origin mismatch!`); }
+		if (!this.session.origin.includes(url)) { throw new Error(`Tab origin mismatch, expected ${ this.session.origin }, got ${ url }`); }
 		return {
 			profile: this.session.data,
 			changed: this.changedSession,
