@@ -47,7 +47,6 @@ sdkPort.addHandler('getTabData', _async(function*(tabId, url) {
 }));
 
 
-// TODO: do cached pages from the tab history pose a problem?
 // TODO: it seems that sync XHRs are not sent here by firefox
 new RequestListener({
 	urls: [ '<all_urls>', ],
@@ -85,6 +84,10 @@ new RequestListener({
 	// TODO: (only?) firefox: this is not called for the favicon
 	onBeforeSendHeaders({ requestHeaders, }) {
 		if (!this.session.navigator) { return; }
+
+		if (gecko) { // ~FF 53 lowercases all header names -.-
+			requestHeaders.forEach(header => header.name = header.name.replace(/(?:^|-)[a-z]|dnt/g, _=>_.toUpperCase())); // TODO: this is inaccurate, especially for custom headers
+		}
 
 		const order = this.session.navigator.headerOrder;
 		const headers = this.objectifyHeaders(requestHeaders, order);

@@ -103,6 +103,13 @@ const osVersion = {
 
 const browserVersion = {
 	firefox: [
+		{ date: +new Date('2018-01-22'), version: '58.0', },
+		{ date: +new Date('2017-11-28'), version: '57.0', },
+		{ date: +new Date('2017-10-03'), version: '56.0', },
+		{ date: +new Date('2017-08-08'), version: '55.0', },
+		{ date: +new Date('2017-06-13'), version: '54.0', },
+		{ date: +new Date('2017-04-18'), version: '53.0', },
+		{ date: +new Date('2017-03-07'), version: '52.0', },
 		{ date: +new Date('2017-01-24'), version: '51.0', },
 		{ date: +new Date('2016-11-08'), version: '50.0', },
 		{ date: +new Date('2016-09-13'), version: '49.0', },

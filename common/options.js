@@ -16,7 +16,7 @@ const model = deepFreeze({
 	},
 	profiles: {
 		maxLength: Infinity,
-		restrict: { match: (/^\{[0-9a-f\-]{40}\}$/), unique: '.', },
+		restrict: { match: RegExpX('i')`^ \{ [\da-f]{8} - [\da-f]{4} - 4 [\da-f]{3} - 8 [\da-f]{3} - [\da-f] {12} \} $`, unique: '.', },
 		type: 'hidden',
 	},
 	addProfile: {
