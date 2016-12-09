@@ -9,7 +9,7 @@ const global = this;
 const { classes: Cc, interfaces: Ci, utils: Cu, } = Components;
 Cu.import("resource://gre/modules/Services.jsm"); /* global Services */
 Cu.import("resource://gre/modules/Console.jsm");
-Cu.import("resource://gre/modules/Timer.jsm");
+Cu.import("resource://gre/modules/Timer.jsm"); /* globals setTimeout, */
 Cu.import("resource://gre/modules/MatchPattern.jsm"); /* global MatchPattern */
 Cu.import("resource://gre/modules/BrowserUtils.jsm"); /* global BrowserUtils */
 Cu.importGlobalProperties([ 'URL', 'Blob', ]); /* globals URL, Blob, */
@@ -24,8 +24,6 @@ const getWebExtId = new Resolvable; let webExtOrigin = null;
 const getWebExtStarted = new Resolvable; let webExtStarted = false;
 const frames = new Map;
 const resolved = Promise.resolve();
-const allUrls = new MatchPattern('<all_urls>');
-const amoUrl  = new MatchPattern('https://addons.mozilla.org/*');
 
 console.log('process.jsm loading', this);
 
@@ -83,12 +81,12 @@ const Frame = asyncClass({
 		this.cfmm = cfmm;
 		this.cfmm.addEventListener('DOMWindowCreated', this);
 		this.cfmm.addEventListener('unload', this);
-		this.top = null; // the top level window, if its url isScriptable
+		this.top = null; // the top level window
 		this.utils = null; // nsIDOMWindowUtils of .top
 		this.tabData = null;
-		this.tabId = null;
+		this.tabId = null; // requested once a isScriptableWindow() is loaded
 		this.pauseTokens = new Set; // used by this.pageUtils. cleared on topWindowCreated
-		this.isScriptable = false;
+		this.isScriptable = false; // isScriptableWindow(this.top)
 		this.handleCriticalError = this.handleCriticalError.bind(this);
 		console.log('created Frame', this);
 	} },
@@ -178,8 +176,8 @@ const Frame = asyncClass({
 		this.top = cw;
 		this.utils = cw.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
 
-		this.isScriptable = isScriptable(cw);
-		this.isScriptable && cw.addEventListener('unload', () => { /* disable BFcache */ }); // worry about the performance hit later
+		this.isScriptable = isScriptableWindow(cw);
+		this.isScriptable && cw.addEventListener('unload', () => { /* disable BFcache */ }); // worry about the performance hit later: https://developer.mozilla.org/en-US/docs/Working_with_BFCache
 	},
 
 	injectInto(cw) {
@@ -258,6 +256,7 @@ const Frame = asyncClass({
 		// if (!this.utils) { return 0; }
 		if (this.pauseTokens.size === 0) {
 			console.log('pausing now');
+			this.utils.enterModalState();
 			this.utils.suppressEventHandling(true);
 			this.utils.suspendTimeouts();
 		}
@@ -270,6 +269,7 @@ const Frame = asyncClass({
 		const removed = this.pauseTokens.delete(token);
 		if (removed && this.pauseTokens.size === 0) {
 			console.log('resuming now');
+			this.utils.leaveModalState();
 			this.utils.suppressEventHandling(false);
 			this.utils.resumeTimeouts();
 		}
@@ -289,8 +289,7 @@ function extendWebExtWindow(cw) {
 	const ucw = Cu.waiveXrays(cw);
 	ucw./*browser.tabs.*/isScriptable = Cu.exportFunction(function(url) {
 		try {
-			const nsIURI = BrowserUtils.makeURI(url);
-			return allUrls.matches(nsIURI) && !amoUrl.matches(nsIURI) && !url.startsWith('moz-extension://');
+			return isScriptableUrl(url);
 		} catch (error) {
 			console.error('isScriptable ', url, ' threw', error);
 			return false;
@@ -298,25 +297,23 @@ function extendWebExtWindow(cw) {
 	}, ucw, { allowCrossOriginArguments: true, });
 }
 
-function isScriptable(cw) {
+const allUrls = new MatchPattern('<all_urls>');
+const amoUrl  = new MatchPattern('https://addons.mozilla.org/*');
+function isScriptableWindow(cw) {
 	try {
-		if (cw.document.readyState === 'uninitialized') {
+		if (cw.document.readyState === 'uninitialized') { // this can happen directly after a tab was opened using Ctrl+click.
+			// The document.URL is 'about:blank' at this point and changes later (or the document is replaced), but the window is already the one used by the content
 			console.log('cw.document is uninitialized', cw.document, 'assuming', !!cw.document.domain);
-			return !!cw.document.domain;
+			return !!cw.document.domain && cw.document.domain !== 'addons.mozilla.org'; // is only set for actual domains (and not about:/chrome:/...) TODO: assert that this is true
 		}
 		const url = cw.document.URL;
 		if (url == null) { console.warn('isScriptable called with null url'); return false; }
 		if (url.length === 0) { console.warn('isScriptable called with empty url'); return false; }
-		const nsIURI = BrowserUtils.makeURI(url);
-	// 	return allUrls.matches(nsIURI) && !amoUrl.matches(nsIURI);
 
-		if (allUrls.matches(nsIURI) && !amoUrl.matches(nsIURI) && !url.startsWith('moz-extension://')) {
+		if (isScriptableUrl(url)) {
 			return true;
 		} else {
 			console.log('unscriptable window', cw, url, cw.location, cw.opener);
-			// TODO: after `window.open()` the new windows url is`'about:blank' (and thus unscriptable) but the `window.opener` is already set.
-			// so this function should probably return isScriptable(cw.opener)
-			// but TODO: test if this is the only case where `window.opener` is set
 			return false;
 		}
 		// it might be worth a bug report that causing a reference error here (window) crashes the entire browser (and prevents it from starting)
@@ -324,6 +321,11 @@ function isScriptable(cw) {
 		console.error('isScriptable ', cw, ' threw', error);
 		return false;
 	}
+}
+
+function isScriptableUrl(url) {
+	const nsIURI = BrowserUtils.makeURI(url);
+	return allUrls.matches(nsIURI) && !amoUrl.matches(nsIURI) && !url.startsWith('moz-extension://');
 }
 
 function ErrorLogger(error) {

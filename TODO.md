@@ -11,7 +11,15 @@
 
 - document.referrer
 
-- handle ServiceWorkers (cache deactivation should make them de-facto useless, but they are probably still able to provide similar services as an unwrapped Shared Worker would)
+- make localhost inaccessible for web content
+
+- suggest to set locale to en-US
+
+- disable gamepads via "dom.gamepad.enabled"
+
+- ??? set "browser.download.forbid_open_with" to true and register to open-external event to warn user that additional resources may be loaded by the external software?
+
+- handle ServiceWorkers (disable via "dom.workers.sharedWorkers.enabled") (cache deactivation should make them de-facto useless, but they are probably still able to provide similar services as an unwrapped Shared Worker would)
 - prevent AudioContext fingerprinting (see https://audiofingerprint.openwpm.com/)
 - mess with WebGL (https://www.browserleaks.com/webgl)
 - try different methods to change the canvas (sharpening, moving, blurring, ...); related: images with and w/o ICC profiles render differently

@@ -16,7 +16,7 @@ class ProcessScript {
 		gppmm.loadProcessScript(this.processSrc, true);
 		gfmm.loadFrameScript(this.frameSrc, true);
 		this.port = new Port({
-			out: gppmm, /*broadcast: true,*/ in: [ gfmm, gppmm, ],
+			out: gppmm, in: [ gfmm, gppmm, ],
 			namespace: self.id.replace(/@/g, '') +'-'+ namespace,
 		}, Port.moz_nsIMessageListenerManager);
 		console.log('created ProcessScript', this);
