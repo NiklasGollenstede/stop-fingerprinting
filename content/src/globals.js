@@ -3,7 +3,7 @@
 	let   _ = global;
 	const window = global.constructor.name === 'Window' ? global : null;
  //	const worker = window ? null : global;
- //	const document = window && window.document;
+	const document = window && window.document;
  //	const documentElement = document && document.documentElement;
 
 /**
@@ -111,6 +111,8 @@
 	const HTMLCanvasElement_p_toBlob                        = window     && _call.bind(          _.HTMLCanvasElement          .prototype    .toBlob);
 	const HTMLCanvasElement_p_toDataURL                     = window     && _call.bind(          _.HTMLCanvasElement          .prototype    .toDataURL);
 	const HTMLCanvasElement_p_mozGetAsFile                  = window     && _call.bind(          _.HTMLCanvasElement          .prototype    .mozGetAsFile);
+	const HTMLElement_p_setAttribute                        = window     && _call.bind(          _.HTMLElement                .prototype    .setAttribute);
+	const HTMLElement_p_setAttributeNS                        = window     && _call.bind(          _.HTMLElement                .prototype    .setAttributeNS);
  //	const MutationObserver_p_observe                        = window     && _call.bind(          _.MutationObserver           .prototype    .observe);
 	const MediaStreamTrack_p_getSources                     =               _call.bind(          _.MediaStreamTrack           .prototype    .getSources);
 	const Node_p_cloneNode                                  = window     && _call.bind(          _.Node                       .prototype    .cloneNode);
@@ -147,6 +149,11 @@
  //	const Node_p_get_parentNode                             = window     && _call.bind(getGetter(_.Node                       .prototype,   'parentNode'));
  //	const Set_p_get_size                                    = window     && _call.bind(getGetter(_.Set                        .prototype,   'size'));
 	const TypedArray_p_get_length                           =               _call.bind(getGetter(getPrototypeOf(_.Uint8Array  .prototype),  'length'));
+
+/**
+ * Setters
+ */
+	const HTMLAnchorElement_p_set_href                      =               _call.bind(getSetter(_.HTMLAnchorElement          .prototype,   'href'));
 
 
 /*const notImplemented = */function notImplemented() {
