@@ -118,6 +118,7 @@ const webExtManifestJson = {
 
 // files from '/' to be included in '/'
 const sdkRootFiles = [
+	'blob/',
 	'LICENSE',
 	'README.md',
 ];

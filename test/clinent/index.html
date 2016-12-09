@@ -11,6 +11,14 @@
 		<!-- <link href="index.css" rel="stylesheet"> -->
 	</head>
 	<body>
+			<span id="span1">Some Text</span>
+			<span id="span2">Some Text</span>
+			<script>
+				const span1 = window.document.querySelector('#span1');
+				const span2 = window.document.querySelector('#span2');
+				span1.style.fontFamily = 'Bell MT';
+				window.installed = span1.offsetWidth !== span2.offsetWidth;
+			</script>
 		<h1>Stop Fingerprinting Test</h1>
 		<a href="">reload</a>
 		<!-- <img src="sample.png"> -->

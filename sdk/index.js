@@ -11,8 +11,9 @@ const { _async, spawn, Resolvable, } = require('./webextension/node_modules/es6l
 const Port = require('./webextension/node_modules/es6lib/port.js');
 const { sliceTabInto, replaceParentTab, } = require('./tab-utils.js');
 
-const getWebExtId = new Resolvable;
-let webExtPort = null;
+const getBlobs = require('./load-blobs.js')(); // ==> object of files in /blob/ as { ...[path]: { url: 'blob:...', type: '...', }, }
+const getWebExtId = new Resolvable; // ==> random (but constant) uuid of the WebExtension
+let webExtPort = null; // es6lib/Port to communicate with the WebExtension
 
 const tabIdToBrowser = new Map; // webExt tabId ==> xul <browser> // this association should never change, if it does (for relevant pages) these maps are insufficient
 const browserToTabId = new Map; // xul <browser> ==> webExt tabId
@@ -26,7 +27,11 @@ const processScript = new (require('./attach.js'))({
 
 processScript.port.addHandlers({
 	getWebExtId() { console.log('getWebExtId'); return getWebExtId; },
-	getWebExtStarted() { console.log('getWebExtStarted'); return getWebExtStarted; },
+	getWebExtStarted() {
+		console.log('getWebExtStarted');
+		return Promise.all([ getBlobs, getWebExtStarted, ])
+		.then((([ blobs, ]) => ({ blobs, })));
+	},
 	setTabId(tabId) {
 		if (tabId == null) { throw new Error(`invalid tabId`); }
 		// const tab = this.ownerGlobal.gBrowser && this.ownerGlobal.gBrowser.getTabForBrowser(this);
