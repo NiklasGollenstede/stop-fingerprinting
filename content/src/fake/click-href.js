@@ -6,7 +6,7 @@
 let focused = null; // this is inaccurate if additional mouse buttons are pressed before the first one is released, but that is rather rare user behavior which can't be influenced by the website. So it is probably Ok to ignore it
 
 document.addEventListener('mousedown', event => event.isTrusted && (focused = event.target), true);
-document.addEventListener('mouseup',   event => event.isTrusted && (focused = null),         true);
+document.addEventListener('mouseup',   event => event.isTrusted && (focused = null),         true); // TODO: this may be to early. Use 'click' instead?
 document.addEventListener('dragend',   event => event.isTrusted && (focused = null),         true);
 
 //	document.addEventListener('mousedown', event => console.log(event, focused), true);

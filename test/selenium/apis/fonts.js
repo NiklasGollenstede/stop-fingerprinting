@@ -2,7 +2,7 @@
 
 exports.description = /* 'The [patched]? browser does[n't]? */ `not have the font 'Bell MT'`;
 
-exports.timeout = 2000000000;
+exports.disabled = true;
 
 exports.getTest = isFixed => require('es6lib/concurrent')._async(function*(test, browser, ports) {
 

@@ -1,4 +1,4 @@
-'use strict'; /* globals describe, it, beforeEach, afterEach, before, after, __dirname, expect */
+'use strict'; /* globals describe, it, xit, beforeEach, afterEach, before, after, __dirname, expect */
 
 const {
 	concurrent: { _async, },
@@ -26,7 +26,9 @@ const Test = require('..');
 
 		require('fs').readdirSync(__dirname).forEach(name => {
 			if (name === 'index.js') { return; }
-			const { description, getTest, timeout, } = require('./'+ name);
+			const { description, getTest, timeout, disabled } = require('./'+ name);
+
+			if (disabled) { xit(description, _=>_); return; }
 
 			it(description, function() {
 				timeout && this.timeout(timeout);

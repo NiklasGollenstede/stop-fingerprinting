@@ -199,8 +199,6 @@ const Frame = asyncClass({
 			wantXrays: false,
 		});
 
-		this.loadSheet(cw, CSS);
-
 		const exportFunction = func => Cu.exportFunction(func, ucw, { allowCrossOriginArguments: true, });
 		const cloneInto = obj => Cu.cloneInto(obj, ucw, { cloneFunctions: false, }); // expose functions only explicitly through exportFunction
 		const needsCloning = obj => obj !== null && typeof obj === 'object' && Cu.getGlobalForObject(obj) !== ucw; // TODO: test
