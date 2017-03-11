@@ -28,7 +28,7 @@ const processScript = new (require('./attach.js'))({
 
 processScript.port.addHandlers({
 	getWebExtId() { console.log('getWebExtId'); return getWebExtId; },
-	getWebExtStarted() { console.log('getWebExtStarted'); return getWebExtStarted; },
+	'await webExtStarted'() { console.log('getWebExtStarted'); return getWebExtStarted; },
 	setTabId(tabId) {
 		if (tabId == null) { throw new Error(`invalid tabId`); }
 		// const tab = this.ownerGlobal.gBrowser && this.ownerGlobal.gBrowser.getTabForBrowser(this);

@@ -13,9 +13,9 @@ delete ucw.getTabId;
 
 browser.runtime.sendMessage([ 'getSenderTabId', 1, [ ], ])
 .then(([ _, id, [ value, ], ]) => {
-	if (id < 0) { throw new Error(`Failed to load tabId`); }
+	if (id <<0 !== id) { throw new Error(`Failed to load tabId`); }
 	return value;
 })
 .then(resolve, reject);
 
-} catch (error) { console.error(error); } })((function() { /* jshint strict: false */ return this; })());
+} catch (error) { console.error(error); } })(this);

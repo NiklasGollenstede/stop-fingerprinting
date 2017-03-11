@@ -6,6 +6,7 @@ module.exports = function*({ options, /*packageJson,*/ manifestJson, files, }) {
 
 	manifestJson.permissions.push(
 		'browsingData',
+		'contextualIdentitities',
 		'notifications',
 		'nativeMessaging',
 		'tabs',
@@ -15,12 +16,11 @@ module.exports = function*({ options, /*packageJson,*/ manifestJson, files, }) {
 		'<all_urls>'
 	);
 
-	manifestJson.browser_action.default_popup = 'view.html#panel?w=220&h=206';
+	manifestJson.browser_action.default_popup = 'view.html#panel?w=220&h=206'; // set size for Private Window panel fallback
 	manifestJson.browser_action.default_icon = manifestJson.icons =
 	(yield FS.readdir(Path.resolve(__dirname, 'icons/default/')))
 	.reduce((obj, name) => ((obj[name.split('.')[0]] = 'icons/default/'+ name), obj), { });
 	options.favicon = manifestJson.icons[64];
-	console.log('icon', manifestJson.icons[64]);
 
 	manifestJson.options_ui.open_in_tab = true;
 	manifestJson.background.persistent = true;
@@ -31,9 +31,7 @@ module.exports = function*({ options, /*packageJson,*/ manifestJson, files, }) {
 			match_about_blank: false,
 			all_frames: false, // injection into sub_frames is done from the main_frame
 			run_at: 'document_start',
-			js: [
-				'content/get-tab-id.js',
-			],
+			js: [ 'content/get-tab-id.js', ],
 		},
 	];
 

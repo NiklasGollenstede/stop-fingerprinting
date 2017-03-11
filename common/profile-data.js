@@ -64,29 +64,27 @@ If you put multiple hosts in one row, they are seen as equivalent by this add-on
 	},
 	inherits: {
 		title: 'Inherited Profile',
-		description: `<pre>
-You don't have to specify all possible parameters for a website in a single profile.
-'Rules' that are not specified in this Profile are inherited from:
-</pre>`,
+		description: `You don't have to specify all possible parameters for a website in a single profile.
+		<br>'Rules' that are not specified in this Profile are inherited from:`,
 		default: '<default>',
 		expanded: false,
 		input: { type: 'string', }, // TODO: this shouldn't be a string input
 	},
 	rules: {
 		title: 'Rules',
-		description: 'Set the rules that should apply to all matching sites, any rules that are not set will be filled in by matching profiles with lower priorities or the extensions default values',
+		description: `Set the rules that should apply to all matching sites, any rules that are not set will be filled in by matching profiles with lower priorities or the extensions default values`,
 		default: true,
 		input: { type: 'label', },
 		children: {
 			disabled: optional({
 				title: 'Disable',
-				description: 'Completely disable this extension for all matching sites',
+				description: `Completely disable this extension for all matching sites`,
 				[_default]: false,
 				input: { type: 'bool', },
 			}),
 			logLevel: optional({
 				title: 'Logging',
-				description: 'Decide what priority of notifications you want to see',
+				description: `Decide what priority of notifications you want to see`,
 				[_default]: 3,
 				input: { type: 'menulist', options: [
 					{ value: 1, label: `Include debugging`, },
@@ -133,7 +131,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				children: {
 					browser: optional({
 						title: 'Browsers',
-						description: 'The browsers that can be chosen from',
+						description: `The browsers that can be chosen from`,
 						[_default]: applications.current,
 						restrict: { unique: '.', },
 						minLength: 1,
@@ -146,14 +144,14 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 					}),
 					browserAge: optional({
 						title: 'Browser Age',
-						description: 'The age of the browser version, chose negative values to allow beta versions',
-						[_default]: { from: -1, to: 12, },
-						restrict: { from: -10, to: 150, type: 'number', },
-						input: { type: 'interval', suffix: 'weeks', },
+						description: `The age of the browser version, chose negative values to allow beta versions`,
+						[_default]: [ [ -1, 12, ], ],
+						restrict: [ { from: -10, to: 150, type: 'number', }, { from: -10, to: 150, type: 'number', }, ],
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: 'weeks.', }, ],
 					}),
 					os: optional({
 						title: 'Operating Systems',
-						description: 'The operating systems that can be chosen from',
+						description: `The operating systems that can be chosen from`,
 						[_default]: [ 'win', 'mac', 'lin', ],
 						restrict: { unique: '.', },
 						addDefault: 'win',
@@ -167,7 +165,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 					}),
 					osArch: ({
 						title: 'Processor Architecture',
-						description: 'The processor and process architectures that can be chosen from',
+						description: `The processor and process architectures that can be chosen from`,
 						[_default]: [ '32_32', '32_64', '64_64', ],
 						restrict: { unique: '.', },
 						addDefault: '32_32',
@@ -180,36 +178,32 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 					}),
 					cpuCores: optional({
 						title: 'CPU cores',
-						description: 'Number of (virtual) CPU cores',
-						restrict: { from: 1, to: 16, type: 'number', },
-						[_default]: { from: 1, to: 8, },
+						description: `Number of (virtual) CPU cores`,
+						[_default]: [ [ 1, 8, ], ],
+						restrict: [ { from: 1, to: 16, type: 'number', }, { from: 1, to: 16, type: 'number', }, ],
 						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 					}),
 					osAge: optional({
 						title: 'Operating Systems Age',
-						description: 'The age of the operating system version',
-						suffix: 'years',
-						restrict: { from: 0, to: 11, type: 'number', },
-						[_default]: { from: 0, to: 3, },
-						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
+						description: `The age of the operating system version`,
+						[_default]: [ [ 0, 3, ], ],
+						restrict: [ { from: 0, to: 11, type: 'number', }, { from: 0, to: 11, type: 'number', }, ],
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: 'years.', }, ],
 					}),
 					dntChance: optional({
 						title: 'Do-Not-Track header',
 						description: `If you would trust the <a href="https://en.wikipedia.org/wiki/Do_Not_Track">Do Not Track</a> concept, you wouldn't be using this extension.
 						<br>So the best use for it is probably to send random values`,
-						prefix: 'Chance to set the header:',
-						infix: '% &emsp;&emsp;&emsp; Chance to opt in to tracking:',
-						suffix: '%',
-						[_default]: { from: 30, to: 1, },
-						restrict: { from: 0, to: 100, type: 'number', },
-						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
+						[_default]: [ [ 30, 1, ], ],
+						restrict: [ { from: 0, to: 100, type: 'number', }, { from: 0, to: 100, type: 'number', }, ],
+						input: [ { type: 'integer', prefix: 'Chance to set the header', suffix: '%.', }, { type: 'integer', prefix: 'Chance to opt in to tracking', suffix: '%.', }, ],
 					}),
 					ieFeatureCount: optional({
 						title: 'Number of Internet Explorer "features"',
 						description: `This is rather a detail and only applies if an Internet Explorer User Agent is generated.
 						<br>The IE User Agent contains things like the installed versions on .NET and others. This option restricts the number of these "features"`,
-						restrict: { from: 0, to: 7, type: 'number', },
-						[_default]: { from: 0, to: 4, },
+						[_default]: [ [ 0, 4, ], ],
+						restrict: [ { from: 0, to: 7, type: 'number', }, { from: 0, to: 7, type: 'number', }, ],
 						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 					}),
 					ieFeatureExclude: optional({
@@ -225,10 +219,9 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 			plugins: optional({
 				title: 'Plugins',
 				description: `By default scripts can enumerate the plugins installed on your OS / in your browser`,
-				suffix: 'enable modifications',
 				[_default]: true,
 				expanded: false,
-				input: { type: 'bool', },
+				input: { type: 'bool', suffix: 'enable modifications', },
 				children: {
 					hideAll: optional({
 						title: 'Hide all',
@@ -241,10 +234,9 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 			devices: optional({
 				title: 'Media Devices',
 				description: `By default scripts can detect the audio/video input hardware of your computer`,
-				suffix: 'enable modifications',
 				[_default]: true,
 				expanded: false,
-				input: { type: 'bool', },
+				input: { type: 'bool', suffix: 'enable modifications', },
 				children: {
 					hideAll: optional({
 						title: 'Hide all',
@@ -265,67 +257,64 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				title: 'Screen',
 				description: `Decide which values the window.screen and and window.devicePixelRatio should have.
 				<br>These values are randomly generated according to the parameters below`,
-				suffix: 'enable modifications',
 				[_default]: true,
 				expanded: false,
-				input: { type: 'bool', },
+				input: { type: 'bool', suffix: 'enable modifications', },
 				children: {
 					devicePixelRatio: optional({
 						title: 'devicePixelRatio',
-						[_default]: { from: 1, to: 1.5, },
-						restrict: { from: 0.5, to: 8, type: 'number', },
-						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
+						[_default]: [ [ 1, 1.5, ], ],
+						restrict: [ { from: 0.5, to: 8, type: 'number', }, { from: 0.5, to: 8, type: 'number', }, ],
+						input: [ { type: 'number', prefix: 'From', }, { type: 'number', prefix: 'to', suffix: '.', }, ],
 					}),
 					width: optional({
 						title: 'screen.width',
-						[_default]: { from: screen.width * 0.8, to: 3840, },
-						restrict: { from: 1024, to: 8192, type: 'number', },
-						suffix: 'pixels',
-						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
+						[_default]: [ [ global.screen.width / global.devicePixelRatio * 0.8, 3840, ], ],
+						restrict: [ { from: 1024, to: 8192, type: 'number', }, { from: 1024, to: 8192, type: 'number', }, ],
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: 'pixels.', }, ],
 					}),
 					height: optional({
 						title: 'screen.height',
-						[_default]: { from: screen.height * 0.8, to: 2160, },
-						restrict: { from: 600, to: 8192, type: 'number', },
-						suffix: 'pixels',
-						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
+						[_default]: [ [ global.screen.height / global.devicePixelRatio * 0.8, 2160, ], ],
+						restrict: [ { from: 600, to: 8192, type: 'number', }, { from: 600, to: 8192, type: 'number', }, ],
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: 'pixels.', }, ],
 					}),
 					ratio: optional({
 						title: 'Aspect ratio',
-						description: 'The quotient screen.width / screen.height',
-						[_default]: { from: 1.3, to: 2.4, },
-						restrict: { from: 0.5, to: 8, type: 'number', },
-						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
+						description: `The quotient screen.width / screen.height`,
+						[_default]: [ [ 1.3, 2.4, ], ],
+						restrict: [ { from: 0.5, to: 8, type: 'number', }, { from: 0.5, to: 8, type: 'number', }, ],
+						input: [ { type: 'number', prefix: 'From', }, { type: 'number', prefix: 'to', suffix: '.', }, ],
 					}),
 					offset: {
 						title: 'Offset',
-						description: 'The amount of space at each edge of the screen that is occupied by task/title bars etc.',
+						description: `The amount of space at each edge of the screen that is occupied by task/title bars etc.`,
 						default: true,
 						input: { type: 'label', },
 						children: {
 							top: optional({
 								title: 'Top',
-								[_default]: { from: 0, to: 0, },
-								restrict: { from: 0, to: 200, type: 'number', },
-								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
+								[_default]: [ [ 0, 0, ], ],
+								restrict: [ { from: 0, to: 200, type: 'number', }, { from: 0, to: 200, type: 'number', }, ],
+								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: 'px.', }, ],
 							}),
 							right: optional({
 								title: 'Right',
-								[_default]: { from: 0, to: 0, },
-								restrict: { from: 0, to: 200, type: 'number', },
-								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
+								[_default]: [ [ 0, 0, ], ],
+								restrict: [ { from: 0, to: 200, type: 'number', }, { from: 0, to: 200, type: 'number', }, ],
+								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: 'px.', }, ],
 							}),
 							bottom: optional({
 								title: 'Bottom',
-								[_default]: { from: 30, to: 50, },
-								restrict: { from: 0, to: 200, type: 'number', },
-								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
+								[_default]: [ [ 30, 50, ], ],
+								restrict: [ { from: 0, to: 200, type: 'number', }, { from: 0, to: 200, type: 'number', }, ],
+								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: 'px.', }, ],
 							}),
 							left: optional({
 								title: 'Left',
-								[_default]: { from: 0, to: 0, },
-								restrict: { from: 0, to: 200, type: 'number', },
-								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
+								[_default]: [ [ 0, 0, ], ],
+								restrict: [ { from: 0, to: 200, type: 'number', }, { from: 0, to: 200, type: 'number', }, ],
+								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: 'px.', }, ],
 							}),
 						},
 					},
@@ -340,41 +329,34 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 					<li>JavaScript can test the presence of a font by displaying (hidden) text in that font and checking how it is rendered</li>
 				</ul>
 				`,
-				suffix: 'enable modifications',
 				[_default]: true,
 				expanded: false,
-				input: { type: 'bool', },
+				input: { type: 'bool', suffix: 'enable modifications', },
 				children: {
 					dispersion: optional({
 						title: 'JavaScript randomness',
 						description: `To prevent JavaScript from detecting fonts, this adds some randomness to the size of text elements.
-						<br>On most websites this should not have any visible effects, but the font detection will effectively disabled if the randomness is greater zero`,
-						suffix: '%',
+						<br>On most websites this should not have any visible effects, but the font detection will effectively disabled if the randomness is greater zero.`,
 						[_default]: 25,
 						restrict: { from: 0, to: 75, },
-						input: { type: 'number', },
+						input: { type: 'number', suffix: '%', },
 					}),
 				},
 			}),
 			canvas: optional({
 				title: 'Canvas',
-				description: `<pre>
-Websites are able to draw custom images on special &lt;canvas&gt; elements.
-Since different browsers on different operation systems on different hardware draw a little different on different screens, reading these images allows for browser fingerprinting
-</pre>`,
-				suffix: 'enable modifications',
+				description: `Websites are able to draw custom images on special &lt;canvas&gt; elements.
+				<br>Since different browsers on different operation systems on different hardware draw a little different on different screens,
+				reading these images allows for browser fingerprinting.`,
 				[_default]: true,
 				expanded: false,
-				input: { type: 'bool', },
+				input: { type: 'bool', suffix: 'enable modifications', },
 				children: {
 					randomize: ({
 						title: 'Randomize',
-						description: `<pre>
-Currently the only technique to disable canvas fingerprinting is to add random noise to &lt;canvas&gt; images when they are read.
-You can't configure anything about that yet
-</pre>`,
+						description: `Currently the only technique to disable canvas fingerprinting is to add random noise to &lt;canvas&gt; images when they are read.
+						<br>You can't configure anything about that yet.`,
 						default: true,
-						input: { type: 'label', },
 					}),
 				},
 			}),

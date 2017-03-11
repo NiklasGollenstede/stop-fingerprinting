@@ -650,8 +650,9 @@ function isIn(value, range) {
 function parseRange(arg, def) {
 	if (arg == null) { return def; }
 	if (typeof arg === 'object') {
-		let from = 'from' in arg ? arg.from : arg.to || 0;
-		let to = 'to' in arg ? arg.to : arg.from || 0;
+		const array = Array.isArray(arg);
+		let from = array ? arg[0] : 'from' in arg ? arg.from : arg.to || 0;
+		let to = array ? arg[1] : 'to' in arg ? arg.to : arg.from || 0;
 		if (to < from) { let tmp = from; from = to; to = tmp; }
 		return { from, to, };
 	}

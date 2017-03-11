@@ -1,6 +1,6 @@
-(() => { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(() => { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/web-ext-utils/browser/': { webRequest, },
-}) {
+}) => {
 
 const ignore = { toString() { return 'ignore'; }, };
 const reset = { toString() { return 'ignore'; }, };
@@ -35,20 +35,20 @@ function RequestListener(filter, options, Handler) {
 
 		function fire({ requestId, url, }) {
 			let handler = handlers[requestId];
-			if (handler === ignore) { return; }
+			if (handler === ignore) { return null; }
 			if (!handler) { try {
 				handler = handlers[requestId] = new Handler(...arguments);
-				if (handler === reset) { done(arguments[0]); console.log('reset', requestId, event, url); return; }
-				if (handler === ignore) { done(arguments[0]); handlers[requestId] = ignore; console.log('ignore', requestId, event, url); return; }
+				if (handler === reset) { done(arguments[0]); console.log('reset', requestId, event, url); return null; }
+				if (handler === ignore) { done(arguments[0]); handlers[requestId] = ignore; console.log('ignore', requestId, event, url); return null; }
 			} catch (error) {
 				console.error('Uncaught error during handler construction', error);
-				return;
+				return null;
 			} }
 			try {
 				let value = handler[event](...arguments);
 				if (value === reset) { value = undefined; done(arguments[0]); console.log('reset', requestId, event, url); }
 				if (value === ignore) { value = undefined; done(arguments[0]); handlers[requestId] = ignore; console.log('ignore', requestId, event, url); }
-				if (typeof value === 'object') {
+				if (typeof value === 'object' && value !== null) {
 					if (value.ignore === ignore) {
 						delete value.ignore;
 						done(arguments[0]);
@@ -62,7 +62,7 @@ function RequestListener(filter, options, Handler) {
 				}
 				return value;
 			} catch (error) {
-				console.error(`Uncaught error in "${ event }" handler of`, handler, error);
+				return console.error(`Uncaught error in "${ event }" handler of`, handler, error);
 			}
 		}
 	}
