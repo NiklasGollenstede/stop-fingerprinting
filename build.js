@@ -1,120 +1,6 @@
-'use strict'; /* globals __dirname, __filename, module, process */ // license: MPL-2.0
+/*eslint strict: ["error", "global"], no-implicit-globals: "off"*/ 'use strict'; /* globals module, require, __dirname, process, */ // license: MPL-2.0
 
 const packageJson = require('./package.json');
-
-// files from '/' to be included in /webextension/
-const webExtFiles = {
-	'.': [
-		'background/',
-		'common/',
-		'content/',
-		'icons/',
-		'ui/',
-		'LICENSE',
-	],
-	node_modules: {
-		es6lib: [
-			'concurrent.js',
-			'dom.js',
-			'functional.js',
-			'index.js',
-			'namespace.js',
-			'network.js',
-			'object.js',
-			'port.js',
-			'require.js',
-			'string.js',
-		],
-		'get-tld': [
-			'index.js',
-		],
-		'regexpx': [
-			'index.js',
-		],
-		'web-ext-utils': {
-			'.': [ 'utils.js', ],
-			chrome: [
-				'index.js',
-			],
-			options: [
-				'index.js',
-				'editor.js',
-				'editor-dark.css',
-				'editor-layout.css',
-			],
-			tabview: [
-				'index.js',
-			],
-			update: [
-				'index.js',
-			],
-		},
-	},
-};
-
-const webExtManifestJson = {
-	manifest_version: 2,
-	name: packageJson.title,
-	short_name: packageJson.title,
-	version: packageJson.version,
-	author: packageJson.author,
-	license: packageJson.license,
-	description: packageJson.description,
-	repository: packageJson.repository,
-
-	icons: { 64: 'icons/default/64.png', }, // TODO: read from dir
-
-	// minimum_chrome_version: '51.0.0',
-	applications: {
-		gecko: {
-			id: '@'+ packageJson.name,
-			strict_min_version: '51.0',
-		}
-	},
-
-	permissions: [
-		'browsingData',
-		'notifications',
-		'nativeMessaging',
-		'storage',
-		'tabs',
-		'webRequest',
-		'webRequestBlocking',
-		'webNavigation',
-		'*://*/*'
-	],
-	optional_permissions: [ ],
-
-	background: { page: 'background/index.html', },
-	content_scripts: [
-		{
-			matches: [ '<all_urls>' ], // doesn't match amo (in firefox)
-			match_about_blank: false,
-			all_frames: false, // injection into sub_frames is done from the main_frame
-			run_at: 'document_start',
-			js: [
-				'content/get-tab-id.js'
-			]
-		}
-	],
-	browser_action: {
-		default_title: 'Stop Fingerprinting',
-		default_popup: 'ui/panel/index.html',
-	},
-	options_ui: {
-		page: 'ui/home/index.html#options',
-		open_in_tab: true,
-	},
-	web_accessible_resources: [ ], // must be empty
-
-	run_update: { // options for the es6lib/update module
-		'base_path': '/update/'
-	},
-
-	seleniun_setup_port: null, // set later if building for a selenium test
-
-	incognito: 'spanning', // firefox doesn't support anything else
-};
 
 // files from '/' to be included in '/'
 const sdkRootFiles = [
@@ -148,13 +34,14 @@ const sdkPackageJson = {
 };
 
 const {
-	concurrent: { async, spawn, promisify, },
+	concurrent: { async, promisify, },
 	functional,
 	fs: { FS, },
 	process: { execute, },
 } = require('es6lib');
-const { join, relative, resolve, dirname, basename, } = require('path');
+const { join, resolve, } = require('path');
 
+const webExtBuild = require('web-ext-build');
 const fsExtra = require('fs-extra');
 const copy = promisify(fsExtra.copy);
 const remove = promisify(fsExtra.remove);
@@ -177,21 +64,21 @@ const buildTldJS = async(function*(options) {
 	log(`./node_modules/get-tld/index.js created/updated (${ list.length } => ${ data.length } bytes)`);
 });
 
-const buildUpdate = async(function*(options) {
-	const outputJson = promisify(require('fs-extra').outputJson);
-	for (let component of (yield FS.readdir(resolve(__dirname, `update`)))) {
-		const names = (yield FS.readdir(resolve(__dirname, `update/${ component }`)))
-		.filter(_=>_ !== 'versions.json')
-		.map(path => basename(path).slice(0, -3));
-		(yield outputJson(resolve(__dirname, `update/${ component }/versions.json`), names));
-	}
-	log('wrote version info');
+const buildWebExt = async(function*(options) {
+	const config = options.webExt || { };
+	config.outDir = options.outDir || resolve(__dirname, './build') +'/webextension';
+
+//	// for selenium test, write the setupPort to the manifest.json
+//	options.selenium && (webExtManifestJson.seleniun_setup_port = options.selenium.setupPort);
+
+	(yield webExtBuild(config));
+	log('built WebExt');
 });
 
 const copyFiles = async(function*(files, from, to) {
 	const paths = [ ];
 	(function addPaths(prefix, module) {
-		if (Array.isArray(module)) { return paths.push(...module.map(file => join(prefix, file))); }
+		if (Array.isArray(module)) { return void paths.push(...module.map(file => join(prefix, file))); }
 		Object.keys(module).forEach(key => addPaths(join(prefix, key), module[key]));
 	})('.', files);
 
@@ -211,29 +98,15 @@ const build = module.exports = async(function*(options) {
 		trueisch(options.content) && buildContent(options.content || { }),
 		trueisch(options.icons)   &&   buildIcons(options.icons   || { }),
 		trueisch(options.tld)     &&   buildTldJS(options.tld     || { }),
-		trueisch(options.update)  &&  buildUpdate(options.update  || { }),
 		(!options.outDir || options.clearOutDir) && (yield remove(outDir)),
 	]));
 
-	// write all resolutions of the default icon
-	webExtManifestJson.icons = (yield FS.readdir(resolve(__dirname, 'icons/default/')))
-	.reduce((obj, name) => ((obj[name.split('.')[0]] = 'icons/default/'+ name), obj), { });
-
-	// for selenium test, write the setupPort to the manifest.json
-	options.selenium && (webExtManifestJson.seleniun_setup_port = options.selenium.setupPort);
-
 	(yield Promise.all([
-		copyFiles(webExtFiles, '.', join(outDir, 'webextension')),
+		buildWebExt(options),
 		copyFiles(sdkRootFiles, '.', join(outDir, '.')),
 		copyFiles(sdkFiles, 'sdk', join(outDir, '.')),
 		writeFile(join(outDir, 'package.json'), JSON.stringify(sdkPackageJson, null, '\t', 'utf8')),
-		writeFile(join(outDir, 'webextension/manifest.json'), JSON.stringify(webExtManifestJson, null, '\t', 'utf8')),
 	]));
-
-	if (options.selenium) { // change the main module for selenium tests
-		const path = join(outDir, 'webextension/background/index.html');
-		const main = (yield writeFile(path, (yield FS.readFile(path, 'utf8')).replace(/data-main="\.\/"/g, 'data-main="./selenium"')));
-	}
 
 	const jpm = 'node "'+ resolve(__dirname, 'node_modules/jpm/bin/jpm') +'"';
 	const run = command => execute(command, { cwd: outDir, });

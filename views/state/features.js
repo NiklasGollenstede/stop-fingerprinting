@@ -1,6 +1,8 @@
-'use strict'; // license: MPL-2.0
+(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	exports,
+}) => {
 
-window.featureStates = {
+exports.featureStates = {
 	stable:        { color: 100, /*hsl(100, 100%, 25%)*/ title: `stable`,       description: `Implemented and seems to work`, },
 	implemented:   { color: 212, /*hsl(212, 100%, 25%)*/ title: `implemented`,  description: `Implemented and not known to not work`, },
 	almost:        { color: 200, /*hsl(195, 100%, 25%)*/ title: `almost`,       description: `Implemented and seems to work, but there is room for improvement`, },
@@ -10,7 +12,7 @@ window.featureStates = {
 	missing:       { color:  10, /*hsl( 10, 100%, 25%)*/ title: `missing`,      description: `Not implemented at all, but should be added in the future`, },
 };
 
-window.features = {
+exports.features = {
 	ui: {
 		title: `User Interface`,
 		entries: {
@@ -188,3 +190,4 @@ window.features = {
 // - do something about console.memory in chrome (?)
 // - do image sets with variable resolution or css media queries leak the true devicePixelRatio?
 
+}); })(this);

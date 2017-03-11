@@ -1,19 +1,13 @@
-(function() { 'use strict'; define(function({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'node_modules/web-ext-utils/update/': updated, // wait for updates to be run
-	'node_modules/es6lib/concurrent': { _async, },
-	'node_modules/es6lib/functional': { log, },
-	'node_modules/es6lib/object': { MultiMap, deepFreeze, },
-	'node_modules/web-ext-utils/chrome/': { Tabs, applications, rootUrl, Storage, },
+(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'node_modules/web-ext-utils/update/': _,
 	'common/options': options,
 	'common/profile-data': ProfileData,
-	'common/utils': { notify, domainFromUrl, setBrowserAction, },
-	'icons/urls': icons,
 	OriginPattern: { originFromPatternGroup, originFromUrl, },
 	ua: { Generator: NavGen, },
 	ScreenGen,
-}) {
+}) => {
 
-const defaultProfData   = ProfileData.defaultProfile;
+// const defaultProfData   = ProfileData.defaultProfile;
 const ruleModel         = ProfileData.model.rules.children;
 const profIdToData      = new Map;            // profileId         ==>  ProfileData, unsorted
 const profIdToStack     = new Map;            // profileId         ==>  ProfileStack, sorted by the ProfileStack's .priority
@@ -53,12 +47,12 @@ function rebuild() {
 	return; // that's it (?)
 }
 
-const addProfile = _async(function*(id) {
-	const data = (yield ProfileData(id));
+async function addProfile(id) {
+	const data = (await ProfileData(id));
 	profIdToData.set(id, data);
 
 	console.log('added ProfileData', profIdToData, profIdToStack, data);
-});
+}
 
 function removeProfile(id) {
 	const data = profIdToData.get(id);
@@ -77,9 +71,9 @@ class ProfileStack {
 		this.id = data.id.value;
 		this.data = data;
 		this.priority = data.priority.value; // used for the sorting
-		data.priority.whenChange(() => needRebuild = true); // TODO: this is expensive
-		data.inherits.whenChange(() => needRebuild = true); // TODO: this is expensive
-		data.include.whenChange((_, { current: origins, }) => this.origins = origins.map(originFromPatternGroup));
+		data.priority.whenChange(() => (needRebuild = true)); // TODO: this is expensive
+		data.inherits.whenChange(() => (needRebuild = true)); // TODO: this is expensive
+		data.include.whenChange((_, { current: origins, }) => (this.origins = origins.map(originFromPatternGroup)));
 		data.rules.onAnyChange((value, { parent: { path, }, }) => this.clear(path.replace(/^\.?rules\./, ''))); // will be removed on data.destroy()
 		this.sessions = new Set; // used to .outdade() them on this.clear() or .destroy()
 		this.values = null;
@@ -183,7 +177,7 @@ class Session {
 		this.navigator = this.stack.navGen.generate();
 		data.navigator = this.navigator && this.navigator.toJSON();
 		data.screen = this.stack.screenGen.generate();
-		data.debug = options.children.debug.value;
+		data.debug = options.debug.value;
 		data.debug && (data.profileTitle = stack.data.title.value);
 		console.log('Session.created', this);
 	}
@@ -194,7 +188,7 @@ class Session {
 }
 
 addProfile('<default>');
-options.children.profiles.whenChange((_, { current: ids, }) => {
+options.profiles.whenChange((_, { current: ids, }) => {
 	profIdToData.forEach((_, old) => !ids.includes(old) && old !== '<default>' && removeProfile(old));
 	Promise.all(ids.map(id => !profIdToData.has(id) && addProfile(id)))
 	.then(() => mayRebuild++);
@@ -226,7 +220,7 @@ Object.keys(Profiles).forEach(key => {
 });
 
 function deepDeepFlatteningClone(target, source) {
-	for (let key in source) {
+	for (const key in source) {
 		let value = source[key];
 		if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
 			value = deepDeepFlatteningClone({ }, value);
@@ -238,4 +232,4 @@ function deepDeepFlatteningClone(target, source) {
 
 return Object.freeze(Profiles);
 
-}); })();
+}); })(this);

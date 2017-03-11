@@ -1,23 +1,22 @@
-(function() { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'node_modules/es6lib/object': { copyProperties, deepFreeze, },
+(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+	'node_modules/es6lib/object': { copyProperties, },
 	'node_modules/regexpx/': RegExpX,
 	'node_modules/web-ext-utils/options/': Options,
-	'node_modules/web-ext-utils/chrome/': { Storage, applications, },
+	'node_modules/web-ext-utils/browser/version': applications,
 	utils: { DOMAIN_CHARS, },
-}) {
+}) => {
 
-let makeModel = (optional, _default) => ({
+const makeModel = (optional, _default) => ({
 	title: {
 		title: 'Profile name',
 		default: 'New Profile',
-		type: 'string',
+		input: { type: 'string', },
 	},
 	description: {
 		title: 'Description',
-		type: 'text',
 		default: '',
-		placeholder: `You can save notes about this profile here`,
 		expanded: false,
+		input: { type: 'text', placeholder: `You can save notes about this profile here`, },
 	},
 	include: {
 		title: 'Included hosts',
@@ -53,15 +52,15 @@ If you put multiple hosts in one row, they are seen as equivalent by this add-on
 			},
 			unique: '.',
 		},
-		type: 'string',
+		input: { type: 'string', },
 	},
 	priority: {
 		title: 'Profile priority',
 		description: `If a website is matched by the include rules of more than one Profile, the profile with the highest priority is used.`,
 		default: 0,
 		restrict: { from: -Infinity, to: Infinity, },
-		type: 'number',
 		expanded: false,
+		input: { type: 'number', },
 	},
 	inherits: {
 		title: 'Inherited Profile',
@@ -70,32 +69,31 @@ You don't have to specify all possible parameters for a website in a single prof
 'Rules' that are not specified in this Profile are inherited from:
 </pre>`,
 		default: '<default>',
-		type: 'string', // TODO: this shouldn't be a string input
 		expanded: false,
+		input: { type: 'string', }, // TODO: this shouldn't be a string input
 	},
 	rules: {
 		title: 'Rules',
 		description: 'Set the rules that should apply to all matching sites, any rules that are not set will be filled in by matching profiles with lower priorities or the extensions default values',
-		type: 'label',
 		default: true,
+		input: { type: 'label', },
 		children: {
 			disabled: optional({
 				title: 'Disable',
 				description: 'Completely disable this extension for all matching sites',
 				[_default]: false,
-				type: 'bool',
+				input: { type: 'bool', },
 			}),
 			logLevel: optional({
 				title: 'Logging',
 				description: 'Decide what priority of notifications you want to see',
 				[_default]: 3,
-				type: 'menulist',
-				options: [
+				input: { type: 'menulist', options: [
 					{ value: 1, label: `Include debugging`, },
 					{ value: 2, label: `Log everything`, },
 					{ value: 3, label: `Important only`, },
 					{ value: 4, label: `Errors only`, },
-				],
+				], },
 			}),
 			session: optional({
 				title: 'Session duration',
@@ -103,13 +101,12 @@ You don't have to specify all possible parameters for a website in a single prof
 				<br>Here you can choose the scope and duration of those sessions.
 				<br>You can also end the current session from the pop-up menu.`, // TODO: implement this
 				[_default]: 'page',
-				type: 'menulist',
-				options: [
+				input: { type: 'menulist', options: [
 					{ value: 'browser',  label: `Browser: All tabs use the same session, the session lasts until the browser is closed`, }, // TODO: (separate for private/incognito // mode)
 					// { value: 'window',   label: `Window: Once per window. You should reload tabs if you move them between windows`, },
 					{ value: 'tab',      label: `Tab: Every tab gets its own session, the session ends when the tab gets closed`, },
 					{ value: 'page',      label: `Page: Every page in every tab gets its own session, the session ends when th tab is reloaded`, },
-				],
+				], },
 			}),
 			hstsDisabled: optional({
 				title: 'Disable HSTS',
@@ -123,75 +120,70 @@ Enabling this will only prevent the creation of new HSTS super cookies, any exis
 THIS DOES NOT WORK IN FIREFOX (yet?)!
 </pre>`,
 				[_default]: true,
-				type: 'bool',
 				expanded: false,
+				input: { type: 'bool', },
 			}),
 			navigator: optional({
 				title: 'Navigator and Requests',
 				description: `Decide which values the window.navigator and some HTTP-request header fields should have.
 				<br>These values are randomly generated according to the parameters below`,
-				suffix: 'enable modifications',
 				[_default]: true,
-				type: 'bool',
 				expanded: false,
+				input: { type: 'bool', suffix: 'enable modifications', },
 				children: {
 					browser: optional({
 						title: 'Browsers',
 						description: 'The browsers that can be chosen from',
-						type: 'menulist',
 						[_default]: applications.current,
+						restrict: { unique: '.', },
 						minLength: 1,
 						maxLength: 3,
-						restrict: { unique: '.', },
-						options: [
+						input: { type: 'menulist', options: [
 							{ value: 'chrome',  label: 'Chrome', },
 							{ value: 'firefox', label: 'Firefox', },
 							{ value: 'ie',      label: 'Internet Explorer / Edge', },
-						],
+						], },
 					}),
 					browserAge: optional({
 						title: 'Browser Age',
 						description: 'The age of the browser version, chose negative values to allow beta versions',
-						suffix: 'weeks',
-						restrict: { from: -10, to: 150, type: 'number', },
 						[_default]: { from: -1, to: 12, },
-						type: 'interval',
+						restrict: { from: -10, to: 150, type: 'number', },
+						input: { type: 'interval', suffix: 'weeks', },
 					}),
 					os: optional({
 						title: 'Operating Systems',
 						description: 'The operating systems that can be chosen from',
-						type: 'menulist',
 						[_default]: [ 'win', 'mac', 'lin', ],
+						restrict: { unique: '.', },
 						addDefault: 'win',
 						minLength: 1,
 						maxLength: 3,
-						restrict: { unique: '.', },
-						options: [
+						input: { type: 'menulist', options: [
 							{ value: 'win', label: 'Windows', },
 							{ value: 'mac', label: 'Mac OS', },
 							{ value: 'lin', label: 'Linux', },
-						],
+						], },
 					}),
 					osArch: ({
 						title: 'Processor Architecture',
 						description: 'The processor and process architectures that can be chosen from',
-						type: 'menulist',
 						[_default]: [ '32_32', '32_64', '64_64', ],
+						restrict: { unique: '.', },
 						addDefault: '32_32',
 						maxLength: 3,
-						restrict: { unique: '.', },
-						options: [
+						input: { type: 'menulist', options: [
 							{ value: '32_32', label: '32 bit', },
 							{ value: '32_64', label: '32 on 64 bit', },
 							{ value: '64_64', label: '64 bit', },
-						],
+						], },
 					}),
 					cpuCores: optional({
 						title: 'CPU cores',
 						description: 'Number of (virtual) CPU cores',
 						restrict: { from: 1, to: 16, type: 'number', },
 						[_default]: { from: 1, to: 8, },
-						type: 'interval',
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 					}),
 					osAge: optional({
 						title: 'Operating Systems Age',
@@ -199,7 +191,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						suffix: 'years',
 						restrict: { from: 0, to: 11, type: 'number', },
 						[_default]: { from: 0, to: 3, },
-						type: 'interval',
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 					}),
 					dntChance: optional({
 						title: 'Do-Not-Track header',
@@ -210,7 +202,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						suffix: '%',
 						[_default]: { from: 30, to: 1, },
 						restrict: { from: 0, to: 100, type: 'number', },
-						type: 'interval',
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 					}),
 					ieFeatureCount: optional({
 						title: 'Number of Internet Explorer "features"',
@@ -218,7 +210,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						<br>The IE User Agent contains things like the installed versions on .NET and others. This option restricts the number of these "features"`,
 						restrict: { from: 0, to: 7, type: 'number', },
 						[_default]: { from: 0, to: 4, },
-						type: 'interval',
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 					}),
 					ieFeatureExclude: optional({
 						title: 'Exclude Internet Explorer "features"',
@@ -226,7 +218,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						[_default]: [ ],
 						addDefault: '(?!)',
 						restrict: { isRegExp: true, },
-						type: 'string',
+						input: { type: 'string', },
 					}),
 				},
 			}),
@@ -235,14 +227,14 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				description: `By default scripts can enumerate the plugins installed on your OS / in your browser`,
 				suffix: 'enable modifications',
 				[_default]: true,
-				type: 'bool',
 				expanded: false,
+				input: { type: 'bool', },
 				children: {
 					hideAll: optional({
 						title: 'Hide all',
 						description: `Makes the browser report that there are no plugins installed. If a website decides to load a plugin anyway, that plugin will still work. It is not disabled, just hidden from enumeration`,
 						[_default]: true,
-						type: 'bool',
+						input: { type: 'bool', },
 					}),
 				},
 			}),
@@ -251,23 +243,23 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				description: `By default scripts can detect the audio/video input hardware of your computer`,
 				suffix: 'enable modifications',
 				[_default]: true,
-				type: 'bool',
 				expanded: false,
+				input: { type: 'bool', },
 				children: {
 					hideAll: optional({
 						title: 'Hide all',
 						description: `Makes the browser report that there are no media devices available`,
 						[_default]: true,
-						type: 'bool',
+						input: { type: 'bool', },
 					}),
-				}
+				},
 			}),
 			windowName: optional({
 				title: 'Reset window.name',
 				description: `If checked, the window.name property gets reset at every load`,
 				[_default]: true,
-				type: 'bool',
 				expanded: false,
+				input: { type: 'bool', },
 			}),
 			screen: optional({
 				title: 'Screen',
@@ -275,65 +267,65 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				<br>These values are randomly generated according to the parameters below`,
 				suffix: 'enable modifications',
 				[_default]: true,
-				type: 'bool',
 				expanded: false,
+				input: { type: 'bool', },
 				children: {
 					devicePixelRatio: optional({
 						title: 'devicePixelRatio',
 						[_default]: { from: 1, to: 1.5, },
 						restrict: { from: 0.5, to: 8, type: 'number', },
-						type: 'interval',
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 					}),
 					width: optional({
 						title: 'screen.width',
 						[_default]: { from: screen.width * 0.8, to: 3840, },
 						restrict: { from: 1024, to: 8192, type: 'number', },
 						suffix: 'pixels',
-						type: 'interval',
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 					}),
 					height: optional({
 						title: 'screen.height',
 						[_default]: { from: screen.height * 0.8, to: 2160, },
 						restrict: { from: 600, to: 8192, type: 'number', },
 						suffix: 'pixels',
-						type: 'interval',
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 					}),
 					ratio: optional({
 						title: 'Aspect ratio',
 						description: 'The quotient screen.width / screen.height',
 						[_default]: { from: 1.3, to: 2.4, },
 						restrict: { from: 0.5, to: 8, type: 'number', },
-						type: 'interval',
+						input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 					}),
 					offset: {
 						title: 'Offset',
 						description: 'The amount of space at each edge of the screen that is occupied by task/title bars etc.',
-						type: 'label',
 						default: true,
+						input: { type: 'label', },
 						children: {
 							top: optional({
 								title: 'Top',
 								[_default]: { from: 0, to: 0, },
 								restrict: { from: 0, to: 200, type: 'number', },
-								type: 'interval',
+								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 							}),
 							right: optional({
 								title: 'Right',
 								[_default]: { from: 0, to: 0, },
 								restrict: { from: 0, to: 200, type: 'number', },
-								type: 'interval',
+								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 							}),
 							bottom: optional({
 								title: 'Bottom',
 								[_default]: { from: 30, to: 50, },
 								restrict: { from: 0, to: 200, type: 'number', },
-								type: 'interval',
+								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 							}),
 							left: optional({
 								title: 'Left',
 								[_default]: { from: 0, to: 0, },
 								restrict: { from: 0, to: 200, type: 'number', },
-								type: 'interval',
+								input: [ { type: 'integer', prefix: 'From', }, { type: 'integer', prefix: 'to', suffix: '.', }, ],
 							}),
 						},
 					},
@@ -350,8 +342,8 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 				`,
 				suffix: 'enable modifications',
 				[_default]: true,
-				type: 'bool',
 				expanded: false,
+				input: { type: 'bool', },
 				children: {
 					dispersion: optional({
 						title: 'JavaScript randomness',
@@ -360,7 +352,7 @@ THIS DOES NOT WORK IN FIREFOX (yet?)!
 						suffix: '%',
 						[_default]: 25,
 						restrict: { from: 0, to: 75, },
-						type: 'number',
+						input: { type: 'number', },
 					}),
 				},
 			}),
@@ -372,8 +364,8 @@ Since different browsers on different operation systems on different hardware dr
 </pre>`,
 				suffix: 'enable modifications',
 				[_default]: true,
-				type: 'bool',
 				expanded: false,
+				input: { type: 'bool', },
 				children: {
 					randomize: ({
 						title: 'Randomize',
@@ -381,8 +373,8 @@ Since different browsers on different operation systems on different hardware dr
 Currently the only technique to disable canvas fingerprinting is to add random noise to &lt;canvas&gt; images when they are read.
 You can't configure anything about that yet
 </pre>`,
-						type: 'label',
 						default: true,
+						input: { type: 'label', },
 					}),
 				},
 			}),
@@ -390,51 +382,31 @@ You can't configure anything about that yet
 	},
 	manage: {
 		title: 'Manage profile',
-		default: [ 'delete', ],
-		type: 'control',
+		default: true,
+		input: { type: 'control', id: 'delete', label: 'Delete', },
 	},
 });
 
 const model = makeModel(option => Object.assign(option, { minLength: 0, }), 'addDefault');
 
-const listerners = new WeakMap;
-const createProfile = (id, model) => {
-	const prefix = 'profile.'+ id;
-	return new Options({
-		model: Object.assign(model, { id: {
-			default: id,
-			restrict: { readOnly: true, },
-			type: 'hidden',
-		}, }),
-		prefix,
-		storage: Storage.sync || Storage.local,
-		addChangeListener(listener) {
-			const onChanged = changes => {
-				Object.keys(changes).forEach(key => key.startsWith(prefix) && listener(key, changes[key].newValue));
-			};
-			listerners.set(listener, onChanged);
-			Storage.onChanged.addListener(onChanged);
-		},
-		removeChangeListener(listener) {
-			const onChanged = listerners.get(listener);
-			listerners.delete(listener);
-			Storage.onChanged.removeListener(onChanged);
-		},
-	});
-};
+const createProfile = (id, model) => new Options({ model: Object.assign({ id: {
+	default: id,
+	restrict: { readOnly: true, },
+	hidden: true,
+}, }, model), prefix: 'profile.'+ id, });
 
-const defaultProfile = (yield createProfile('<default>', copyProperties(makeModel(_=>_, 'default'), {
+const defaultProfile = (await createProfile('<default>', copyProperties(makeModel(_=>_, 'default'), {
 	title: {
 		default: '<default>',
 	},
 	description: {
 		expanded: null,
-		type:  'label',
+		input: { type:  'label', },
 		description: `TODO`,
 	},
 	include: {
 		expanded: null,
-		type: 'label',
+		input: { type: 'label', },
 		description: `TODO`,
 		maxLength: 0,
 	},
@@ -442,17 +414,17 @@ const defaultProfile = (yield createProfile('<default>', copyProperties(makeMode
 		default: -Infinity,
 		expanded: null,
 		disabled: true,
-		type: 'string',
+		input: { type: 'string', },
 	},
 	inherits: {
 		default: null,
 		expanded: null,
-		type: 'label',
+		input: { type: 'label', },
 		description: `TODO`,
 	},
 	// rules: ,
 	manage: {
-		type: 'hidden',
+		hidden: true,
 	},
 })));
 
@@ -460,6 +432,6 @@ function Profile(id) {
 	return id === '<default>' ? defaultProfile : createProfile(id, model);
 }
 
-return deepFreeze(Object.assign(Profile, { defaultProfile, model, }));
+return Object.assign(Profile, { defaultProfile, model, });
 
-}); })();
+}); })(this);

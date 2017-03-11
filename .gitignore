@@ -1,6 +1,5 @@
 node_modules
 tmp/
-*.xpi
 log.txt
 npm-debug.log
 npm-debug.log.*
@@ -12,4 +11,8 @@ debug.log
 /icons/urls.js
 /native/native.*
 /native/*.json
-/update/*/versions.json
+files.json
+manifest.json
+view.html
+*.xpi
+*.zip

@@ -1,51 +1,31 @@
-(function() { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
-	'node_modules/es6lib/object': { deepFreeze, },
+(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/regexpx/': RegExpX,
 	'node_modules/web-ext-utils/options/': Options,
-	'node_modules/web-ext-utils/chrome/': { Storage, },
-	utils: { DOMAIN_CHARS, },
-}) {
+}) => {
 
-const model = deepFreeze({
+const isBeta = true || (/^\d+\.\d+.\d+(?!$)/).test((global.browser || global.chrome).runtime.getManifest().version); // version doesn't end after the 3rd number ==> bata channel
+
+const model = {
 	debug: {
-		title: 'Enable debugging',
-		description: `Enable some stuff that can definitely be used to compromise your privacy and security but is helpful when debugging`,
-		type: 'bool',
-		default: false,
-		expanded: false,
+		title: 'Debug Level',
+		expanded: true,
+		default: +isBeta,
+		hidden: !isBeta,
+		restrict: { type: 'number', from: 0, to: 2, },
+		input: { type: 'integer', suffix: 'set to > 0 to enable debugging', },
 	},
 	profiles: {
 		maxLength: Infinity,
 		restrict: { match: RegExpX('i')`^ \{ [\da-f]{8} - [\da-f]{4} - 4 [\da-f]{3} - 8 [\da-f]{3} - [\da-f] {12} \} $`, unique: '.', },
-		type: 'hidden',
+		hidden: true,
 	},
 	addProfile: {
 		title: 'Add new profile',
-		default: 'Add',
-		type: 'control',
+		default: true,
+		input: { type: 'control', id: 'add', label: 'Add', },
 	},
-});
+};
 
-const listerners = new WeakMap;
+return (await new Options({ model, })).children;
 
-const options = (yield new Options({
-	model,
-	prefix: 'options',
-	storage: Storage.sync,
-	addChangeListener(listener) {
-		const onChanged = changes => Object.keys(changes).forEach(key => key.startsWith('options') && listener(key, changes[key].newValue));
-		listerners.set(listener, onChanged);
-		Storage.onChanged.addListener(onChanged);
-	},
-	removeChangeListener(listener) {
-		const onChanged = listerners.get(listener);
-		listerners.delete(listener);
-		Storage.onChanged.removeListener(onChanged);
-	},
-}));
-
-options.model = model;
-
-return Object.freeze(options);
-
-}); })();
+}); })(this);

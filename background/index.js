@@ -1,23 +1,17 @@
-(function(global) { 'use strict'; define(function*({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/web-ext-utils/update/': updated,
-	'node_modules/es6lib/concurrent': { sleep, _async, },
-	'node_modules/es6lib/functional': { throttle, },
-	'node_modules/es6lib/port': Port, // also for chrome.Messages
-	'node_modules/web-ext-utils/chrome/': { Tabs, Messages, browsingData, runtime, webNavigation, webRequest, applications: { gecko, }, content, },
-	'node_modules/web-ext-utils/utils': { showExtensionTab, },
-	'common/utils': { notify, domainFromUrl, setBrowserAction, },
+	'node_modules/es6lib/concurrent': { sleep, },
+	'node_modules/es6lib/port': Port, // also for browser.Messages
+	'node_modules/web-ext-utils/browser/': { manifest, Tabs, Messages, runtime, webNavigation, },
+	'node_modules/web-ext-utils/browser/version': { gecko, },
+	'common/utils': { notify, setBrowserAction, },
 	'common/options': options,
-	'icons/urls': icons,
 	RequestListener, RequestListener: { ignore, reset, },
 	Profiles,
 	Tab,
 	require,
-}) {
-console.log('Ran updates', updated);
-
-global.options = options;
-global.Profiles = Profiles;
-global.Chrome = global.Browser = arguments[0]['node_modules/web-ext-utils/chrome/'];
+}) => {
+console.log(manifest.name, 'loaded, updates', updated);
 
 	Tabs         .onCreated                   .addListener((...args) => console.log('onCreated'                   , ...args));
 	Tabs         .onRemoved                   .addListener((...args) => console.log('onRemoved'                   , ...args));
@@ -32,23 +26,23 @@ webNavigation.onErrorOccurred  .addListener(callOnTab('cancelNavigation'));
 
 const sdkPort = new Port(runtime.connect({ name: 'sdk', }), Port.web_ext_Port);
 
-sdkPort.addHandler('awaitStarted', () => require.main.promise.then(() => 'started'));
+sdkPort.addHandler('awaitStarted', () => require.main.ready.then(() => 'started'));
 
-Messages.addHandler('getSenderTabId', function() { return this.tab.id; });
-sdkPort.addHandler('resetOnCrossNavigation', (tabId, url) => Tab.get(tabId).resetOnCrossNavigation());
-sdkPort.addHandler('getTabData', _async(function*(tabId, url) {
+Messages.addHandler('getSenderTabId', function X() { return this.tab.id; });
+sdkPort.addHandler('resetOnCrossNavigation', (tabId, _url) => Tab.get(tabId).resetOnCrossNavigation());
+sdkPort.addHandler('getTabData', async (tabId, url) => {
 	const tab = Tab.get(tabId);
 	for (let i = 1; tab.navigation && i < 15; ++i) {
 		console.warn('waiting for tab to commit navigation', tab, url);
-		(yield sleep(5 + 5 * i));
+		(await sleep(5 + 5 * i));
 	}
 	if (tab.navigation) { throw new Error(`tab is still navigating`); }
 	return tab.getContentProfile(url);
-}));
+});
 
 
 // TODO: it seems that sync XHRs are not sent here by firefox
-new RequestListener({
+const requests = new RequestListener({
 	urls: [ '<all_urls>', ],
 }, {
 	onBeforeRequest: [ 'blocking', ],
@@ -79,14 +73,15 @@ new RequestListener({
 			sdkPort.post('resetTab', this.tabId, { url: this.url, });
 			return { cancel: true, };
 		}
+		return null;
 	}
 
 	// TODO: (only?) firefox: this is not called for the favicon
 	onBeforeSendHeaders({ requestHeaders, }) {
-		if (!this.session.navigator) { return; }
+		if (!this.session.navigator) { return null; }
 
 		if (gecko) { // ~FF 53 lowercases all header names -.-
-			requestHeaders.forEach(header => header.name = header.name.replace(/(?:^|-)[a-z]|dnt/g, _=>_.toUpperCase())); // TODO: this is inaccurate, especially for custom headers
+			requestHeaders.forEach(header => (header.name = header.name.replace(/(?:^|-)[a-z]|dnt/g, _=>_.toUpperCase()))); // TODO: this is inaccurate, especially for custom headers
 		}
 
 		const order = this.session.navigator.headerOrder;
@@ -107,10 +102,10 @@ new RequestListener({
 
 		// not firefox: disable HSTS header (has no effect in firefox, but it should have, so leave the code for now)
 		changed |= this.profile.hstsDisabled && responseHeaders.some(header => {
-			if ((/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value) { return this.removeHSTS(header); }
+			return (/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value && this.removeHSTS(header);
 		});
 
-		if (changed) { return { responseHeaders, }; }
+		return changed ? { responseHeaders, } : null;
 	}
 
 	objectifyHeaders(headers, which) {
@@ -158,7 +153,7 @@ new RequestListener({
 });
 
 // let other views and the content post notifications
-Messages.addHandler('notify', function(method, { title, message, url, }) {
+Messages.addHandler('notify', function X(method, { title, message, url, }) {
 	url || (url = this.tab.url);
 	const { id: tabId, title: tabTitle, } = this.tab;
 	const tab = Tab.get(tabId);
@@ -166,15 +161,9 @@ Messages.addHandler('notify', function(method, { title, message, url, }) {
 	notify(method, { title, message, url, tabId, tabTitle, logLevel, });
 });
 
-Messages.addHandler('openOptions', () => showExtensionTab('/ui/home/index.html#options', '/ui/home/index.html'));
-
-Messages.addHandler('getTempProfileForTab', tabId => Tab.get(tabId).tempProfId);
-Messages.addHandler('setTempProfileForTab', (tabId, value) => Tab.get(tabId).tempProfId = value);
-Messages.addHandler('getProfilesNames', () => Profiles.getNames());
-
 // set the correct browserAction icon
 setBrowserAction({ icon: 'detached', title: 'installed', });
-Tabs.onUpdated.addListener(function(tabId, info, { url, }) {
+Tabs.onUpdated.addListener((tabId, info, { /*url,*/ }) => {
 	if (!('status' in info)) { return; }
 	const tab = Tab.get(tabId);
 	setBrowserAction(
@@ -186,4 +175,11 @@ Tabs.onUpdated.addListener(function(tabId, info, { url, }) {
 	);
 });
 
-}); })((function() { /* jshint strict: false */ return this; })());
+Object.assign(global, {
+	options, Profiles, sdkPort, requests,
+	Browser: require('node_modules/web-ext-utils/browser/'),
+	Loader:  require('node_modules/web-ext-utils/loader/'),
+	Utils:   require('node_modules/web-ext-utils/utils/'),
+});
+
+}); })(this);

@@ -1,13 +1,13 @@
-'use strict'; /* globals exports, setTimeout: true, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+/*eslint strict: ["error", "global"], no-implicit-globals: "off"*/ 'use strict'; /* globals require, exports, setTimeout: true, */ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 const self = require('sdk/self');
 const Prefs = require('sdk/simple-prefs');
 const { setTimeout, } = require('sdk/timers');
 const webExtension = require('sdk/webextension');
 
-const { Services } = require('resource://gre/modules/Services.jsm');
+const { Services, } = require('resource://gre/modules/Services.jsm');
 
-const { _async, spawn, Resolvable, } = require('./webextension/node_modules/es6lib/concurrent.js');
+const { Resolvable, } = require('./webextension/node_modules/es6lib/concurrent.js');
 const Port = require('./webextension/node_modules/es6lib/port.js');
 const { sliceTabInto, replaceParentTab, } = require('./tab-utils.js');
 
@@ -23,6 +23,8 @@ const processScript = new (require('./attach.js'))({
 	frame:     'content/frame.js',
 	namespace: 'content',
 });
+
+// ???: delete 'extensions.webextensions.uuids' to generate new uuids for all WebExtensions?
 
 processScript.port.addHandlers({
 	getWebExtId() { console.log('getWebExtId'); return getWebExtId; },
@@ -58,12 +60,12 @@ const webExtHandlers = { // handlers for the actions specified in /background/sd
 	},
 };
 
-const startWebExt = _async(function*() {
+async function startWebExt() {
 
 	// load the WebExtension
 	let extension;
 	try {
-		extension = (yield webExtension.startup());
+		extension = (await webExtension.startup());
 	} catch (error) {
 		console.error(error);
 		return 1;
@@ -77,9 +79,8 @@ const startWebExt = _async(function*() {
 	} catch (_) { return 4; }
 
 	// connect to the WebExtension
-	let port;
 	try {
-		webExtPort = new Port((yield new Promise((resolve, reject) => {
+		webExtPort = new Port((await new Promise((resolve, reject) => {
 			extension.browser.runtime.onConnect.addListener(port => {
 				port.name === 'sdk' && resolve(port);
 			});
@@ -93,39 +94,41 @@ const startWebExt = _async(function*() {
 
 	// wait for the WebExtension to start
 	try {
-		(yield webExtPort.request('awaitStarted'));
+		(await webExtPort.request('awaitStarted'));
 	} catch (error) {
 		console.error(error);
 		return 3;
 	}
 
 	return 0;
-});
+}
 
 const getWebExtStarted = startWebExt()
 .then(code => {
 	// calling processScript.destroy(); here has very wiers effects (const variables in process.jsm are reset to undefined)
+	let error;
 	switch (code) {
 		case 0: {
 			console.info('WebExtension started');
 		} return;
 		case 1: {
-			throw new Error('Could not start, the WebExtension Experiment API is most likely missing');
+			error = new Error('Could not start, the WebExtension Experiment API is most likely missing');
 		} break;
 		case 2: {
-			throw new Error('WebExtension startup timed out');
+			error = new Error('WebExtension startup timed out');
 		} break;
 		case 3: {
-			throw new Error('WebExtension failed to start');
+			error = new Error('WebExtension failed to start');
 		} break;
 		case 4: {
-			throw new Error(`Failed to read the WebExtension's UUID`);
+			error = new Error(`Failed to read the WebExtension's UUID`);
 		} break;
 		default: {
-			throw new Error(`WebExtension failed with unknown error`);
+			error = new Error(`WebExtension failed with unknown error`);
 		} break;
 	}
 	processScript.destroy();
+	throw error || new Error;
 })
 .catch(error => {
 	getWebExtId.reject(error);
@@ -133,6 +136,12 @@ const getWebExtStarted = startWebExt()
 	return null;
 });
 
+void restart; function restart() {
+	const { Ci, Cc, } = require('chrome');
+	const service = Ci.nsIAppStartup;
+	Cc['@mozilla.org/toolkit/app-startup;1'].getService(service)
+	.quit(service.eRestart); // | service.eForceQuit
+}
 
 // respond to unload, unless its because of 'shutdown' (performance)
 exports.onUnload = reason => {

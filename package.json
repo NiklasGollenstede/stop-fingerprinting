@@ -3,7 +3,7 @@
 	"title": "Stop Fingerprinting",
 	"description": "Disables / modifies browser APIs to prevent browser fingerprinting",
 	"icon": "icons/default/256.png",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"license": "MPL-2.0",
 	"author": "Niklas Gollenstede",
 
@@ -24,10 +24,11 @@
 		"winreg": "1.2.2",
 		"zip-dir": "1.0.2",
 
-		"es6lib": "NiklasGollenstede/es6lib",
+		"es6lib": "NiklasGollenstede/es6lib#65c97ce",
 		"get-tld": "NiklasGollenstede/get-tld",
 		"regexpx": "NiklasGollenstede/regexpx",
-		"web-ext-utils": "NiklasGollenstede/web-ext-utils"
+		"web-ext-utils": "NiklasGollenstede/web-ext-utils#54edc19",
+		"web-ext-build": "NiklasGollenstede/web-ext-build#cafdc99"
 	},
 	"devDependencies": {
 		"chai": "3.5.0",
@@ -44,7 +45,11 @@
 		"express": "^4.13.4",
 		"fingerprintjs2": "^1.4.0",
 		"helmet": "^2.0.0",
-		"serve-favicon": "^2.3.0"
+		"serve-favicon": "^2.3.0",
+
+		"babel-eslint": "7.1.1",
+		"eslint": "3.14.1",
+		"eslintrc": "NiklasGollenstede/eslintrc"
 	},
 
 	"main": "build.js",
@@ -53,6 +58,13 @@
 		"test": "mocha test/selenium --recursive",
 		"build": "node build",
 		"build-native": "nexe -i ./native/index.js -o ./native/native.exe -f",
-		"postinstall": "node build"
+		"postinstall": "node build",
+		"lint": "eslint --ignore-path .gitignore ."
+	},
+	"eslintConfig": {
+		"extends": "./node_modules/eslintrc/web-ext.js",
+		"rules": {
+			"no-console": "off"
+		}
 	}
 }

@@ -17,7 +17,11 @@
 
 - disable gamepads via "dom.gamepad.enabled"
 
+- "network.jar.block-remote-files"
+
 - ??? set "browser.download.forbid_open_with" to true and register to open-external event to warn user that additional resources may be loaded by the external software?
+
+- does the order and timing of keyboard/mouse events vary across operating systems?
 
 - handle ServiceWorkers (disable via "dom.workers.sharedWorkers.enabled") (cache deactivation should make them de-facto useless, but they are probably still able to provide similar services as an unwrapped Shared Worker would)
 - prevent AudioContext fingerprinting (see https://audiofingerprint.openwpm.com/)
