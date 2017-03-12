@@ -1,6 +1,6 @@
 (function(global) { 'use strict'; const factory = function es6lib_port_moz_nsIMessageListenerManager(exports) { // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-typeof console === 'undefined' && Components.utils.import("resource://gre/modules/Console.jsm");
+typeof console === 'undefined' && Components.utils.import("resource://gre/modules/Console.jsm"); /* global Components */
 
 exports.moz_nsIMessageListenerManager = class moz_nsIMessageListenerManager {
 

@@ -27,7 +27,7 @@
 		"es6lib": "NiklasGollenstede/es6lib#65c97ce",
 		"get-tld": "NiklasGollenstede/get-tld",
 		"regexpx": "NiklasGollenstede/regexpx",
-		"web-ext-utils": "NiklasGollenstede/web-ext-utils#5e248f7",
+		"web-ext-utils": "NiklasGollenstede/web-ext-utils#23fad5c",
 		"web-ext-build": "NiklasGollenstede/web-ext-build#cafdc99"
 	},
 	"devDependencies": {

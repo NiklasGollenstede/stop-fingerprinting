@@ -40,7 +40,7 @@ async function addProfile(id) { try {
 		tabs.set({ id, icon: createElement('span', { textContent: isDef ? '★' : prio, style: {
 			color: `hsl(${ isDef ? 90 : prio * 27 }, 100%, 70%)`,
 			display: 'block', verticalAlign: 'middle',
-			position: 'absolute', top: '-1px', right: '6px',
+			position: 'absolute', top: isDef ? '-2px' : 0, right: '6px',
 			fontWeight: 'bold', fontSize: isDef ? '250%' : '130%',
 		}, }), });
 	});
@@ -63,7 +63,7 @@ const tabs = new TabView({
 		padding: '10px', overflowY: 'scroll',
 	}, }),
 	active: 'options',
-	style: 'horizontal firefox',
+	style: [ 'horizontal', 'firefox', ],
 	tabs: [
 		{
 			id: 'options',
