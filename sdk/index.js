@@ -27,20 +27,26 @@ const processScript = new (require('./attach.js'))({
 // ???: delete 'extensions.webextensions.uuids' to generate new uuids for all WebExtensions?
 
 processScript.port.addHandlers({
-	getWebExtId() { console.log('getWebExtId'); return getWebExtId; },
-	'await webExtStarted'() { console.log('getWebExtStarted'); return getWebExtStarted; },
-	setTabId(tabId) {
+	getWebExtId() {
+		console.log('getWebExtId');
+		return getWebExtId;
+	},
+	'await webExtStarted'() {
+		console.log('getWebExtStarted');
+		return getWebExtStarted;
+	},
+	getCtxIdSetTabId(tabId) {
 		if (tabId == null) { throw new Error(`invalid tabId`); }
 		// const tab = this.ownerGlobal.gBrowser && this.ownerGlobal.gBrowser.getTabForBrowser(this);
 		tabIdToBrowser.set(tabId, this);
 		browserToTabId.set(this, tabId);
+		return this.getAttribute('usercontextid') || '0';
 	},
-	getTabData(tabId, url) {
-		if (browserToTabId.get(this) !== tabId) { console.error('xul <browser> <==> webExt tabId relation changed!'); }
-		return webExtPort.request('getTabData', tabId, url);
+	getTabIdAndCtxId() {
+		return [ browserToTabId.get(this), this.getAttribute('usercontextid') || '0', ]; // TODO: this might race with setTabId
 	},
-	resetOnCrossNavigation(tabId) {
-		return webExtPort.request('resetOnCrossNavigation', tabId);
+	getProfile(ctxId) {
+		return webExtPort.request('getProfile', ctxId);
 	},
 });
 
@@ -94,7 +100,7 @@ async function startWebExt() {
 
 	// wait for the WebExtension to start
 	try {
-		(await webExtPort.request('awaitStarted'));
+		(await webExtPort.request('await started'));
 	} catch (error) {
 		console.error(error);
 		return 3;
@@ -105,7 +111,7 @@ async function startWebExt() {
 
 const getWebExtStarted = startWebExt()
 .then(code => {
-	// calling processScript.destroy(); here has very wiers effects (const variables in process.jsm are reset to undefined)
+	// calling processScript.destroy(); here has very weird effects (const variables in process.jsm are reset to undefined)
 	let error;
 	switch (code) {
 		case 0: {

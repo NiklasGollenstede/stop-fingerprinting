@@ -12,7 +12,7 @@ Cu.import("resource://gre/modules/Console.jsm");
 // Cu.import("resource://gre/modules/Timer.jsm"); /* globals setTimeout, */
 Cu.import("resource://gre/modules/MatchPattern.jsm"); /* global MatchPattern */
 Cu.import("resource://gre/modules/BrowserUtils.jsm"); /* global BrowserUtils */
-Cu.importGlobalProperties([ 'URL', 'Blob', ]); /* globals URL, Blob, */
+// Cu.importGlobalProperties([ 'URL', 'Blob', ]); /* globals URL, Blob, */
 
 const Port = require('webextension/node_modules/es6lib/port.js');
 const { moz_nsIMessageListenerManager, } = require('/content/port.js');
@@ -71,8 +71,8 @@ function addFrame(cfmm) { // called by ./frame.js for every frame it is loaded i
 	new Frame(cfmm);
 }
 
-
-class Frame { // represents a frame script, i.e. e.g. a tab (across navigations) not an iframe or a singe `window`
+// represents a frame script. There is one frame script for each browsing context, e.g. a tab, *per process*
+class Frame {
 	constructor(cfmm) {
 		if (frames.has(cfmm)) { throw new Error('duplicate frame'); }
 		frames.set(cfmm, this);
@@ -81,8 +81,9 @@ class Frame { // represents a frame script, i.e. e.g. a tab (across navigations)
 		this.cfmm.addEventListener('unload', this);
 		this.top = null; // the top level `window`
 		this.utils = null; // nsIDOMWindowUtils of .top
-		this.tabData = null;
-		this.tabId = null; // requested once a isScriptableWindow() is loaded
+		this.profile = null;
+		this.tabId = null; // WebExt tabId, requested once a isScriptableWindow() is loaded
+		this.ctxId = null; // "usercontextid" attribute, -"-
 		this.pauseTokens = new Set; // used by this.pageUtils. cleared on topWindowCreated
 		this.isScriptable = false; // isScriptableWindow(this.top)
 		this.handleCriticalError = this.handleCriticalError.bind(this);
@@ -115,7 +116,7 @@ class Frame { // represents a frame script, i.e. e.g. a tab (across navigations)
 			this.top.document.documentElement && this.top.document.documentElement.remove();
 			if (rethrow) { throw error; }
 		}
-		console.error(message, error);
+		console.error(message, ...(error ? [ error.message, error.stack, error.fileName, error.lineNumber, ] : [ error, ]));
 		return resume;
 	}
 
@@ -132,6 +133,17 @@ class Frame { // represents a frame script, i.e. e.g. a tab (across navigations)
 		} // webExtOrigin is not null anymore
 		if (webExtOrigin && cw.location.origin === webExtOrigin) {
 			extendWebExtWindow(cw);
+			if (this.tabId == null && cw.location.pathname === '/background/init-tab.html') {
+				const ucw = Cu.waiveXrays(cw);
+				this.tabId = (await new Promise(gotTabId => {
+					ucw.getCtxId = Cu.exportFunction(tabId => new ucw.Promise((resolve, reject) => {
+						gotTabId(tabId);
+						return port.request({ sender: this.cfmm, }, 'getCtxIdSetTabId', tabId)
+						.then(ctxId => (this.ctxId = ctxId)).then(resolve, reject);
+					}), ucw);
+				}));
+				console.log('got tabId in background frame', this.tabId);
+			}
 		}
 
 		if (!this.isScriptable) { console.log('skipping non-content tab', this); return; }
@@ -141,20 +153,16 @@ class Frame { // represents a frame script, i.e. e.g. a tab (across navigations)
 				(await this.pauseWhile(getWebExtStarted));
 			}
 			if (this.tabId == null) {
-				const ucw = Cu.waiveXrays(cw);
-				const getTabId = new Promise((resolve, reject) => {
-					ucw.getTabId = Cu.cloneInto({ resolve, reject, }, ucw, { cloneFunctions: true, });
-				});
-				this.tabId = (await this.pauseWhile(getTabId));
-				console.log('got tabId', this.tabId);
-				port.post({ sender: this.cfmm, }, 'setTabId', this.tabId); // inform the SDK background about the tabId
+				const getIds = port.request({ sender: this.cfmm, }, 'getTabIdAndCtxId');
+				[ this.tabId, this.ctxId, ] = (await this.pauseWhile(getIds));
+				console.log('got tabId in content frame', this.tabId);
 			}
 
-			this.tabData = (await this.pauseWhile(port.request({ sender: this.cfmm, }, 'getTabData', this.tabId, this.top.location.href)));
-			if (this.tabData == null) { console.log('tabData is null'); } // no tabData available for this tab yet. This is not an error
+			this.profile = (await this.pauseWhile(port.request({ sender: this.cfmm, }, 'getProfile', this.ctxId)));
+			if (this.profile == null) { console.log('profile is null'); } // no profile available for this tab yet. This is not an error
 		}
 
-		if (this.tabData != null) {
+		if (this.profile != null) {
 			this.injectInto(cw);
 		}
 	} catch (error) {
@@ -165,7 +173,7 @@ class Frame { // represents a frame script, i.e. e.g. a tab (across navigations)
 		console.log('topWindowCreated', cw);
 
 		// remove the previous window and all related resources
-		this.tabData = null;
+		this.profile = null;
 		this.pauseTokens.size && console.warn('replaced page was paused');
 		this.pauseTokens.clear();
 		this.top = cw;
@@ -177,16 +185,10 @@ class Frame { // represents a frame script, i.e. e.g. a tab (across navigations)
 
 	injectInto(cw) {
 		const ucw = Cu.waiveXrays(cw);
-		const {
-			profile,
-			changed: profileChanged, // whether this profile is a different one than on the last page load
-			pageLoadCount, // number of pages loaded in this tab, starting at 1
-			includes: includeRegExpSource, // RegExp of (url.origin || url.href) that share their origin with the current page
-		} = this.tabData;
+		const { profile, } = this;
 		if (!profile || profile.disabled) { console.log('profile is disabled'); return; } // never mind ...
 
-		console.log('got profile', profile.nonce, this.tabData);
-		const includeRegExp = new RegExp(includeRegExpSource);
+		console.log('got profile', profile.nonce, JSON.stringify(profile));
 
 		const sandbox = Cu.Sandbox(ucw, {
 			sameZoneAs: ucw,
@@ -197,28 +199,26 @@ class Frame { // represents a frame script, i.e. e.g. a tab (across navigations)
 		const exportFunction = func => Cu.exportFunction(func, ucw, { allowCrossOriginArguments: true, });
 		const cloneInto = obj => Cu.cloneInto(obj, ucw, { cloneFunctions: false, }); // expose functions only explicitly through exportFunction
 		const needsCloning = obj => obj !== null && typeof obj === 'object' && Cu.getGlobalForObject(obj) !== ucw; // TODO: test
-		const originIncludes = url => (url = new URL(url, cw.location)) && url.origin === 'null' ? includeRegExp.test(url.href) : includeRegExp.test(url.origin);
 		const postToBackground = (name, ...args) => port.post({ sender: this.cfmm, }, name, this.tabId, ...args);
 
 		sandbox.console = cw.console;
 		sandbox.handleCriticalError = exportFunction(this.handleCriticalError.bind(this));
 		sandbox.profile = cloneInto(profile);
 		sandbox.isMainFrame = cw.top === cw;
-		sandbox.profileChanged = profileChanged;
-		sandbox.pageLoadCount = pageLoadCount;
 		sandbox.exportFunction = exportFunction(exportFunction);
 		sandbox.cloneInto = exportFunction(cloneInto);
 		sandbox.needsCloning = exportFunction(needsCloning);
-		sandbox.originIncludes = exportFunction(originIncludes);
 		sandbox.postToBackground = exportFunction(postToBackground);
 		sandbox.sandbox = sandbox;
 		sandbox.ucw = ucw;
 
 		const exec = ({ content, name, offset, }) => Cu.evalInSandbox(
 			content, sandbox, 'latest',
-			__dirname +'/'+ name +'?'+ (profile.debug ? 'abcdef' : profile.nonce), // the nonce is needed to create unpredictable error stack fames that can be filtered
+			__dirname +'/webextension/'+ name +'?'+ (profile.debug ? 'abcdef' : profile.nonce), // the nonce is needed to create unpredictable error stack fames that can be filtered
 			offset + 1
 		);
+
+		if (profile.debug) { ucw.profile = cloneInto(profile); } // TODO: remove
 
 		exec(files['globals.js']);
 		Object.keys(files.fake).forEach(key => exec(files.fake[key]));
@@ -227,10 +227,7 @@ class Frame { // represents a frame script, i.e. e.g. a tab (across navigations)
 		// TODO: there are cases (the first load in a new tab using Crl+Click) where the direct window. properties
 		// are overwritten/not applied, but those on other objects (e.g. Screen.prototype) work
 
-		if (profile.debug) { // TODO: remove
-			ucw.profile = cloneInto(profile);
-			ucw.apis = sandbox.apis;
-		}
+		if (profile.debug) { ucw.apis = sandbox.apis; } // TODO: remove
 		cw.console.log('injection done', profile.debug, this.tabId);
 	}
 
@@ -319,11 +316,6 @@ function isScriptableWindow(cw) {
 function isScriptableUrl(url) {
 	const nsIURI = BrowserUtils.makeURI(url);
 	return allUrls.matches(nsIURI) && !amoUrl.matches(nsIURI) && !url.startsWith('moz-extension://');
-}
-
-function ErrorLogger(error) {
-	console.error('uncaught (in Promise):', error);
-	throw error;
 }
 
 function require(path) {

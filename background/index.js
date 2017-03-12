@@ -1,49 +1,57 @@
 (function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/web-ext-utils/update/': updated,
-	'node_modules/es6lib/concurrent': { sleep, },
 	'node_modules/es6lib/port': Port, // also for browser.Messages
 	'node_modules/web-ext-utils/browser/': { manifest, Tabs, Messages, runtime, webNavigation, },
 	'node_modules/web-ext-utils/browser/version': { gecko, },
-	'common/utils': { notify, setBrowserAction, },
+	'node_modules/web-ext-utils/loader/views': Views,
+	'node_modules/web-ext-utils/utils/': { reportError, },
+	'common/utils': { setBrowserAction, },
 	'common/options': options,
 	RequestListener, RequestListener: { ignore, reset, },
 	Profiles,
-	Tab,
 	require,
 }) => {
 console.log(manifest.name, 'loaded, updates', updated);
+const { isScriptable, } = global;
 
-	Tabs         .onCreated                   .addListener((...args) => console.log('onCreated'                   , ...args));
-	Tabs         .onRemoved                   .addListener((...args) => console.log('onRemoved'                   , ...args));
-	webNavigation.onBeforeNavigate            .addListener((...args) => console.log('onBeforeNavigate'            , ...args));
-	webNavigation.onCommitted                 .addListener((...args) => console.log('onCommitted'                 , ...args));
-	webNavigation.onErrorOccurred             .addListener((...args) => console.log('onErrorOccurred'             , ...args));
+//	Tabs         .onCreated                   .addListener((...args) => console.log('onCreated'                   , ...args));
+//	Tabs         .onRemoved                   .addListener((...args) => console.log('onRemoved'                   , ...args));
+//	webNavigation.onBeforeNavigate            .addListener((...args) => console.log('onBeforeNavigate'            , ...args));
+//	webNavigation.onCommitted                 .addListener((...args) => console.log('onCommitted'                 , ...args));
+//	webNavigation.onErrorOccurred             .addListener((...args) => console.log('onErrorOccurred'             , ...args));
 
-const callOnTab = member => details => details.parentFrameId === -1 && Tab.get(details.tabId)[member](details);
-webNavigation.onBeforeNavigate .addListener(callOnTab('startNavigation'));
-webNavigation.onCommitted      .addListener(callOnTab('commitNavigation'));
-webNavigation.onErrorOccurred  .addListener(callOnTab('cancelNavigation'));
-
-const sdkPort = new Port(runtime.connect({ name: 'sdk', }), Port.web_ext_Port);
-
-sdkPort.addHandler('awaitStarted', () => require.main.ready.then(() => 'started'));
-
-Messages.addHandler('getSenderTabId', function X() { return this.tab.id; });
-sdkPort.addHandler('resetOnCrossNavigation', (tabId, _url) => Tab.get(tabId).resetOnCrossNavigation());
-sdkPort.addHandler('getTabData', async (tabId, url) => {
-	const tab = Tab.get(tabId);
-	for (let i = 1; tab.navigation && i < 15; ++i) {
-		console.warn('waiting for tab to commit navigation', tab, url);
-		(await sleep(5 + 5 * i));
-	}
-	if (tab.navigation) { throw new Error(`tab is still navigating`); }
-	return tab.getContentProfile(url);
+const sdkPort = new Port(runtime.connect({ name: 'sdk', }), Port.web_ext_Port).addHandlers({
+	'await started'() {
+		return require.main.ready.then(() => manifest.version);
+	},
+	async getProfile(ctxId) {
+		return Profiles.get(ctxId);
+	},
 });
+
+const Ctx = new Map/*<tabId, ctxId>*/;
+Views.setHandler(async function inittab(view, { tabId, url, }) { // for normal tabs
+	// view.getTabId.resolve(tabId);
+	const ctxId = (await view.getCtxId(tabId));
+	Ctx.set(tabId, ctxId);
+	console.log('got ctxId', ctxId, 'for tab', tabId);
+	view.location.replace(url);
+});
+Messages.addHandlers({ inittab(tabId, ctxId) { // for incognito and container tabs
+	if (tabId !== this.tab.id) { console.error(`tabId mismatch`); }
+	Ctx.set(tabId, ctxId);
+	console.log('got ctxId', ctxId, 'for tab', tabId, '(remote)');
+}, });
+async function initTab(tabId, url) {
+	(await Tabs.update(tabId, {
+		url: require.toUrl('./init-tab.html') +`#inittab?tabId=${ tabId }&url=${ encodeURIComponent(url) }`,
+	}));
+}
 
 
 // TODO: it seems that sync XHRs are not sent here by firefox
 const requests = new RequestListener({
-	urls: [ '<all_urls>', ],
+	urls: [ '*://*/*', ], // TODO: this only includes https?://
 }, {
 	onBeforeRequest: [ 'blocking', ],
 	onBeforeSendHeaders: [ 'blocking', 'requestHeaders', ],
@@ -53,12 +61,10 @@ const requests = new RequestListener({
 		this.requestId = requestId; this.url = url; this.type = type; this.tabId = tabId;
 		console.log('request start', this);
 
-		this.tab = Tab.get(tabId);
 		this.isMainFrame = type === 'main_frame';
-
-		this.session = this.tab.getSession(url, this.isMainFrame);
-
-		if (!this.session || (this.profile = this.session.data).disabled) { this.destroy(); return ignore; }
+		this.ctxId = Ctx.get(tabId);
+		try { this.session = Profiles.get(this.ctxId); } // TODO: do something
+		catch (error) { reportError(error); }
 	}
 	destroy() {
 		console.log('request end', this.requestId);
@@ -68,12 +74,12 @@ const requests = new RequestListener({
 	onBeforeRedirect() { return reset; } // create a new instance when redirecting
 
 	onBeforeRequest() {
-		if (this.isMainFrame && this.tab.mustResetOnCrossNavigation && this.tab.session !== this.tab.navigation.session) {
-			console.log('resetting tab', this);
-			sdkPort.post('resetTab', this.tabId, { url: this.url, });
-			return { cancel: true, };
+		if (this.ctxId != null) { return null; }
+		if (this.isMainFrame) {
+			initTab(this.tabId, this.url);
+			return { cancel: true, ignore, };
 		}
-		return null;
+		return ignore; // TODO: or continue with default profile?
 	}
 
 	// TODO: (only?) firefox: this is not called for the favicon
@@ -101,7 +107,7 @@ const requests = new RequestListener({
 		let changed = false;
 
 		// not firefox: disable HSTS header (has no effect in firefox, but it should have, so leave the code for now)
-		changed |= this.profile.hstsDisabled && responseHeaders.some(header => {
+		changed |= this.session.hstsDisabled && responseHeaders.some(header => {
 			return (/^(?:Strict-Transport-Security)$/i).test(header.name) && header.value && this.removeHSTS(header);
 		});
 
@@ -152,34 +158,30 @@ const requests = new RequestListener({
 	}
 });
 
-// let other views and the content post notifications
-Messages.addHandler('notify', function X(method, { title, message, url, }) {
-	url || (url = this.tab.url);
-	const { id: tabId, title: tabTitle, } = this.tab;
-	const tab = Tab.get(tabId);
-	const logLevel = tab.session ? tab.session.data.logLevel : null;
-	notify(method, { title, message, url, tabId, tabTitle, logLevel, });
-});
-
 // set the correct browserAction icon
 setBrowserAction({ icon: 'detached', title: 'installed', });
-Tabs.onUpdated.addListener((tabId, info, { /*url,*/ }) => {
-	if (!('status' in info)) { return; }
-	const tab = Tab.get(tabId);
-	setBrowserAction(
-		tab.session == null
-		? { tabId, icon: 'inactive', title: 'browserTab', }
-		: tab.tempProfId == null
-		? { tabId, icon: 'default', title: 'default', }
-		: { tabId, icon: 'temp', title: 'tempActive', }
-	);
+Tabs.query({ }).then(_=>_.forEach(({ url, id: tabId, }) => !isScriptable(url) && setBrowserAction({ tabId, icon: 'inactive', title: 'browserTab', })));
+Profiles.onChanged.addListener(ctxIds => {
+	Ctx.forEach((id, tabId) => ctxIds.includes(id) && setBrowserAction({ tabId, icon: 'detached', title: 'optionsChanged', }));
+});
+webNavigation.onCommitted.addListener(({ tabId, frameId, url, }) => {
+	if (frameId !== 0) { return; }
+	if (!isScriptable(url)) {
+		setBrowserAction({ tabId, icon: 'inactive', title: 'browserTab', });
+	} else if (Profiles.getTemp(Ctx.get(tabId))) {
+		setBrowserAction({ tabId, icon: 'temp', title: 'tempActive', });
+	} else {
+		setBrowserAction({ tabId, icon: 'default', title: 'default', });
+	}
 });
 
 Object.assign(global, {
-	options, Profiles, sdkPort, requests,
+	options, Profiles, sdkPort, requests, Ctx,
 	Browser: require('node_modules/web-ext-utils/browser/'),
 	Loader:  require('node_modules/web-ext-utils/loader/'),
 	Utils:   require('node_modules/web-ext-utils/utils/'),
 });
+
+return { Ctx, sdkPort, };
 
 }); })(this);

@@ -111,8 +111,8 @@
 	const HTMLCanvasElement_p_toBlob                        = window     && _call.bind(          _.HTMLCanvasElement          .prototype    .toBlob);
 	const HTMLCanvasElement_p_toDataURL                     = window     && _call.bind(          _.HTMLCanvasElement          .prototype    .toDataURL);
 	const HTMLCanvasElement_p_mozGetAsFile                  = window     && _call.bind(          _.HTMLCanvasElement          .prototype    .mozGetAsFile);
-	const HTMLElement_p_setAttribute                        = window     && _call.bind(          _.HTMLElement                .prototype    .setAttribute);
-	const HTMLElement_p_setAttributeNS                        = window     && _call.bind(          _.HTMLElement                .prototype    .setAttributeNS);
+	const Element_p_setAttribute                            = window     && _call.bind(          _.Element                    .prototype    .setAttribute);
+	const Element_p_setAttributeNS                          = window     && _call.bind(          _.Element                    .prototype    .setAttributeNS);
  //	const MutationObserver_p_observe                        = window     && _call.bind(          _.MutationObserver           .prototype    .observe);
 	const MediaStreamTrack_p_getSources                     =               _call.bind(          _.MediaStreamTrack           .prototype    .getSources);
 	const Node_p_cloneNode                                  = window     && _call.bind(          _.Node                       .prototype    .cloneNode);

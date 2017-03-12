@@ -1,67 +1,45 @@
-(function(global) { 'use strict'; define(({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
+(function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/web-ext-utils/update/': _,
+	'node_modules/es6lib/functional': { cached, },
+	'node_modules/web-ext-utils/utils/': { reportError, },
 	'common/options': options,
 	'common/profile-data': ProfileData,
-	OriginPattern: { originFromPatternGroup, originFromUrl, },
 	ua: { Generator: NavGen, },
 	ScreenGen,
 }) => {
 
 // const defaultProfData   = ProfileData.defaultProfile;
 const ruleModel         = ProfileData.model.rules.children;
-const profIdToData      = new Map;            // profileId         ==>  ProfileData, unsorted
-const profIdToStack     = new Map;            // profileId         ==>  ProfileStack, sorted by the ProfileStack's .priority
-const originToSession   = new Map;            // Origin            ==>  Session, unsorted, only if Session can be shared between tabs
-let needRebuild = true; // rebuld() needs to be called before accessing any of the maps above.
-let mayRebuild = 0; // a value below zero indicates that some ProfileData are still loading and the (synchronous) rebuld() must thus fail.
-let defaultStack = null;
+const profIdToData      = new Map/*<profileId, Promise<ProfileData>>*/;
+const profIdToStack     = new Map/*<profileId, Promise?<ProfileStack>>*/;
+const ctxIdToStack      = new Map/*<ctxId,     ProfileStack>*/;
+const ctxIdToTempStack  = new Map/*<ctxId,     ProfileStack>*/;
+const onChanged = new Event;
 
-window.profiles = profIdToStack;
-
-function rebuild() {
-	needRebuild = false; // TODO: catch ... or something
-	if (mayRebuild !== 0) { throw new Error(`Must not rebuild()`); }
-	const stacks = new Map(profIdToStack), datas = new Set(profIdToData.values());
-	let added;
-	do {
-		added = false;
-		datas.forEach(data => {
-			const profileId = data.children.id.value;
-			if (stacks.has(profileId)) { return; }
-			const parentId = data.children.inherits.value;
-			if (!parentId) { stacks.set(profileId, new ProfileStack(data, null)); }
-			else if (stacks.has(parentId)) { stacks.set(profileId, new ProfileStack(data, stacks.get(parentId))); }
-			else { return; }
-			added = true;
-		});
-	} while (added);
-	if (stacks.size !== datas.size) { throw new Error(`Cyclic inherit`); }
-
-	// insert into profIdToStack ordered by .priority
-	profIdToStack.clear();
-	Array.from(stacks.values()).sort((a, b) => b.priority - a.priority) // TODO: check order
-	.forEach(stack => {
-		if (stack.id === '<default>') { defaultStack = stack; }
-		profIdToStack.set(stack.id, stack);
-	});
-	return; // that's it (?)
-}
+const getProfileData = cached(async id => ProfileData(id), profIdToData);
+const getProfileStack = cached(async id => {
+	const data = (await getProfileData(id));
+	const parentId = data.children.inherits.value;
+	const parent = parentId && (await getProfileStack(parentId));
+	const stack = new ProfileStack(data, parent);
+	profIdToStack.set(id, stack);
+	return stack;
+}, profIdToStack);
 
 async function addProfile(id) {
-	const data = (await ProfileData(id));
-	profIdToData.set(id, data);
-
-	console.log('added ProfileData', profIdToData, profIdToStack, data);
+	const stack = (await getProfileStack(id));
+	console.log('added ProfileData', profIdToData, profIdToStack, stack);
 }
 
-function removeProfile(id) {
-	const data = profIdToData.get(id);
+async function removeProfile(id) {
+	const data = (await profIdToData.get(id));
 	data && data.destroy(); // removes all event listeners
 	profIdToData.delete(id);
-	const stack = profIdToStack.get(id);
+	const stack = (await profIdToStack.get(id));
+	stack && onChanged.fire(stack.ids);
 	stack && stack.destroy();
 	profIdToStack.delete(id);
-	console.log('removed ProfileData', profIdToData, profIdToStack, data);
+	console.log('removed ProfileData', profIdToData, profIdToStack, stack);
 }
 
 class ProfileStack {
@@ -69,24 +47,54 @@ class ProfileStack {
 		data = data.children;
 		this.parent = parent;
 		this.id = data.id.value;
+		this.isRoot = this.id === '<default>';
 		this.data = data;
-		this.priority = data.priority.value; // used for the sorting
-		data.priority.whenChange(() => (needRebuild = true)); // TODO: this is expensive
-		data.inherits.whenChange(() => (needRebuild = true)); // TODO: this is expensive
-		data.include.whenChange((_, { current: origins, }) => (this.origins = origins.map(originFromPatternGroup)));
-		data.rules.onAnyChange((value, { parent: { path, }, }) => this.clear(path.replace(/^\.?rules\./, ''))); // will be removed on data.destroy()
-		this.sessions = new Set; // used to .outdade() them on this.clear() or .destroy()
 		this.values = null;
+		this.result = null;
+
+		data.inherits.whenChange(() => (this.parent = null) === onChanged.fire(this.ids)); // must always have parent (unless .isRoot) ==> rebuild
+		data.rules.onAnyChange((value, { parent: { path, }, }) => this.clear(path.replace(/^\.?rules\./, ''))); // listeners will be removed on data.destroy()
+		data.ctxId.whenChange((_, { current: ids, }) => {
+			ctxIdToStack.forEach((stack, id) => stack === this && ctxIdToStack.delete(id));
+			ids.forEach(id => ctxIdToStack.set(id, this));
+		});
 
 		this.destroy = this.destroy.bind(this);
 		console.log('created ProfileStack', this);
 	}
 
+	get ids() {
+		return this.data.ctxId.values;
+	}
+
 	init() {
-		if (this.values) { return this; }
+		if (!this.isRoot && !this.parent) {
+			this.parent = profIdToStack.get(this.data.inherits.value);
+			if (!this.parent || typeof this.parent.then === 'function') {
+				throw new Error(`Profile parent is not yet ready`);
+			}
+		}
 		this.parent && this.parent.init();
-		this.values = Object.create(this.parent && this.parent.values || null);
-		(function clone(model, data, values) {
+
+		if (!this.values) {
+			this.values = Object.create(this.parent && this.parent.values || null);
+			clone(ruleModel, this.data.rules.children, this.values);
+			this.navGen = !this.values.navigator ? { generate() { return null; }, } : new NavGen(this.values.navigator).makeValid();
+			this.screenGen = !this.values.screen ? { generate() { return null; }, } : new ScreenGen(this.values.screen).makeValid();
+			console.log('profile values rebuilt', this);
+		}
+
+		if (!this.result) {
+			const result = this.result = deepDeepFlatteningClone({ }, this.values);
+			result.nonce = Array.prototype.map.call(global.crypto.getRandomValues(new Uint32Array(6)), _=>_.toString(32)).join('');
+			result.navigator = this.navGen.generate();
+			result.screen = this.screenGen.generate();
+			result.debug = options.debug.value;
+			result.debug && (result.profileTitle = this.data.title.value);
+			console.log('profile result rebuilt', this);
+		}
+
+		function clone(model, data, values) {
 			Object.keys(model).forEach(child => {
 				const ownValues = data[child].values.current;
 				if (!ownValues.length) { return; } // no own values set ==> inherit through data.__proto__
@@ -99,124 +107,66 @@ class ProfileStack {
 					set(values, child, ownValue);
 				}
 			});
-		})(ruleModel, this.data.rules.children, this.values);
-
+		}
 		function set(obj, key, value) { Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true, }); return value; }
-
-		this.navGen = !this.values.navigator ? { generate() { return null; }, } : new NavGen(this.values.navigator); // TODO: XXX: these may throw
-		this.screenGen = !this.values.screen ? { generate() { return null; }, } : new ScreenGen(this.values.screen); // TODO: XXX: these may throw
-
-		console.log('init done', this);
-		return this;
 	}
 
-	getSessionForPageLoad(url, prev, isOverwrite) {
-		this.init();
-
-		let origin = this.origins.find(_=>_.includes(url));
-		if (!origin) {
-			if (
-				this === defaultStack
-				|| isOverwrite
-			) { origin = originFromUrl(url); }
-			else { throw new Error(`ProfileStack.newSession() called with wrong origin`); }
-		}
-
-		switch (this.values.session) {
-			case 'browser': {
-				const session = originToSession.get(origin);
-				if (session && !session.outdated) { return session; } // origin was previously visited in this browser session
-			} break;
-			case 'tab': {
-				if (prev && !prev.outdated && prev.origin === origin) { return prev; } // origin is loaded in this tab anyway
-			} break;
-			// case 'page': // must create a new session on every load
-		}
-		const session = new Session(this, origin);
-
-		switch (this.values.session) {
-			case 'browser': {
-				originToSession.set(origin, session); // origin is being visited for the first time, save the session
-			} break;
-			// case 'tab': // nothing to do, only keep the session for same-origin navigations, which this is not
-		}
-
-		this.sessions.add(session); // add to be able to .outdate() it
-		return session;
-	}
-
-	clear(key = null) {
+	clear(/*key = null*/) {
 		this.values = null;
-
-		// detach from current scopes
-		this.sessions.forEach(session => session.outdate());
+		onChanged.fire(this.ids);
 	}
 
-	destroy(reason = 'profileDeleted') {
+	refresh() {
+		this.result = null;
+		onChanged.fire(this.ids);
+	}
+
+	getData() {
+		this.init();
+		return this.result;
+	}
+
+	destroy(/*reason = 'profileDeleted'*/) {
 		this.clear();
 		profIdToStack.delete(this.id, this);
 	}
-
-	static findStack(url) {
-		for (const [ , stack, ] of profIdToStack) {
-			if (stack.origins.some(_=>_.includes(url))) { return stack.init(); }
-		}
-		return defaultStack.init();
-	}
 }
 
-class Session {
-	constructor(stack, origin) {
-		this.stack = stack;
-		this.origin = origin;
-		this.outdaded = false;
+(await Promise.all([ '<default>', ].concat(options.profiles.values.current).map(addProfile)));
+const defaultStack = (await profIdToStack.get('<default>'));
 
-		const data = this.data = { };
-		deepDeepFlatteningClone(data, stack.values);
-		data.nonce = Array.prototype.map.call(window.crypto.getRandomValues(new Uint32Array(6)), _=>_.toString(36)).join('');
-		this.navigator = this.stack.navGen.generate();
-		data.navigator = this.navigator && this.navigator.toJSON();
-		data.screen = this.stack.screenGen.generate();
-		data.debug = options.debug.value;
-		data.debug && (data.profileTitle = stack.data.title.value);
-		console.log('Session.created', this);
-	}
-
-	outdate() {
-		this.outdaded = true;
-	}
-}
-
-addProfile('<default>');
-options.profiles.whenChange((_, { current: ids, }) => {
-	profIdToData.forEach((_, old) => !ids.includes(old) && old !== '<default>' && removeProfile(old));
-	Promise.all(ids.map(id => !profIdToData.has(id) && addProfile(id)))
-	.then(() => mayRebuild++);
-	mayRebuild--;
-	needRebuild = true;
-});
+options.profiles.onChange(async (_, { current: ids, }) => { try {
+	(await Promise.all(Array.from(profIdToData.keys(), old => !ids.includes(old) && old !== '<default>' && removeProfile(old))));
+	(await Promise.all(ids.map(addProfile)));
+} catch (error) { reportError(error); } });
 
 const Profiles = ({
-	getSessionForPageLoad(rawUrl, tempId, previous) {
-		const url = new URL(rawUrl);
-		const stack = tempId ? profIdToStack.get(tempId) : ProfileStack.findStack(url);
-		return stack.getSessionForPageLoad(url, previous, !!tempId);
+	get(ctxId) {
+		return (ctxIdToTempStack.get(ctxId) || ctxIdToStack.get(ctxId) || defaultStack).getData();
 	},
+	onChanged: onChanged.event,
 	getNames() {
-		return Array.from(profIdToData.values()).map(
-			({ children: { id: { value: id, }, title: { value: name, }, }, }) => ({ id, name, })
+		return Array.from(profIdToStack.values(),
+			({ id, data: { title: { value: name, }, }, }) => ({ id, name, })
 		);
 	},
-	prepare() { /* triggers the asynchronous rebuild(), if necessary */ },
-});
-
-Object.keys(Profiles).forEach(key => {
-	const member = Profiles[key];
-	if (typeof member !== 'function') { return; }
-	Profiles[key] = function() {
-		needRebuild && rebuild();
-		return member.apply(Profiles, arguments);
-	};
+	getTemp(ctxId) {
+		const stack = ctxIdToTempStack.get(ctxId);
+		return stack && stack.id; // ...
+	},
+	setTemp(ctxId, id) {
+		if (id == null) {
+			ctxIdToTempStack.delete(ctxId);
+			return true;
+		} else {
+			const stack = profIdToStack.get(id);
+			stack && ctxIdToTempStack.set(ctxId, stack);
+			return !!stack;
+		}
+	},
+	getHandledCtxTds() {
+		return new Set(ctxIdToStack.values());
+	},
 });
 
 function deepDeepFlatteningClone(target, source) {
@@ -228,6 +178,21 @@ function deepDeepFlatteningClone(target, source) {
 		target[key] = value;
 	}
 	return target;
+}
+
+function Event() {
+	const listeners = new Set;
+	return {
+		listeners,
+		fire() {
+			listeners.forEach(listener => { try { listener.apply(null, arguments); } catch (error) { console.error(error); } });
+		},
+		event: {
+			addListener(listener) { typeof listener === 'function' && listeners.add(listener); },
+			hasListener(listener) { return listeners.has(listener); },
+			removeListener(listener) { listeners.delete(listener); },
+		},
+	};
 }
 
 return Object.freeze(Profiles);

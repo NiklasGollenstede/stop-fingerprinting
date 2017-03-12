@@ -400,19 +400,20 @@ const Generator = exports.Generator = class Generator {
 		this.ieFeatureCount = parseRange(config.ieFeatureCount, { from: 0, to: 3, });
 		this.ieFeature = config.ieFeatureExclude ? ieFeature.filter(({ feature, }) => !feature.match(config.ieFeatureExclude)) : ieFeature;
 		this.dntChance = parseRange(config.dntChance, { from: 1, to: 30, });
-		config.noThrow ? this.makeValid() : this.validate();
 	}
 	makeValid() {
 		if (!this.browser_os.length) { this.browser_os = browser_os; }
 		if (!this.cpuCores.length) { this.cpuCores = cpuCores; }
 		if (!this.osArch.length) { this.osArch = osArch; }
 		if (this.ieFeatureCount.to && !this.ieFeature.length) { this.ieFeature = ieFeature; }
+		return this;
 	}
 	validate() {
 		if (!this.browser_os.length) { throw new Error('No possible combinations of operating system and browser type'); }
-		if (!this.cpuCores.length) { throw new Error('No CPU code count allowed'); }
+		if (!this.cpuCores.length) { throw new Error('No CPU core count allowed'); }
 		if (!this.osArch.length) { throw new Error('No operating system architecture allowed'); }
 		if (this.ieFeatureCount.to && !this.ieFeature.length) { throw new Error('All Internet Explorer features are excluded'); }
+		return this;
 	}
 	navigator() {
 		return new Navigator(this);

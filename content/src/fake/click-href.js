@@ -1,6 +1,6 @@
 /* globals
 	define, makeMethod, makeSetter,
-	document, HTMLAnchorElement_p_set_href, HTMLElement_p_setAttribute, HTMLElement_p_setAttributeNS,
+	document, HTMLAnchorElement_p_set_href, Element_p_setAttribute, Element_p_setAttributeNS,
 */
 
 let focused = null; // this is inaccurate if additional mouse buttons are pressed before the first one is released, but that is rather rare user behavior which can't be influenced by the website. So it is probably Ok to ignore it
@@ -21,19 +21,20 @@ define('HTMLAnchorElement.prototype', { // TODO: make it optional
 	}), },
 });
 
-define('HTMLElement.prototype', { // TODO: make it optional
+// TODO: this breaks stuff
+/*define('Element.prototype', { // TODO: make it optional
 	setAttribute: { value: makeMethod(function setAttribute(name, value) {
-		//	console.log('setAttribute', name, value);
+		console.log('setAttribute', name, value);
 		name = (name +'').toLowerCase();
 		if (name !== 'href' || focused && this === focused) { return; }
-		HTMLElement_p_setAttribute(this, name, value);
+		Element_p_setAttribute(this, name, value);
 	}), },
 	setAttributeNS: { value: makeMethod(function setAttributeNS(name, value, ns) {
-		//	console.log('setAttributeNS', name, value);
+		console.log('setAttributeNS', name, value);
 		name = (name +'').toLowerCase();
 		if (name !== 'href' || focused && this === focused) { return; }
-		HTMLElement_p_setAttributeNS(this, name, value, ns);
+		Element_p_setAttributeNS(this, name, value, ns);
 	}), },
-});
+});*/
 
 // TODO: also needs to handle the value (and others) setter on the AttrNode returned by .getAttributeNode('href')

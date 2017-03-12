@@ -1,9 +1,8 @@
 (function(global) { 'use strict'; define(async ({ // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 	'node_modules/es6lib/object': { copyProperties, },
-	'node_modules/regexpx/': RegExpX,
 	'node_modules/web-ext-utils/options/': Options,
 	'node_modules/web-ext-utils/browser/version': applications,
-	utils: { DOMAIN_CHARS, },
+	require,
 }) => {
 
 const makeModel = (optional, _default) => ({
@@ -12,63 +11,30 @@ const makeModel = (optional, _default) => ({
 		default: 'New Profile',
 		input: { type: 'string', },
 	},
-	description: {
-		title: 'Description',
-		default: '',
-		expanded: false,
-		input: { type: 'text', placeholder: `You can save notes about this profile here`, },
-	},
-	include: {
-		title: 'Included hosts',
-		description: `
-This profile only apples to websites matching any of the hosts below.
-
-A domain may contain one or more <code>*</code>'s as wildcards.
-The meaning of that wildcard depends on its position:<ul>
-<li> after a <code>.</code> at the end, it means any <a href="https://en.wikipedia.org/wiki/Top-level_domain">Top Level Domain</a>, such as <code>.com</code>, <code>.co.uk</code> or <code>.blogspot.co.at</code>. </li>
-<li> in between two <code>.</code>'s, it means any name that doesn't contain a <code>.</code> itself, such as <code>google</code> or <code>amazon</code>. </li>
-<li> at the beginning before a <code>.</code>, it means any sub domain, such as <code>www.</code>, <code>mail.</code>, <code>code.</code> or <code>any.thing.else.</code> e.g. before <code>google.com</code>. </li>
-</ul>
-You can ether specify one domain per row, or multiple hosts in one row divided by <code>|</code>es.
-If you put multiple hosts in one row, they are seen as equivalent by this add-on. That is, they for example share the same session.
-`, // TODO: allow scheme://domain:port
-		maxLength: Infinity,
-		addDefault: String.raw`*.domain.com | www.domain.co.uk | *.*.berlin`,
-		restrict: {
-			match: {
-				exp: RegExpX`^(?! \s* \| \s* ) (?:
-					(?: ^ | \s* \| \s* )      # ' | ' separated list of:
-					(?:                                # '<sub>.<name>.<tld>':
-						  (?:
-							   \* \. |(?:    ${ DOMAIN_CHARS }+ \.)*      # '*.' or a '.' terminated list of sub domain names
-						) (?:
-							   \*    |       ${ DOMAIN_CHARS }+           # '*' or a domain name
-						) (?:
-							\. \*    |(?: \. ${ DOMAIN_CHARS }+   )*      # '.*' or '.'+ TLD
-						)
-					)
-				)+$`,
-				message: `Each line must be a '|' separated list of domains (<sub>.<name>.<tld>)`,
-			},
-			unique: '.',
-		},
-		input: { type: 'string', },
-	},
-	priority: {
-		title: 'Profile priority',
-		description: `If a website is matched by the include rules of more than one Profile, the profile with the highest priority is used.`,
-		default: 0,
-		restrict: { from: -Infinity, to: Infinity, },
-		expanded: false,
-		input: { type: 'number', },
+	ctxId: {
+		title: 'Container',
+		description: `The ID if the Contextual Identity Container this profile applies to`,
+		default: -1,
+		input: { type: 'menulist', getOptions(_option) {
+			const ids = Array.from(new Set([ '0', '1', '2', '3', '4', ...require('background/').Ctx.values(), ])).sort();
+			const used = require('background/profiles').getHandledCtxTds();
+			return [ { value: -1, label: '<none>', }, ].concat(ids.map(id => ({ value: id, label: id, disabled: used.has(id), })));
+		}, },
 	},
 	inherits: {
 		title: 'Inherited Profile',
-		description: `You don't have to specify all possible parameters for a website in a single profile.
-		<br>'Rules' that are not specified in this Profile are inherited from:`,
+		description: `You don't have to specify all possible parameters for a website in a single profile.`,
 		default: '<default>',
+		restrict: { type: 'string', },
+		input: { type: 'menulist', getOptions({ parent: { children: { id: { value, }, }, }, }) {
+			return require('background/profiles').getNames().map(({ name, id, }) => ({ value: id, label: name, disabled: id === value, }));
+		}, prefix: `'Rules' that are not specified in this Profile are inherited from:`, },
+	},
+	description: {
+		title: 'Notes',
+		default: '',
 		expanded: false,
-		input: { type: 'string', }, // TODO: this shouldn't be a string input
+		input: { type: 'text', placeholder: `You can save notes about this profile here`, },
 	},
 	rules: {
 		title: 'Rules',
@@ -108,15 +74,13 @@ If you put multiple hosts in one row, they are seen as equivalent by this add-on
 			}),
 			hstsDisabled: optional({
 				title: 'Disable HSTS',
-				description: `<pre>
-Completely disable <a href="https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security">HTTP Strict Transport Security</a> (HSTS) for all matching sites.
-HSTS is a security feature that makes the browser remember that a specific URL should only be used over https.
-If an attacker tires to redirect the connection over insecure http, the browser will then reject the connection.
-Unfortunately this stored information can be read out and used as a <a href="http://www.radicalresearch.co.uk/lab/hstssupercookies">super cookie</a>.
-If you disable HSTS you should be even more careful to always look for the (green) lock symbol next or the URL-bar on any security relevant sites.
-Enabling this will only prevent the creation of new HSTS super cookies, any existing ones need to be deleted via the browsers 'clear browsing data' functions.
-THIS DOES NOT WORK IN FIREFOX (yet?)!
-</pre>`,
+				description: `Completely disable <a href="https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security">HTTP Strict Transport Security</a> (HSTS) for all matching sites.
+				<br>HSTS is a security feature that makes the browser remember that a specific URL should only be used over https.
+				If an attacker tires to redirect the connection over insecure http, the browser will then reject the connection.
+				<br>Unfortunately this stored information can be read out and used as a <a href="http://www.radicalresearch.co.uk/lab/hstssupercookies">super cookie</a>.
+				<br>If you disable HSTS you should be even more careful to always look for the (green) lock symbol next or the URL-bar on any security relevant sites.
+				<br>Enabling this will only prevent the creation of new HSTS super cookies, any existing ones need to be deleted via the browsers 'clear browsing data' functions.
+				<br>THIS DOES NOT WORK IN FIREFOX (yet?)!`,
 				[_default]: true,
 				expanded: false,
 				input: { type: 'bool', },
@@ -386,23 +350,13 @@ const defaultProfile = (await createProfile('<default>', copyProperties(makeMode
 		input: { type:  'label', },
 		description: `TODO`,
 	},
-	include: {
-		expanded: null,
-		input: { type: 'label', },
-		description: `TODO`,
-		maxLength: 0,
-	},
-	priority: {
-		default: -Infinity,
-		expanded: null,
-		disabled: true,
-		input: { type: 'string', },
+	ctxId: {
+		default: '<none>',
+		hidden: true,
 	},
 	inherits: {
 		default: null,
-		expanded: null,
-		input: { type: 'label', },
-		description: `TODO`,
+		hidden: true,
 	},
 	// rules: ,
 	manage: {

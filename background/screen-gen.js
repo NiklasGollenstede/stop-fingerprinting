@@ -136,17 +136,30 @@ class ScreenGenerator {
 		this.width = parseRange(config.width, { from: 0, to: Infinity, });
 		this.height = parseRange(config.height, { from: 0, to: Infinity, });
 		this.resolutions = resolutions.filter(({ ratio,  width, height, }) => isIn(ratio, this.ratio) && isIn(width, this.width) && isIn(height, this.height));
-		if (!this.resolutions.length) { throw new RangeError('The filters don\'t allow any resolutions'); }
 
 		const dprRange = parseRange(config.devicePixelRatio, { from: 1, to: 1.5, });
 		this.devicePixelRatios = devicePixelRatios.filter(({ value, }) => isIn(value, dprRange));
-		if (!this.devicePixelRatios.length) { throw new RangeError('The devicePixelRatio range is invalid'); }
 
 		[ 'top', 'right', 'bottom', 'left', ].forEach(offset => {
 			const range = parseRange(config.offset && config.offset[offset], offset === 'bottom' ? { from: 30, to: 50, } : { from: 0, to: 0, });
 			this[offset] = offsets.filter(({ value, }) => isIn(value, range));
+		});
+	}
+	makeValid() {
+		if (!this.resolutions.length) { this.resolutions = resolutions; }
+		if (!this.devicePixelRatios.length) { this.devicePixelRatios = devicePixelRatios; }
+		[ 'top', 'right', 'bottom', 'left', ].forEach(offset => {
+			if (!this[offset].length) { this[offset] = offset === 'bottom' ? offsets : [ { parts: 10, value: 0, }, ]; }
+		});
+		return this;
+	}
+	validate() {
+		if (!this.resolutions.length) { throw new RangeError('The filters don\'t allow any resolutions'); }
+		if (!this.devicePixelRatios.length) { throw new RangeError('The devicePixelRatio range is invalid'); }
+		[ 'top', 'right', 'bottom', 'left', ].forEach(offset => {
 			if (!this[offset].length) { throw new RangeError('The '+ offset +' offset range is invalid'); }
 		});
+		return this;
 	}
 	screen() {
 		const { width, height, } = chooseWeightedRandom(this.resolutions);
@@ -157,12 +170,12 @@ class ScreenGenerator {
 		const left = chooseWeightedRandom(this.left).value;
 		return {
 			top: 0, left: 0,
-			availTop: top / dpr,
-			availLeft: left / dpr,
-			height: height / dpr,
-			width: width / dpr,
-			availHeight: (height - top - bottom) / dpr,
-			availWidth: (width - right - left) / dpr,
+			availTop: top / dpr +.5<<0,
+			availLeft: left / dpr +.5<<0,
+			height: height / dpr +.5<<0,
+			width: width / dpr +.5<<0,
+			availHeight: (height - top - bottom) / dpr +.5<<0,
+			availWidth: (width - right - left) / dpr +.5<<0,
 			colorDepth: 24, pixelDepth: 24,
 			// orientation: , // TODO
 			devicePixelRatio: dpr,

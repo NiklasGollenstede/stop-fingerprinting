@@ -35,14 +35,13 @@ async function addProfile(id) { try {
 	profile.children.title.whenChange(title => {
 		tabs.set({ id, title, });
 	});
-	id === '<default>' ? tabs.set({ id, icon: createElement('span', { textContent: '\u2605'/* '★' */, style: {
-		color: `hsl(90, 100%, 70%)`, fontWeight: 'bold',
-		position: 'relative', top: '-7px',
-		transform: 'scale(2)', display: 'block',
-	}, }), }) : profile.children.priority.whenChange(prio => {
-		tabs.set({ id, icon: createElement('span', { textContent: prio, style: {
-			color: `hsl(${ prio * 10 }, 100%, 70%)`, fontWeight: 'bold',
-			position: 'relative', top: '-7px',
+	profile.children.ctxId.whenChange(prio => {
+		const isDef = id === '<default>';
+		tabs.set({ id, icon: createElement('span', { textContent: isDef ? '★' : prio, style: {
+			color: `hsl(${ isDef ? 90 : prio * 27 }, 100%, 70%)`,
+			display: 'block', verticalAlign: 'middle',
+			position: 'absolute', top: '-1px', right: '6px',
+			fontWeight: 'bold', fontSize: isDef ? '250%' : '130%',
 		}, }), });
 	});
 	created && (tabs.active = id);

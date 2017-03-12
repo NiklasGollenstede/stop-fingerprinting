@@ -7,6 +7,7 @@ module.exports = function*({ options, /*packageJson,*/ manifestJson, files, }) {
 	manifestJson.permissions.push(
 		'browsingData',
 		'contextualIdentitities',
+		'cookies',
 		'notifications',
 		'nativeMessaging',
 		'tabs',
@@ -24,16 +25,6 @@ module.exports = function*({ options, /*packageJson,*/ manifestJson, files, }) {
 
 	manifestJson.options_ui.open_in_tab = true;
 	manifestJson.background.persistent = true;
-
-	manifestJson.content_scripts = [
-		{
-			matches: [ '<all_urls>', ], // doesn't match amo (in firefox)
-			match_about_blank: false,
-			all_frames: false, // injection into sub_frames is done from the main_frame
-			run_at: 'document_start',
-			js: [ 'content/get-tab-id.js', ],
-		},
-	];
 
 	manifestJson.seleniun_setup_port = null; // TODO: set if building for a selenium test
 
