@@ -17,7 +17,7 @@ module.exports = function*({ options, /*packageJson,*/ manifestJson, files, }) {
 		'<all_urls>'
 	);
 
-	manifestJson.browser_action.default_popup = 'view.html#panel?w=220&h=206'; // set size for Private Window panel fallback
+	manifestJson.browser_action.default_popup = 'view.html?w=220&h=206#panel'; // set size for Private Window panel fallback
 	manifestJson.browser_action.default_icon = manifestJson.icons =
 	(yield FS.readdir(Path.resolve(__dirname, 'icons/default/')))
 	.reduce((obj, name) => ((obj[name.split('.')[0]] = 'icons/default/'+ name), obj), { });
@@ -55,13 +55,9 @@ module.exports = function*({ options, /*packageJson,*/ manifestJson, files, }) {
 				'browser/',
 				'loader/',
 				'options/',
+				'tabview/',
 				'utils/',
-			],
-			tabview: [
-				'index.js',
-			],
-			update: [
-				'index.js',
+				'update/',
 			],
 		},
 	};

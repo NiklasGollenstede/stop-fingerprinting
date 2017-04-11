@@ -17,7 +17,6 @@ async function deleteProfile(profile) { try {
 	(await options.profiles.values.splice(options.profiles.values.current.indexOf(id), 1));
 	tabs.active = 'options';
 	tabs.remove(id);
-	editors.delete(profile);
 	delete profiles[id];
 } catch (error) { reportError(error); } }
 
@@ -28,17 +27,12 @@ async function addProfile(id) { try {
 		(await options.profiles.values.splice(Infinity, 0, id));
 	}
 	const profile = (await ProfileData(id));
-	tabs.add({
-		id,
-		data:  { branch: profile, },
-	});
-	profile.children.title.whenChange(title => {
-		tabs.set({ id, title, });
-	});
+	tabs.add({ id, data: { branch: profile, }, });
+	profile.children.title.whenChange(title => tabs.set({ id, title, }));
 	profile.children.ctxId.whenChange(prio => {
 		const isDef = id === '<default>';
 		tabs.set({ id, icon: createElement('span', { textContent: isDef ? '★' : prio, style: {
-			color: `hsl(${ isDef ? 90 : prio * 27 }, 100%, 70%)`,
+			color: `hsl(${ isDef ? 90 : prio * 71 + 90 }, 100%, 70%)`,
 			display: 'block', verticalAlign: 'middle',
 			position: 'absolute', top: isDef ? '-2px' : 0, right: '6px',
 			fontWeight: 'bold', fontSize: isDef ? '250%' : '130%',
@@ -55,35 +49,26 @@ function onCommand(branch, { name, }, value) { ({
 	})[name](),
 })[name](value); }
 
-const editors = new Map;
-
 const tabs = new TabView({
 	host: body,
-	content: createElement('div', {style: {
+	template: createElement('div', { style: {
 		padding: '10px', overflowY: 'scroll',
 	}, }),
 	active: 'options',
 	style: [ 'horizontal', 'firefox', ],
-	tabs: [
-		{
-			id: 'options',
-			title: 'General',
-			icon: getURL('icons/options/96.png'),
-			data: { branch: options, },
-		},
-	],
-	onSelect({ data: { branch, }, }) {
-		const host = this.content;
-		host.textContent = '';
-		let editor = editors.get(branch);
-		if (editor) { return void host.appendChild(editor); }
-		editor = host.appendChild(createElement('div'));
+	tabs: [ {
+		id: 'options',
+		title: 'General',
+		icon: getURL('icons/options/96.png'),
+		data: { branch: options, },
+	}, ],
+
+	onLoad({ data: { branch, }, content, }) {
 		new Editor({
 			options: branch,
-			host: editor,
+			host: content,
 			onCommand: onCommand.bind(null, branch),
 		});
-		editors.set(branch, editor);
 	},
 });
 

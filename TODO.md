@@ -11,6 +11,8 @@
 
 - document.referrer
 
+- reset history.length
+
 - make localhost inaccessible for web content
 
 - suggest to set locale to en-US

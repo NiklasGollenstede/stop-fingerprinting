@@ -11,7 +11,7 @@
 	Profiles,
 	require,
 }) => {
-console.log(manifest.name, 'loaded, updates', updated);
+console.log(manifest.name, 'loaded, updated', updated);
 const { isScriptable, } = global;
 
 //	Tabs         .onCreated                   .addListener((...args) => console.log('onCreated'                   , ...args));

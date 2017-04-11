@@ -54,7 +54,7 @@ class ProfileStack {
 
 		data.inherits.whenChange(() => (this.parent = null) === onChanged.fire(this.ids)); // must always have parent (unless .isRoot) ==> rebuild
 		data.rules.onAnyChange((value, { parent: { path, }, }) => this.clear(path.replace(/^\.?rules\./, ''))); // listeners will be removed on data.destroy()
-		data.ctxId.whenChange((_, { current: ids, }) => {
+		data.ctxId.whenChange(ids => {
 			ctxIdToStack.forEach((stack, id) => stack === this && ctxIdToStack.delete(id));
 			ids.forEach(id => ctxIdToStack.set(id, this));
 		});
@@ -135,7 +135,7 @@ class ProfileStack {
 (await Promise.all([ '<default>', ].concat(options.profiles.values.current).map(addProfile)));
 const defaultStack = (await profIdToStack.get('<default>'));
 
-options.profiles.onChange(async (_, { current: ids, }) => { try {
+options.profiles.onChange(async ids => { try {
 	(await Promise.all(Array.from(profIdToData.keys(), old => !ids.includes(old) && old !== '<default>' && removeProfile(old))));
 	(await Promise.all(ids.map(addProfile)));
 } catch (error) { reportError(error); } });

@@ -29,7 +29,7 @@ return new Home({
 		id: '404',
 		title: 'Error',
 		icon: getURL('icons/error/256.png'),
-		hidden: true, default: true,
+		hidden: true, default: true, unload: true,
 	}, ],
 	index: 'options',
 	style: [ 'vertical', 'firefox', 'dark', ],

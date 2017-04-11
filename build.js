@@ -67,6 +67,7 @@ const buildTldJS = async(function*(options) {
 const buildWebExt = async(function*(options) {
 	const config = options.webExt || { };
 	config.outDir = options.outDir || resolve(__dirname, './build') +'/webextension';
+	config.chrome = true; // some debugging is actually more comfortable in chrome
 
 //	// for selenium test, write the setupPort to the manifest.json
 //	options.selenium && (webExtManifestJson.seleniun_setup_port = options.selenium.setupPort);

@@ -46,3 +46,8 @@ define('Error.prototype', {
 		})
 	},
 });
+
+// TODO: (in firefox) errors have the own properties fileName, lineNumber and columnNimber, these need to be changes too. So:
+// - call (get) error.stack on every error that is thrown (within this code)
+// - extract and assign the properties in the .stack getter
+// - always cache the getters result in one global WeakMap, which the setter may write to
